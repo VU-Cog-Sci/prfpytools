@@ -49,5 +49,5 @@ MAJOR = _version_major
 MINOR = _version_minor
 MICRO = _version_micro
 VERSION = __version__
-PACKAGE_DATA = {'core': [pjoin('test', 'data', '*')]}
+PACKAGE_DATA = {'prfpy': [pjoin('test', 'data', '*')]}
 REQUIRES = ["prfpy"]
