@@ -34,7 +34,7 @@ pRFpy normalization
 
 """
 
-NAME = "prfpy-norm"
+NAME = "pRFpyNorm"
 MAINTAINER = "Marco Aqil"
 MAINTAINER_EMAIL = "m.aqil@spinozacentre.nl"
 DESCRIPTION = description
