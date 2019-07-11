@@ -1,4 +1,4 @@
-# normalization_pRF
+# prfpy-norm
 Marco Aqil's normalization pRF model implementations
 
 ## Requirements
