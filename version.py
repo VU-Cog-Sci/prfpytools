@@ -34,7 +34,7 @@ pRFpy normalization
 
 """
 
-NAME = "pRFpyNorm"
+NAME = "prfpy-norm"
 MAINTAINER = "Marco Aqil"
 MAINTAINER_EMAIL = "m.aqil@spinozacentre.nl"
 DESCRIPTION = description
@@ -49,5 +49,5 @@ MAJOR = _version_major
 MINOR = _version_minor
 MICRO = _version_micro
 VERSION = __version__
-#PACKAGE_DATA = {'core': [pjoin('test', 'data', '*')]}
+PACKAGE_DATA = {'core': [pjoin('test', 'data', '*')]}
 REQUIRES = ["prfpy"]
