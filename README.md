@@ -6,3 +6,4 @@ Marco Aqil's normalization pRF model implementations
 
 ## To Do:
 
+list conda
