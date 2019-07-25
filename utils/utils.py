@@ -14,7 +14,7 @@ def create_dm_from_screenshots(screenshot_path,
     design_matrix = np.zeros((n_pix, n_pix, 1+len(image_list)))
     for image_file in image_list:
         # assuming last three numbers before .png are the screenshot number
-        img_number = int(image_file[-7:-4])
+        img_number = int(image_file[-7:-4])-1
         # subtract one to start from zero
         img = imageio.imread(os.path.join(screenshot_path, image_file))
         # make it square
@@ -33,3 +33,4 @@ def create_dm_from_screenshots(screenshot_path,
     
     
     return design_matrix
+
