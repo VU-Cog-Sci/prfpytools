@@ -44,6 +44,11 @@ gradient_method = analysis_info["gradient_method"]
 verbose = analysis_info["verbose"]
 rsq_threshold = analysis_info["rsq_threshold"]
 
+if "grid_data_path" in analysis_info:
+    grid_data_path = analysis_info["grid_data_path"]
+else:
+    grid_data_path = None
+
 dm_list = []
 
 for screenshot_path in screenshot_paths:
@@ -137,9 +142,13 @@ gf = Iso2DGaussianFitter(
     gradient_method=gradient_method)
 
 #gaussian grid fit
-gf.grid_fit(ecc_grid=eccs,
-            polar_grid=polars,
-            size_grid=sizes)
+if grid_data_path == None:
+    gf.grid_fit(ecc_grid=eccs,
+                polar_grid=polars,
+                size_grid=sizes)
+else:
+    gf.gridsearch_params = np.load(grid_data_path)
+        
 
 #gaussian iterative fit
 gf.iterative_fit(rsq_threshold=rsq_threshold, verbose=verbose) 

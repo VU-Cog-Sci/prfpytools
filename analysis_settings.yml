@@ -24,7 +24,7 @@ task_names:
 data_path: "/Users/marcoaqil/PRFMapping/PRFMapping-Deriv-noflairtse-manual-hires"
 
 #choices: fsnative, fsaverage (surface fitting), T1w (volume fitting)      
-fitting_space: "fsaverage"
+fitting_space: "T1w"
 
 #window length for savgol filtering
 window_length: 121
@@ -38,6 +38,8 @@ hrf: [1,1,0]
 gradient_method: "numerical"
 verbose: True
 #rsq threshold for iterative fit
-rsq_threshold: 0.66
+rsq_threshold: 0.5
+
+#grid_data_path: "/Users/marcoaqil/PRFMapping/gauss_grid_sub-001.npy"
 
     
