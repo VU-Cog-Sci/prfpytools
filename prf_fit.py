@@ -5,22 +5,26 @@ Created on Tue Aug  6 10:51:41 2019
 
 @author: marcoaqil
 """
-from prfpy.fit import iterative_search
+
 from prfpy.fit import Iso2DGaussianFitter, Norm_Iso2DGaussianFitter, DoG_Iso2DGaussianFitter
 from prfpy.grid import Iso2DGaussianGridder, Norm_Iso2DGaussianGridder, DoG_Iso2DGaussianGridder
 from prfpy.stimulus import PRFStimulus2D
 from utils.utils import create_dm_from_screenshots, prepare_surface_data, prepare_volume_data
 import sys
 import yaml
-import numpy as np
-
 import os
 opj = os.path.join
 
 
-subj = sys.argv[1]
+import numpy as np
 
-with open("./analysis_settings.yml") as f:
+
+
+
+subj = sys.argv[1]
+analysis_settings = sys.argv[2]
+
+with open(analysis_settings) as f:
     analysis_info = yaml.safe_load(f)
 
 # note that screenshot paths and task names should be in the same order
@@ -75,6 +79,8 @@ for i, task_name in enumerate(task_names):
     late_iso_dict[task_name] = np.split(
         late_iso_dict['periods'], len(task_names))[i]
 
+if verbose==True:
+    print("Finished stimulus setup. Now preparing data for fitting...")
 
 if fitting_space == "fsaverage" or fitting_space == "fsnative":
 
@@ -97,18 +103,23 @@ else:
                                                       fitting_space)
 
 
-#grid params
+if verbose==True:
+    print("Finished preparing data for fitting. Now creating and fitting models...")
+    
+# grid params
 grid_nr = 20
 max_ecc_size = 16
 sizes, eccs, polars = max_ecc_size * np.linspace(0.25, 1, grid_nr)**2, \
     max_ecc_size * np.linspace(0.1, 1, grid_nr)**2, \
     np.linspace(0, 2*np.pi, grid_nr)
 
-#to avoid dividing by zero   
-inf=np.inf
-eps=1e-6 
+# to avoid dividing by zero
+inf = np.inf
+eps = 1e-6
 
-#Gaussian grid + iterative fit with CSS parameter
+####MODEL COMPARISON
+
+#Gaussian model
 gg = Iso2DGaussianGridder(stimulus=prf_stim,
                           hrf=hrf,
                           filter_predictions=True,
@@ -117,42 +128,82 @@ gg = Iso2DGaussianGridder(stimulus=prf_stim,
 
 
 gf = Iso2DGaussianFitter(
-    data=tc_full_iso_nonzerovar_dict['tc'], gridder=gg, n_jobs=n_jobs,                                   
-                    bounds=[(-10*n_pix,10*n_pix),  #x
-                                           (-10*n_pix,10*n_pix),  #y
-                                           (eps,10*n_pix),     #prf size
-                                           (-inf,+inf),  #prf amplitude
-                                           (0,+inf), #bold baseline
-                                           (eps, 3)],     #CSS exponent
-                                   gradient_method=gradient_method)
+    data=tc_full_iso_nonzerovar_dict['tc'], gridder=gg, n_jobs=n_jobs,
+    bounds=[(-10*n_pix, 10*n_pix),  # x
+            (-10*n_pix, 10*n_pix),  # y
+            (eps, 10*n_pix),  # prf size
+            (-inf, +inf),  # prf amplitude
+            (0, +inf)],  # bold baseline
+    gradient_method=gradient_method)
 
+#gaussian grid fit
 gf.grid_fit(ecc_grid=eccs,
             polar_grid=polars,
             size_grid=sizes)
 
-gf.iterative_fit(rsq_threshold=rsq_threshold, fit_css=True, verbose=verbose)
+#gaussian iterative fit
+gf.iterative_fit(rsq_threshold=rsq_threshold, verbose=verbose) 
 
-#normalization model iterative fit
+#CSS model iterative fit
+gf_css = Iso2DGaussianFitter(
+    data=tc_full_iso_nonzerovar_dict['tc'], gridder=gg, n_jobs=n_jobs, fit_css=True,
+    bounds=[(-10*n_pix, 10*n_pix),  # x
+            (-10*n_pix, 10*n_pix),  # y
+            (eps, 10*n_pix),  # prf size
+            (-inf, +inf),  # prf amplitude
+            (0, +inf),  # bold baseline
+            (eps, 3)],  # CSS exponent
+    gradient_method=gradient_method)
+
+gf_css.iterative_fit(rsq_threshold=rsq_threshold, verbose=verbose) 
+
+# normalization model iterative fit
 gg_norm = Norm_Iso2DGaussianGridder(stimulus=prf_stim,
                                     hrf=hrf,
-                                   filter_predictions=True,
-                                   window_length=window_length,
-                                   task_lengths=task_lengths)
+                                    filter_predictions=True,
+                                    window_length=window_length,
+                                    task_lengths=task_lengths)
 
 gf_norm = Norm_Iso2DGaussianFitter(data=tc_full_iso_nonzerovar_dict['tc'],
                                    gridder=gg_norm,
-                                   n_jobs=10,
-                                   bounds=[(-10*n_pix,10*n_pix),  #x
-                                           (-10*n_pix,10*n_pix),  #y
-                                           (eps,10*n_pix),     #prf size
-                                           (-inf,+inf),  #prf amplitude
-                                           (0,+inf),     #bold baseline
-                                           (0,+inf),     #neural baseline
-                                           (0,+inf),     #surround amplitude 
-                                           (eps,10*n_pix),     #surround size
-                                           (eps,+inf)],        #surround baseline   
-                                   gradient_method=gradient_method)    
+                                   n_jobs=n_jobs,
+                                   bounds=[(-10*n_pix, 10*n_pix),  # x
+                                           (-10*n_pix, 10*n_pix),  # y
+                                           (eps, 10*n_pix),  # prf size
+                                           (-inf, +inf),  # prf amplitude
+                                           (0, +inf),  # bold baseline
+                                           (0, +inf),  # neural baseline
+                                           (0, +inf),  # surround amplitude
+                                           (eps, 10*n_pix),  # surround size
+                                           (eps, +inf)],  # surround baseline
+                                   gradient_method=gradient_method)
 
-gf_norm.iterative_fit(rsq_threshold=rsq_threshold, gridsearch_params=gf.gridsearch_params, verbose=verbose)
+gf_norm.iterative_fit(rsq_threshold=rsq_threshold,
+                      gridsearch_params=gf.gridsearch_params, verbose=verbose)
 
-#difference of gaussians iterative fit
+# difference of gaussians iterative fit
+gg_dog = DoG_Iso2DGaussianGridder(stimulus=prf_stim,
+                                  hrf=hrf,
+                                  filter_predictions=True,
+                                  window_length=window_length,
+                                  task_lengths=task_lengths)
+
+gf_dog = DoG_Iso2DGaussianFitter(data=tc_full_iso_nonzerovar_dict['tc'],
+                                 gridder=gg_dog,
+                                 n_jobs=n_jobs,
+                                 bounds=[(-10*n_pix, 10*n_pix),  # x
+                                         (-10*n_pix, 10*n_pix),  # y
+                                         (eps, 10*n_pix),  # prf size
+                                         (0, +inf),  # prf amplitude
+                                         (0, +inf),  # bold baseline
+                                         (0, +inf),  # surround amplitude
+                                         (eps, 10*n_pix)],  # surround size
+                                 gradient_method=gradient_method)
+
+gf_dog.iterative_fit(rsq_threshold=rsq_threshold,
+                     gridsearch_params=gf.gridsearch_params, verbose=verbose)
+
+print(gf.iterative_search_params[gf.rsq_mask,-1].mean())
+print(gf.iterative_search_params[gf.rsq_mask,-1].mean())
+print(gf_dog.iterative_search_params[gf.rsq_mask,-1].mean())
+print(gf_norm.iterative_search_params[gf.rsq_mask,-1].mean())

@@ -3,6 +3,7 @@ import numpy as np
 import imageio
 import nibabel as nb
 
+
 opj = os.path.join
 
 from prfpy.timecourse import sgfilter_predictions
