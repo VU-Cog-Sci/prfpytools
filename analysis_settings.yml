@@ -1,0 +1,43 @@
+#intended for single subject analysis
+
+n_pix: 40
+discard_volumes: 5
+
+screenshot_paths:
+                  - "/Users/marcoaqil/PRFMapping/PRFMapping-Raw/sub-001/ses-1/rawdata/sub-001_ses-1_Logs/sub-001_ses-1_task-1R_run-1_Logs/Screenshots"
+                  - "/Users/marcoaqil/PRFMapping/PRFMapping-Raw/sub-001/ses-1/rawdata/sub-001_ses-1_Logs/sub-001_ses-1_task-1S_run-1_Logs/Screenshots"
+                  - "/Users/marcoaqil/PRFMapping/PRFMapping-Raw/sub-001/ses-1/rawdata/sub-001_ses-1_Logs/sub-001_ses-1_task-2R_run-1_Logs/Screenshots"
+                  - "/Users/marcoaqil/PRFMapping/PRFMapping-Raw/sub-001/ses-1/rawdata/sub-001_ses-1_Logs/sub-001_ses-1_task-4F_run-1_Logs/Screenshots"
+                  - "/Users/marcoaqil/PRFMapping/PRFMapping-Raw/sub-001/ses-1/rawdata/sub-001_ses-1_Logs/sub-001_ses-1_task-4R_run-1_Logs/Screenshots"
+
+screen_size_cm: 70
+screen_distance_cm: 210
+TR: 1.5
+
+task_names:
+           - "1R"
+           - "1S"
+           - "2R"
+           - "4F"
+           - "4R"
+           
+data_path: "/Users/marcoaqil/PRFMapping/PRFMapping-Deriv-noflairtse-manual-hires"
+
+#choices: fsnative, fsaverage (surface fitting), T1w (volume fitting)      
+fitting_space: "fsaverage"
+
+#window length for savgol filtering
+window_length: 121
+
+n_jobs: 10
+
+#explicit hrf or spm hrf params. see prfpy for details
+hrf: [1,1,0]
+
+#gradient method to be used in iterative fitting. numerical, analytic (must be set up in prfpy), or None.
+gradient_method: "numerical"
+verbose: True
+#rsq threshold for iterative fit
+rsq_threshold: 0.1
+
+    
