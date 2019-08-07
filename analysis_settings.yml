@@ -38,6 +38,6 @@ hrf: [1,1,0]
 gradient_method: "numerical"
 verbose: True
 #rsq threshold for iterative fit
-rsq_threshold: 0.1
+rsq_threshold: 0.66
 
     
