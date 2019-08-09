@@ -29,7 +29,7 @@ fitting_space: "T1w"
 #window length for savgol filtering
 window_length: 121
 
-n_jobs: 10
+n_jobs: 11
 
 #explicit hrf or spm hrf params. see prfpy for details
 hrf: [1,1,0]
@@ -38,8 +38,10 @@ hrf: [1,1,0]
 gradient_method: "numerical"
 verbose: True
 #rsq threshold for iterative fit
-rsq_threshold: 0.5
-
-#grid_data_path: "/Users/marcoaqil/PRFMapping/gauss_grid_sub-001.npy"
+rsq_threshold: 0.15
+#if gaussian grid data was already obtained, can specify path
+grid_data_path: "/Users/marcoaqil/PRFMapping/gauss_grid_sub-001.npy"
+#if timecourse was already preprocessed, specify
+timecourse_data_path: "/Users/marcoaqil/PRFMapping/timecourse_brain_nonzerovar_sub-001.npy"
 
     

@@ -84,8 +84,8 @@ def prepare_surface_data(subj,
     tc_full_iso = np.concatenate((tc_full_iso_dict['L'], tc_full_iso_dict['R']), axis=0)
     
     tc_full_iso_nonzerovar_dict['orig_data_shape'] = {'R_shape':tc_full_iso_dict['R'].shape, 'L_shape':tc_full_iso_dict['L'].shape}
-    tc_full_iso_nonzerovar_dict['indices'] = np.where(np.var(tc_full_iso, axis=-1)>0)[0]
-    tc_full_iso_nonzerovar_dict['tc'] = tc_full_iso[np.where(np.var(tc_full_iso, axis=-1)>0)]    
+    tc_full_iso_nonzerovar_dict['indices'] = np.where(np.var(tc_full_iso, axis=-1)>0)
+    tc_full_iso_nonzerovar_dict['tc'] = tc_full_iso[tc_full_iso_nonzerovar_dict['indices']]    
     
     return tc_full_iso_nonzerovar_dict
 
@@ -114,12 +114,12 @@ def prepare_volume_data(subj,
     tc_full_iso_nonzerovar_dict = {}
     
     for task_name in task_names:
-        data_ses_1 = nb.load(opj(data_path, 'fmriprep/'+subj+'/ses-1/func/'+subj+'_ses-1_task-'+task_name+'_run-1_space-'+fitting_space+'_desc-preproc_bold.nii.gz'))
-        data_ses_2 = nb.load(opj(data_path, 'fmriprep/'+subj+'/ses-2/func/'+subj+'_ses-2_task-'+task_name+'_run-1_space-'+fitting_space+'_desc-preproc_bold.nii.gz'))
+        data_ses_1 = nb.load(opj(data_path, 'fmriprep/'+subj+'/ses-1/func/'+subj+'_ses-1_task-'+task_name+'_run-1_space-'+fitting_space+'_desc-preproc_bold.nii.gz')).get_data()[...,discard_volumes:]
+        data_ses_2 = nb.load(opj(data_path, 'fmriprep/'+subj+'/ses-2/func/'+subj+'_ses-2_task-'+task_name+'_run-1_space-'+fitting_space+'_desc-preproc_bold.nii.gz')).get_data()[...,discard_volumes:]
            
-        tc_ses_1 = sgfilter_predictions(data_ses_1.get_data()[...,discard_volumes:],
+        tc_ses_1 = sgfilter_predictions(data_ses_1,
                                                 window_length=window_length)
-        tc_ses_2 = sgfilter_predictions(data_ses_2.get_data()[...,discard_volumes:],
+        tc_ses_2 = sgfilter_predictions(data_ses_2,
                                                 window_length=window_length)
             
         tc_list.append((tc_ses_1+tc_ses_2)/2.0)
@@ -147,8 +147,8 @@ def prepare_volume_data(subj,
                 
 
     #exclude timecourses with zero variance
-    tc_full_iso_nonzerovar_dict['orig_data_shape'] = tc_full_iso.shape
-    tc_full_iso_nonzerovar_dict['indices'] = final_mask & np.where(np.var(tc_full_iso, axis=-1)>0)[0]
-    tc_full_iso_nonzerovar_dict['tc'] = tc_full_iso[final_mask & np.where(np.var(tc_full_iso, axis=-1)>0)]
+    tc_full_iso_nonzerovar_dict['brain_mask_shape'] = final_mask.shape
+    tc_full_iso_nonzerovar_dict['nonzerovar_brain_mask'] = np.ravel(final_mask) & np.ravel(np.var(tc_full_iso, axis=-1)>0)
+    tc_full_iso_nonzerovar_dict['tc'] = tc_full_iso[tc_full_iso_nonzerovar_dict['indices']]
 
     return tc_full_iso_nonzerovar_dict
