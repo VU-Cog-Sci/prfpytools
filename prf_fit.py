@@ -173,6 +173,8 @@ gf.iterative_fit(rsq_threshold=rsq_threshold, verbose=verbose)
 
 np.save(opj(data_path, subj+"_gauss-iterparams_space-"+fitting_space), gf.iterative_search_params)
 
+starting_params = np.insert(gf.iterative_search_params, -1, 1.0, axis=-1)
+
 print("Gaussian iterfit completed")
 # CSS iterative fit
 gf_css = Iso2DGaussianFitter(
@@ -186,7 +188,7 @@ gf_css = Iso2DGaussianFitter(
     gradient_method=gradient_method)
 
 gf_css.iterative_fit(rsq_threshold=rsq_threshold,
-                     gridsearch_params=gf.gridsearch_params, verbose=verbose)
+                     gridsearch_params=starting_params, verbose=verbose)
 
 np.save(opj(data_path, subj+"_CSS-iterparams_space-"+fitting_space), gf_css.iterative_search_params)
 
@@ -211,7 +213,7 @@ gf_dog = DoG_Iso2DGaussianFitter(data=tc_full_iso_nonzerovar_dict['tc'],
                                  gradient_method=gradient_method)
 
 gf_dog.iterative_fit(rsq_threshold=rsq_threshold,
-                     gridsearch_params=gf.gridsearch_params, verbose=verbose)
+                     gridsearch_params=starting_params, verbose=verbose)
 
 np.save(opj(data_path, subj+"_DoG-iterparams_space-"+fitting_space), gf_dog.iterative_search_params)
 
@@ -239,7 +241,7 @@ gf_norm = Norm_Iso2DGaussianFitter(data=tc_full_iso_nonzerovar_dict['tc'],
                                    gradient_method=gradient_method)
 
 gf_norm.iterative_fit(rsq_threshold=rsq_threshold,
-                      gridsearch_params=gf.gridsearch_params, verbose=verbose)
+                      gridsearch_params=starting_params, verbose=verbose)
 
 np.save(opj(data_path, subj+"_norm-iterparams_space-"+fitting_space), gf_norm.iterative_search_params)
 
