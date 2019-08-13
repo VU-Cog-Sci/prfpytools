@@ -80,7 +80,6 @@ prf_stim = PRFStimulus2D(screen_size_cm=screen_size_cm,
 
 
 # late-empty DM periods (for calculation of BOLD baseline)
-iso_periods = np.where(np.sum(dm_full, axis=(0, 1)) == 0)[0]
 shifted_dm = np.zeros_like(dm_full)
 
 # number of TRs in which activity may linger (hrf)
@@ -164,6 +163,7 @@ if grid_data_path == None:
     gf.grid_fit(ecc_grid=eccs,
                 polar_grid=polars,
                 size_grid=sizes)
+    np.save(opj(data_path, subj+"_gauss-gridparams_space-"+fitting_space), gf.gridsearch_params)
 else:
     gf.gridsearch_params = np.load(grid_data_path)
 

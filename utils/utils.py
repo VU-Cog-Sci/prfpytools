@@ -2,7 +2,8 @@ import os
 import numpy as np
 import imageio
 import nibabel as nb
-
+from joblib import Parallel, delayed
+import time
 
 opj = os.path.join
 
@@ -75,7 +76,7 @@ def prepare_surface_data(subj,
         #shift timeseries so they have the same average value in proper baseline periods across conditions
         iso_full = np.mean(tc_full[...,late_iso_dict['periods']], axis=-1)
         
-        for i,task in enumerate(task_names):
+        for i,task_name in enumerate(task_names):
             iso_diff = iso_full - np.mean(tc_full[...,late_iso_dict[task_name]], axis=-1)
             tc_dict[hemi][i] += iso_diff[...,np.newaxis]
            
@@ -84,8 +85,8 @@ def prepare_surface_data(subj,
     tc_full_iso = np.concatenate((tc_full_iso_dict['L'], tc_full_iso_dict['R']), axis=0)
     
     tc_full_iso_nonzerovar_dict['orig_data_shape'] = {'R_shape':tc_full_iso_dict['R'].shape, 'L_shape':tc_full_iso_dict['L'].shape}
-    tc_full_iso_nonzerovar_dict['indices'] = np.where(np.var(tc_full_iso, axis=-1)>0)
-    tc_full_iso_nonzerovar_dict['tc'] = tc_full_iso[tc_full_iso_nonzerovar_dict['indices']]    
+    tc_full_iso_nonzerovar_dict['nonzerovar_mask'] = np.var(tc_full_iso, axis=-1)>0
+    tc_full_iso_nonzerovar_dict['tc'] = tc_full_iso[tc_full_iso_nonzerovar_dict['nonzerovar_mask']]    
     
     return tc_full_iso_nonzerovar_dict
 
@@ -116,13 +117,29 @@ def prepare_volume_data(subj,
     for task_name in task_names:
         data_ses_1 = nb.load(opj(data_path, 'fmriprep/'+subj+'/ses-1/func/'+subj+'_ses-1_task-'+task_name+'_run-1_space-'+fitting_space+'_desc-preproc_bold.nii.gz')).get_data()[...,discard_volumes:]
         data_ses_2 = nb.load(opj(data_path, 'fmriprep/'+subj+'/ses-2/func/'+subj+'_ses-2_task-'+task_name+'_run-1_space-'+fitting_space+'_desc-preproc_bold.nii.gz')).get_data()[...,discard_volumes:]
-           
+        
+        data_ses_1 = np.reshape(data_ses_1,(-1, data_ses_1.shape[-1]))
+        data_ses_2 = np.reshape(data_ses_2,(-1, data_ses_2.shape[-1]))
+        
+        #parallel fit is slower?
+#        start = time.time()
+#        tc_ses_1 = Parallel(n_jobs=6, verbose=True)(
+#            delayed(sgfilter_predictions)(data_ses_1[vox,:],
+#                                                window_length=window_length)
+#            for vox in range(data_ses_1.shape[0]))
+#        tc_ses_1 = np.array(tc_ses_1)    
+#
+#        print(time.time()-start)
+#        start=time.time()
+#        tc_ses_2 = sgfilter_predictions(data_ses_2,
+#                                                window_length=window_length)
+#        print(time.time()-start)
         tc_ses_1 = sgfilter_predictions(data_ses_1,
-                                                window_length=window_length)
+                                                window_length=window_length) 
         tc_ses_2 = sgfilter_predictions(data_ses_2,
-                                                window_length=window_length)
-            
+                                                window_length=window_length)  
         tc_list.append((tc_ses_1+tc_ses_2)/2.0)
+        
         
 
     #when scanning sub-001 i mistakenly set the length of the 4F-task scan to 147, while it should have been 145
@@ -138,7 +155,7 @@ def prepare_volume_data(subj,
     #shift timeseries so they have the same average value in baseline periods across conditions
     iso_full = np.mean(tc_full[...,late_iso_dict['periods']], axis=-1)
     
-    for i,task in enumerate(task_names):
+    for i,task_name in enumerate(task_names):
         iso_diff = iso_full - np.mean(tc_full[...,late_iso_dict[task_name]], axis=-1)
         tc_list[i] += iso_diff[...,np.newaxis]
     
@@ -148,7 +165,7 @@ def prepare_volume_data(subj,
 
     #exclude timecourses with zero variance
     tc_full_iso_nonzerovar_dict['brain_mask_shape'] = final_mask.shape
-    tc_full_iso_nonzerovar_dict['nonzerovar_brain_mask'] = np.ravel(final_mask) & np.ravel(np.var(tc_full_iso, axis=-1)>0)
-    tc_full_iso_nonzerovar_dict['tc'] = tc_full_iso[tc_full_iso_nonzerovar_dict['indices']]
+    tc_full_iso_nonzerovar_dict['nonzerovar_brain_mask'] = np.ravel(final_mask) & (np.var(tc_full_iso, axis=-1)>0)
+    tc_full_iso_nonzerovar_dict['tc'] = tc_full_iso[tc_full_iso_nonzerovar_dict['nonzerovar_brain_mask']]
 
     return tc_full_iso_nonzerovar_dict
