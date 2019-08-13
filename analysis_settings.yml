@@ -40,7 +40,7 @@ verbose: True
 #rsq threshold for iterative fit
 rsq_threshold: 0.2
 #if gaussian grid data was already obtained, can specify path
-grid_data_path: "/Users/marcoaqil/PRFMapping/gauss_grid_sub-001.npy"
+#grid_data_path: "/Users/marcoaqil/PRFMapping/gauss_grid_sub-001.npy"
 #if timecourse was already preprocessed, specify
 #timecourse_data_path: "/Users/marcoaqil/PRFMapping/timecourse_brain_nonzerovar_sub-001.npy"
 
