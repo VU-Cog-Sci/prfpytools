@@ -31,6 +31,10 @@ def create_dm_from_screenshots(screenshot_path,
         # downsample
         downsampling_constant = int(img.shape[1]/n_pix)
         downsampled_img = img[::downsampling_constant, ::downsampling_constant]
+        
+        
+        if downsampled_img[:,:,0].shape != design_matrix[...,0].shape:
+            print("please choose a n_pix value that is a divisor of "+str(img.shape[0]))
 
         # binarize image into dm matrix
         # assumes: standard RGB255 format; only colors present in image are black, white, grey, red, green.
