@@ -1,6 +1,6 @@
 #intended for single subject analysis
 
-n_pix: 40
+n_pix: 54
 discard_volumes: 5
 
 screenshot_paths:
@@ -10,7 +10,7 @@ screenshot_paths:
                   - "/Users/marcoaqil/PRFMapping/PRFMapping-Raw/sub-001/ses-1/rawdata/sub-001_ses-1_Logs/sub-001_ses-1_task-4F_run-1_Logs/Screenshots"
                   - "/Users/marcoaqil/PRFMapping/PRFMapping-Raw/sub-001/ses-1/rawdata/sub-001_ses-1_Logs/sub-001_ses-1_task-4R_run-1_Logs/Screenshots"
 
-screen_size_cm: 70
+screen_size_cm: 39.3
 screen_distance_cm: 210
 TR: 1.5
 
@@ -42,6 +42,6 @@ rsq_threshold: 0.2
 #if gaussian grid data was already obtained, can specify path
 #grid_data_path: "/Users/marcoaqil/PRFMapping/gauss_grid_sub-001.npy"
 #if timecourse was already preprocessed, specify
-#timecourse_data_path: "/Users/marcoaqil/PRFMapping/timecourse_brain_nonzerovar_sub-001.npy"
+timecourse_data_path: "/Users/marcoaqil/PRFMapping/tc_fsaverage.npy"
 
     
