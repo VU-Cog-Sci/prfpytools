@@ -19,8 +19,8 @@ with open(analysis_settings) as f:
     analysis_info = yaml.safe_load(f)
 
 if "mkl_num_threads" in analysis_info:
-	import mkl
-	mkl.set_num_threads(analysis_info["mkl_num_threads"])
+    import mkl
+    mkl.set_num_threads(analysis_info["mkl_num_threads"])
 
 import numpy as np
 
@@ -113,7 +113,7 @@ if "timecourse_data_path" not in analysis_info:
 else:
     #mainly for testing purposes
     tc_full_iso_nonzerovar_dict = {}
-    tc_full_iso_nonzerovar_dict['tc'] = np.load(timecourse_data_path)
+    tc_full_iso_nonzerovar_dict['tc'] = np.load(analysis_info["timecourse_data_path"])
     
 
 
@@ -155,30 +155,30 @@ if "grid_data_path" not in analysis_info and "gauss_iterparams_path" not in anal
     gf.grid_fit(ecc_grid=eccs,
                 polar_grid=polars,
                 size_grid=sizes)
-	print("Gaussian gridfit completed. rsq: "+str(gf.gridsearch_params[gf.rsq_mask, -1].mean()))
+    print("Gaussian gridfit completed. rsq: "+str(gf.gridsearch_params[gf.rsq_mask, -1].mean()))
 
-	save_path = opj(data_path, subj+"_gauss-gridparams_space-"+fitting_space)
-	if os.path.exists(save_path):
-		save_path+=datetime.now().strftime('%Y%m%d%H%M%S')
-	
+    save_path = opj(data_path, subj+"_gauss-gridparams_space-"+fitting_space)
+    if os.path.exists(save_path):
+        save_path+=datetime.now().strftime('%Y%m%d%H%M%S')
+    
     np.save(save_path, gf.gridsearch_params)
 
 elif "grid_data_path" in analysis_info:
-    gf.gridsearch_params = np.load(grid_data_path)
+    gf.gridsearch_params = np.load(analysis_info["grid_data_path"])
 
 
 # gaussian iterative fit
 if "gauss_iterparams_path" in analysis_info and "gauss" not in models_to_fit:
-	gf.iterative_search_params = np.load(gauss_iterparams_path)
+    gf.iterative_search_params = np.load(analysis_info["gauss_iterparams_path"])
 else:
-	gf.iterative_fit(rsq_threshold=rsq_threshold, verbose=verbose)
+    gf.iterative_fit(rsq_threshold=rsq_threshold, verbose=verbose)
 
-	print("Gaussian iterfit completed. rsq: "+str(gf.iterative_search_params[gf.rsq_mask, -1].mean()))
+    print("Gaussian iterfit completed. rsq: "+str(gf.iterative_search_params[gf.rsq_mask, -1].mean()))
 
-	save_path = opj(data_path, subj+"_gauss-iterparams_space-"+fitting_space)
-	if os.path.exists(save_path):
-		save_path+=datetime.now().strftime('%Y%m%d%H%M%S')
-	np.save(save_path, gf.iterative_search_params)
+    save_path = opj(data_path, subj+"_gauss-iterparams_space-"+fitting_space)
+    if os.path.exists(save_path):
+        save_path+=datetime.now().strftime('%Y%m%d%H%M%S')
+    np.save(save_path, gf.iterative_search_params)
 
 
 
@@ -187,93 +187,89 @@ starting_params = np.insert(gf.iterative_search_params, -1, 1.0, axis=-1)
 
 # CSS iterative fit
 if "CSS" in models_to_fit:
-	gf_css = Iso2DGaussianFitter(
-	    data=tc_full_iso_nonzerovar_dict['tc'], gridder=gg, n_jobs=n_jobs, fit_css=True,
-	    bounds=[(-10*n_pix, 10*n_pix),  # x
-	            (-10*n_pix, 10*n_pix),  # y
-	            (eps, 20*n_pix),  # prf size
-	            (-inf, +inf),  # prf amplitude
-	            (0, +inf),  # bold baseline
-	            (eps, 3)],  # CSS exponent
-	    gradient_method=gradient_method)
+    gf_css = Iso2DGaussianFitter(
+        data=tc_full_iso_nonzerovar_dict['tc'], gridder=gg, n_jobs=n_jobs, fit_css=True,
+        bounds=[(-10*n_pix, 10*n_pix),  # x
+                (-10*n_pix, 10*n_pix),  # y
+                (eps, 20*n_pix),  # prf size
+                (-inf, +inf),  # prf amplitude
+                (0, +inf),  # bold baseline
+                (eps, 3)],  # CSS exponent
+        gradient_method=gradient_method)
 
-	gf_css.iterative_fit(rsq_threshold=rsq_threshold,
-	                     gridsearch_params=starting_params, verbose=verbose)
+    gf_css.iterative_fit(rsq_threshold=rsq_threshold,
+                         gridsearch_params=starting_params, verbose=verbose)
 
-	save_path = opj(data_path, subj+"_CSS-iterparams_space-"+fitting_space)
-	if os.path.exists(save_path):
-		save_path+=datetime.now().strftime('%Y%m%d%H%M%S')
-	np.save(save_path, gf_css.iterative_search_params)
+    save_path = opj(data_path, subj+"_CSS-iterparams_space-"+fitting_space)
+    if os.path.exists(save_path):
+        save_path+=datetime.now().strftime('%Y%m%d%H%M%S')
+    np.save(save_path, gf_css.iterative_search_params)
 
-	print("CSS iterfit completed. rsq: "+str(gf_css.iterative_search_params[gf.rsq_mask, -1].mean()))
+    print("CSS iterfit completed. rsq: "+str(gf_css.iterative_search_params[gf.rsq_mask, -1].mean()))
 
-if "DoG" in models_to_fit:	
-	# difference of gaussians iterative fit
-	gg_dog = DoG_Iso2DGaussianGridder(stimulus=prf_stim,
-	                                  hrf=hrf,
-	                                  filter_predictions=True,
-	                                  window_length=window_length,
-	                                  task_lengths=task_lengths)
+if "DoG" in models_to_fit:    
+    # difference of gaussians iterative fit
+    gg_dog = DoG_Iso2DGaussianGridder(stimulus=prf_stim,
+                                      hrf=hrf,
+                                      filter_predictions=True,
+                                      window_length=window_length,
+                                      task_lengths=task_lengths)
 
-	gf_dog = DoG_Iso2DGaussianFitter(data=tc_full_iso_nonzerovar_dict['tc'],
-	                                 gridder=gg_dog,
-	                                 n_jobs=n_jobs,
-	                                 bounds=[(-10*n_pix, 10*n_pix),  # x
-	                                         (-10*n_pix, 10*n_pix),  # y
-	                                         (eps, 20*n_pix),  # prf size
-	                                         (0, +inf),  # prf amplitude
-	                                         (0, +inf),  # bold baseline
-	                                         (0, +inf),  # surround amplitude
-	                                         (eps, 20*n_pix)],  # surround size
-	                                 gradient_method=gradient_method)
+    gf_dog = DoG_Iso2DGaussianFitter(data=tc_full_iso_nonzerovar_dict['tc'],
+                                     gridder=gg_dog,
+                                     n_jobs=n_jobs,
+                                     bounds=[(-10*n_pix, 10*n_pix),  # x
+                                             (-10*n_pix, 10*n_pix),  # y
+                                             (eps, 20*n_pix),  # prf size
+                                             (0, +inf),  # prf amplitude
+                                             (0, +inf),  # bold baseline
+                                             (0, +inf),  # surround amplitude
+                                             (eps, 20*n_pix)],  # surround size
+                                     gradient_method=gradient_method)
 
-	gf_dog.iterative_fit(rsq_threshold=rsq_threshold,
-	                     gridsearch_params=starting_params, verbose=verbose)
+    gf_dog.iterative_fit(rsq_threshold=rsq_threshold,
+                         gridsearch_params=starting_params, verbose=verbose)
 
-	save_path = opj(data_path, subj+"_DoG-iterparams_space-"+fitting_space)
-	if os.path.exists(save_path):
-		save_path+=datetime.now().strftime('%Y%m%d%H%M%S')
+    save_path = opj(data_path, subj+"_DoG-iterparams_space-"+fitting_space)
+    if os.path.exists(save_path):
+        save_path+=datetime.now().strftime('%Y%m%d%H%M%S')
 
-	np.save(save_path, gf_dog.iterative_search_params)
+    np.save(save_path, gf_dog.iterative_search_params)
 
 
-	print("DoG iterfit completed. rsq: "+str(gf_dog.iterative_search_params[gf.rsq_mask, -1].mean()))
+    print("DoG iterfit completed. rsq: "+str(gf_dog.iterative_search_params[gf.rsq_mask, -1].mean()))
 
 if "norm" in models_to_fit:
-	# normalization iterative fit
-	gg_norm = Norm_Iso2DGaussianGridder(stimulus=prf_stim,
-	                                    hrf=hrf,
-	                                    filter_predictions=True,
-	                                    window_length=window_length,
-	                                    task_lengths=task_lengths)
+    # normalization iterative fit
+    gg_norm = Norm_Iso2DGaussianGridder(stimulus=prf_stim,
+                                        hrf=hrf,
+                                        filter_predictions=True,
+                                        window_length=window_length,
+                                        task_lengths=task_lengths)
 
-	gf_norm = Norm_Iso2DGaussianFitter(data=tc_full_iso_nonzerovar_dict['tc'],
-	                                   gridder=gg_norm,
-	                                   n_jobs=n_jobs,
-	                                   bounds=[(-10*n_pix, 10*n_pix),  # x
-	                                           (-10*n_pix, 10*n_pix),  # y
-	                                           (eps, 20*n_pix),  # prf size
-	                                           (-inf, +inf),  # prf amplitude
-	                                           (0, +inf),  # bold baseline
-	                                           (0, +inf),  # neural baseline
-	                                           (0, +inf),  # surround amplitude
-	                                           (eps, 20*n_pix),  # surround size
-	                                           (eps, +inf)],  # surround baseline
-	                                   gradient_method=gradient_method)
+    gf_norm = Norm_Iso2DGaussianFitter(data=tc_full_iso_nonzerovar_dict['tc'],
+                                       gridder=gg_norm,
+                                       n_jobs=n_jobs,
+                                       bounds=[(-10*n_pix, 10*n_pix),  # x
+                                               (-10*n_pix, 10*n_pix),  # y
+                                               (eps, 20*n_pix),  # prf size
+                                               (-inf, +inf),  # prf amplitude
+                                               (0, +inf),  # bold baseline
+                                               (0, +inf),  # neural baseline
+                                               (0, +inf),  # surround amplitude
+                                               (eps, 20*n_pix),  # surround size
+                                               (eps, +inf)],  # surround baseline
+                                       gradient_method=gradient_method)
 
-	gf_norm.iterative_fit(rsq_threshold=rsq_threshold,
-	                      gridsearch_params=starting_params, verbose=verbose)
+    gf_norm.iterative_fit(rsq_threshold=rsq_threshold,
+                          gridsearch_params=starting_params, verbose=verbose)
 
-	save_path = opj(data_path, subj+"_norm-iterparams_space-"+fitting_space)
-	if os.path.exists(save_path):
-		save_path+=datetime.now().strftime('%Y%m%d%H%M%S')
+    save_path = opj(data_path, subj+"_norm-iterparams_space-"+fitting_space)
+    if os.path.exists(save_path):
+        save_path+=datetime.now().strftime('%Y%m%d%H%M%S')
 
-	np.save(save_path, gf_norm.iterative_search_params)
+    np.save(save_path, gf_norm.iterative_search_params)
 
-	print("Norm iterfit completed. rsq: "+str(gf_norm.iterative_search_params[gf.rsq_mask, -1].mean()))
+    print("Norm iterfit completed. rsq: "+str(gf_norm.iterative_search_params[gf.rsq_mask, -1].mean()))
 
-print("gauss grid rsq: "+str(gf.gridsearch_params[gf.rsq_mask, -1].mean()))
-print("gauss iter rsq: "+str(gf.iterative_search_params[gf.rsq_mask, -1].mean()))
-print("css iter rsq: "+str(gf_css.iterative_search_params[gf.rsq_mask, -1].mean()))
-print("dog iter rsq: "+str(gf_dog.iterative_search_params[gf.rsq_mask, -1].mean()))
-print("norm iter rsq: "+str(gf_norm.iterative_search_params[gf.rsq_mask, -1].mean()))
+
