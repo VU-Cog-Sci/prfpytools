@@ -31,6 +31,10 @@ def create_dm_from_screenshots(screenshot_path,
         # downsample
         downsampling_constant = int(img.shape[1]/n_pix)
         downsampled_img = img[::downsampling_constant, ::downsampling_constant]
+#        import matplotlib.pyplot as pl
+#        fig = pl.figure()
+#        pl.imshow(downsampled_img)
+#        fig.close()
         
         
         if downsampled_img[:,:,0].shape != design_matrix[...,0].shape:
@@ -40,6 +44,9 @@ def create_dm_from_screenshots(screenshot_path,
         # assumes: standard RGB255 format; only colors present in image are black, white, grey, red, green.
         design_matrix[:, :, img_number][np.where(((downsampled_img[:, :, 0] == 0) & (
             downsampled_img[:, :, 1] == 0)) | ((downsampled_img[:, :, 0] == 255) & (downsampled_img[:, :, 1] == 255)))] = 1
+    
+        design_matrix[:, :, img_number][np.where(((downsampled_img[:, :, 0] == downsampled_img[:, :, 1]) & (
+            downsampled_img[:, :, 1] == downsampled_img[:, :, 2]) & (downsampled_img[:,:,0] != 127) ))] = 1
     
     
     return design_matrix
