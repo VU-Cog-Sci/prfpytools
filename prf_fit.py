@@ -110,6 +110,13 @@ if "timecourse_data_path" not in analysis_info:
                                                           late_iso_dict,
                                                           data_path,
                                                           fitting_space)
+    
+    save_path = opj(data_path, subj+"_timecourse_space-"+fitting_space)
+    
+    if os.path.exists(save_path):
+        save_path+=datetime.now().strftime('%Y%m%d%H%M%S')
+    
+    np.save(save_path, tc_full_iso_nonzerovar_dict['tc'])
 else:
     #mainly for testing purposes
     tc_full_iso_nonzerovar_dict = {}
@@ -129,9 +136,11 @@ sizes, eccs, polars = max_ecc_size * np.linspace(0.25, 1, grid_nr)**2, \
 
 # to avoid dividing by zero
 inf = np.inf
-eps = 1e-6
+eps = 1e-1
+ss = prf_stim.screen_size_degrees
 
 # MODEL COMPARISON
+print("Started modeling at: "+datetime.now().strftime('%Y%m%d%H%M%S'))
 
 # Gaussian model
 gg = Iso2DGaussianGridder(stimulus=prf_stim,
@@ -143,9 +152,9 @@ gg = Iso2DGaussianGridder(stimulus=prf_stim,
 
 gf = Iso2DGaussianFitter(
     data=tc_full_iso_nonzerovar_dict['tc'], gridder=gg, n_jobs=n_jobs,
-    bounds=[(-10*n_pix, 10*n_pix),  # x
-            (-10*n_pix, 10*n_pix),  # y
-            (eps, 20*n_pix),  # prf size
+    bounds=[(-5*ss, 5*ss),  # x
+            (-5*ss, 5*ss),  # y
+            (eps, 5*ss),  # prf size
             (-inf, +inf),  # prf amplitude
             (0, +inf)],  # bold baseline
     gradient_method=gradient_method)
@@ -189,12 +198,12 @@ starting_params = np.insert(gf.iterative_search_params, -1, 1.0, axis=-1)
 if "CSS" in models_to_fit:
     gf_css = Iso2DGaussianFitter(
         data=tc_full_iso_nonzerovar_dict['tc'], gridder=gg, n_jobs=n_jobs, fit_css=True,
-        bounds=[(-10*n_pix, 10*n_pix),  # x
-                (-10*n_pix, 10*n_pix),  # y
-                (eps, 20*n_pix),  # prf size
+        bounds=[(-5*ss, 5*ss),  # x
+                (-5*ss, 5*ss),  # y
+                (eps, 5*ss),  # prf size
                 (-inf, +inf),  # prf amplitude
                 (0, +inf),  # bold baseline
-                (eps, 3)],  # CSS exponent
+                (0.001, 3)],  # CSS exponent
         gradient_method=gradient_method)
 
     gf_css.iterative_fit(rsq_threshold=rsq_threshold,
@@ -218,13 +227,13 @@ if "DoG" in models_to_fit:
     gf_dog = DoG_Iso2DGaussianFitter(data=tc_full_iso_nonzerovar_dict['tc'],
                                      gridder=gg_dog,
                                      n_jobs=n_jobs,
-                                     bounds=[(-10*n_pix, 10*n_pix),  # x
-                                             (-10*n_pix, 10*n_pix),  # y
-                                             (eps, 20*n_pix),  # prf size
-                                             (0, +inf),  # prf amplitude
+                                     bounds=[(-5*ss, 5*ss),  # x
+                                             (-5*ss, 5*ss),  # y
+                                             (eps, 5*ss),  # prf size
+                                             (-inf, +inf),  # prf amplitude
                                              (0, +inf),  # bold baseline
-                                             (0, +inf),  # surround amplitude
-                                             (eps, 20*n_pix)],  # surround size
+                                             (-inf, +inf),  # surround amplitude
+                                             (eps, 10*ss)],  # surround size
                                      gradient_method=gradient_method)
 
     gf_dog.iterative_fit(rsq_threshold=rsq_threshold,
@@ -250,15 +259,15 @@ if "norm" in models_to_fit:
     gf_norm = Norm_Iso2DGaussianFitter(data=tc_full_iso_nonzerovar_dict['tc'],
                                        gridder=gg_norm,
                                        n_jobs=n_jobs,
-                                       bounds=[(-10*n_pix, 10*n_pix),  # x
-                                               (-10*n_pix, 10*n_pix),  # y
-                                               (eps, 20*n_pix),  # prf size
+                                       bounds=[(-5*ss, 5*ss),  # x
+                                               (-5*ss, 5*ss),  # y
+                                               (eps, 5*ss),  # prf size
                                                (-inf, +inf),  # prf amplitude
                                                (0, +inf),  # bold baseline
-                                               (0, +inf),  # neural baseline
-                                               (0, +inf),  # surround amplitude
-                                               (eps, 20*n_pix),  # surround size
-                                               (eps, +inf)],  # surround baseline
+                                               (-inf, +inf),  # neural baseline
+                                               (-inf, +inf),  # surround amplitude
+                                               (eps, 10*ss),  # surround size
+                                               (-inf, +inf)],  # surround baseline
                                        gradient_method=gradient_method)
 
     gf_norm.iterative_fit(rsq_threshold=rsq_threshold,
