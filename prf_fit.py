@@ -110,6 +110,13 @@ if "timecourse_data_path" not in analysis_info:
                                                           late_iso_dict,
                                                           data_path,
                                                           fitting_space)
+    
+    save_path = opj(data_path, subj+"_timecourse_space-"+fitting_space)
+    
+    if os.path.exists(save_path):
+        save_path+=datetime.now().strftime('%Y%m%d%H%M%S')
+    
+    np.save(save_path, tc_full_iso_nonzerovar_dict['tc'])
 else:
     #mainly for testing purposes
     tc_full_iso_nonzerovar_dict = {}
@@ -133,6 +140,7 @@ eps = 1e-1
 ss = prf_stim.screen_size_degrees
 
 # MODEL COMPARISON
+print("Started modeling at: "+datetime.now().strftime('%Y%m%d%H%M%S'))
 
 # Gaussian model
 gg = Iso2DGaussianGridder(stimulus=prf_stim,
