@@ -129,7 +129,7 @@ if verbose == True:
 
 # grid params
 grid_nr = 20
-max_ecc_size = 16
+max_ecc_size = prf_stim.max_ecc
 sizes, eccs, polars = max_ecc_size * np.linspace(0.25, 1, grid_nr)**2, \
     max_ecc_size * np.linspace(0.1, 1, grid_nr)**2, \
     np.linspace(0, 2*np.pi, grid_nr)
@@ -152,9 +152,9 @@ gg = Iso2DGaussianGridder(stimulus=prf_stim,
 
 gf = Iso2DGaussianFitter(
     data=tc_full_iso_nonzerovar_dict['tc'], gridder=gg, n_jobs=n_jobs,
-    bounds=[(-5*ss, 5*ss),  # x
-            (-5*ss, 5*ss),  # y
-            (eps, 5*ss),  # prf size
+    bounds=[(-10*ss, 10*ss),  # x
+            (-10*ss, 10*ss),  # y
+            (eps, 10*ss),  # prf size
             (-inf, +inf),  # prf amplitude
             (0, +inf)],  # bold baseline
     gradient_method=gradient_method)
@@ -198,9 +198,9 @@ starting_params = np.insert(gf.iterative_search_params, -1, 1.0, axis=-1)
 if "CSS" in models_to_fit:
     gf_css = Iso2DGaussianFitter(
         data=tc_full_iso_nonzerovar_dict['tc'], gridder=gg, n_jobs=n_jobs, fit_css=True,
-        bounds=[(-5*ss, 5*ss),  # x
-                (-5*ss, 5*ss),  # y
-                (eps, 5*ss),  # prf size
+        bounds=[(-10*ss, 10*ss),  # x
+                (-10*ss, 10*ss),  # y
+                (eps, 10*ss),  # prf size
                 (-inf, +inf),  # prf amplitude
                 (0, +inf),  # bold baseline
                 (0.001, 3)],  # CSS exponent
@@ -227,13 +227,13 @@ if "DoG" in models_to_fit:
     gf_dog = DoG_Iso2DGaussianFitter(data=tc_full_iso_nonzerovar_dict['tc'],
                                      gridder=gg_dog,
                                      n_jobs=n_jobs,
-                                     bounds=[(-5*ss, 5*ss),  # x
-                                             (-5*ss, 5*ss),  # y
-                                             (eps, 5*ss),  # prf size
+                                     bounds=[(-10*ss, 10*ss),  # x
+                                             (-10*ss, 10*ss),  # y
+                                             (eps, 10*ss),  # prf size
                                              (-inf, +inf),  # prf amplitude
                                              (0, +inf),  # bold baseline
                                              (-inf, +inf),  # surround amplitude
-                                             (eps, 10*ss)],  # surround size
+                                             (eps, 20*ss)],  # surround size
                                      gradient_method=gradient_method)
 
     gf_dog.iterative_fit(rsq_threshold=rsq_threshold,
@@ -259,14 +259,14 @@ if "norm" in models_to_fit:
     gf_norm = Norm_Iso2DGaussianFitter(data=tc_full_iso_nonzerovar_dict['tc'],
                                        gridder=gg_norm,
                                        n_jobs=n_jobs,
-                                       bounds=[(-5*ss, 5*ss),  # x
-                                               (-5*ss, 5*ss),  # y
-                                               (eps, 5*ss),  # prf size
+                                       bounds=[(-10*ss, 10*ss),  # x
+                                               (-10*ss, 10*ss),  # y
+                                               (eps, 10*ss),  # prf size
                                                (-inf, +inf),  # prf amplitude
                                                (0, +inf),  # bold baseline
                                                (-inf, +inf),  # neural baseline
                                                (-inf, +inf),  # surround amplitude
-                                               (eps, 10*ss),  # surround size
+                                               (eps, 20*ss),  # surround size
                                                (-inf, +inf)],  # surround baseline
                                        gradient_method=gradient_method)
 
