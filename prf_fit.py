@@ -166,7 +166,7 @@ if "grid_data_path" not in analysis_info and "gauss_iterparams_path" not in anal
     gf.grid_fit(ecc_grid=eccs,
                 polar_grid=polars,
                 size_grid=sizes)
-    print("Gaussian gridfit completed. rsq: "+str(gf.gridsearch_params[:, -1].mean()))
+    print("Gaussian gridfit completed at "+datetime.now().strftime('%Y%m%d%H%M%S')+". rsq: "+str(gf.gridsearch_params[:, -1].mean()))
 
     save_path = opj(data_path, subj+"_gauss-gridparams_space-"+fitting_space)
     if os.path.exists(save_path):
@@ -186,7 +186,7 @@ if "gauss_iterparams_path" in analysis_info and "gauss" not in models_to_fit:
 else:
     gf.iterative_fit(rsq_threshold=rsq_threshold, verbose=verbose)
 
-    print("Gaussian iterfit completed. rsq: "+str(gf.iterative_search_params[gf.rsq_mask, -1].mean()))
+    print("Gaussian iterfit completed at "+datetime.now().strftime('%Y%m%d%H%M%S')+". rsq: "+str(gf.iterative_search_params[gf.rsq_mask, -1].mean()))
 
     save_path = opj(data_path, subj+"_gauss-iterparams_space-"+fitting_space)
     if os.path.exists(save_path):
@@ -218,7 +218,7 @@ if "CSS" in models_to_fit:
         save_path+=datetime.now().strftime('%Y%m%d%H%M%S')
     np.save(save_path, gf_css.iterative_search_params)
 
-    print("CSS iterfit completed. rsq: "+str(gf_css.iterative_search_params[gf_css.rsq_mask, -1].mean()))
+    print("CSS iterfit completed at "+datetime.now().strftime('%Y%m%d%H%M%S')+". rsq: "+str(gf_css.iterative_search_params[gf_css.rsq_mask, -1].mean()))
 
 if "DoG" in models_to_fit:    
     # difference of gaussians iterative fit
@@ -250,7 +250,7 @@ if "DoG" in models_to_fit:
     np.save(save_path, gf_dog.iterative_search_params)
 
 
-    print("DoG iterfit completed. rsq: "+str(gf_dog.iterative_search_params[gf_dog.rsq_mask, -1].mean()))
+    print("DoG iterfit completed at "+datetime.now().strftime('%Y%m%d%H%M%S')+". rsq: "+str(gf_dog.iterative_search_params[gf_dog.rsq_mask, -1].mean()))
 
 if "norm" in models_to_fit:
     # normalization iterative fit
@@ -283,6 +283,6 @@ if "norm" in models_to_fit:
 
     np.save(save_path, gf_norm.iterative_search_params)
 
-    print("Norm iterfit completed. rsq: "+str(gf_norm.iterative_search_params[gf_norm.rsq_mask, -1].mean()))
+    print("Norm iterfit completed at "+datetime.now().strftime('%Y%m%d%H%M%S')+". rsq: "+str(gf_norm.iterative_search_params[gf_norm.rsq_mask, -1].mean()))
 
 
