@@ -83,11 +83,14 @@ late_iso_dict = {}
 late_iso_dict['periods'] = np.where((np.sum(dm_full, axis=(0, 1)) == 0) & (
     np.sum(shifted_dm, axis=(0, 1)) == 0))[0]
 
+start=0
 for i, task_name in enumerate(task_names):
+    stop=start+task_lengths[i]
     if task_name not in screenshot_paths[i]:
         print("WARNING: check that screenshot paths and task names are in the same order")
-    late_iso_dict[task_name] = np.split(
-        late_iso_dict['periods'], len(task_names))[i]
+    late_iso_dict[task_name] = late_iso_dict['periods'][np.where((late_iso_dict['periods']>=start) & (late_iso_dict['periods']<stop))]
+        
+    start+=task_lengths[i]
 
 if verbose == True:
     print("Finished stimulus setup. Now preparing data for fitting...")
@@ -168,7 +171,7 @@ if "grid_data_path" not in analysis_info and "gauss_iterparams_path" not in anal
                 size_grid=sizes)
     print("Gaussian gridfit completed at "+datetime.now().strftime('%Y%m%d%H%M%S')+". rsq: "+str(gf.gridsearch_params[:, -1].mean()))
 
-    save_path = opj(data_path, subj+"_gauss-gridparams_space-"+fitting_space)
+    save_path = opj(data_path, subj+"_gridparams-gauss_space-"+fitting_space)
     if os.path.exists(save_path):
         save_path+=datetime.now().strftime('%Y%m%d%H%M%S')
     
@@ -188,7 +191,7 @@ else:
 
     print("Gaussian iterfit completed at "+datetime.now().strftime('%Y%m%d%H%M%S')+". rsq: "+str(gf.iterative_search_params[gf.rsq_mask, -1].mean()))
 
-    save_path = opj(data_path, subj+"_gauss-iterparams_space-"+fitting_space)
+    save_path = opj(data_path, subj+"_iterparams-gauss_space-"+fitting_space)
     if os.path.exists(save_path):
         save_path+=datetime.now().strftime('%Y%m%d%H%M%S')
     np.save(save_path, gf.iterative_search_params)
@@ -213,7 +216,7 @@ if "CSS" in models_to_fit:
     gf_css.iterative_fit(rsq_threshold=0.4,
                          gridsearch_params=starting_params, verbose=verbose)
 
-    save_path = opj(data_path, subj+"_CSS-iterparams_space-"+fitting_space)
+    save_path = opj(data_path, subj+"_iterparams-css-_space-"+fitting_space)
     if os.path.exists(save_path):
         save_path+=datetime.now().strftime('%Y%m%d%H%M%S')
     np.save(save_path, gf_css.iterative_search_params)
@@ -243,7 +246,7 @@ if "DoG" in models_to_fit:
     gf_dog.iterative_fit(rsq_threshold=0.4,
                          gridsearch_params=starting_params, verbose=verbose)
 
-    save_path = opj(data_path, subj+"_DoG-iterparams_space-"+fitting_space)
+    save_path = opj(data_path, subj+"_iterparams-dog_space-"+fitting_space)
     if os.path.exists(save_path):
         save_path+=datetime.now().strftime('%Y%m%d%H%M%S')
 
@@ -268,16 +271,16 @@ if "norm" in models_to_fit:
                                                (eps, 10*ss),  # prf size
                                                (-inf, +inf),  # prf amplitude
                                                (0, +inf),  # bold baseline
-                                               (-inf, +inf),  # neural baseline
-                                               (-inf, +inf),  # surround amplitude
+                                               (0, +inf),  # neural baseline
+                                               (0, +inf),  # surround amplitude
                                                (eps, 20*ss),  # surround size
-                                               (-inf, +inf)],  # surround baseline
+                                               (1e-6, +inf)],  # surround baseline
                                        gradient_method=gradient_method)
 
     gf_norm.iterative_fit(rsq_threshold=0.4,
                           gridsearch_params=starting_params, verbose=verbose)
 
-    save_path = opj(data_path, subj+"_norm-iterparams_space-"+fitting_space)
+    save_path = opj(data_path, subj+"_iterparams-norm_space-"+fitting_space)
     if os.path.exists(save_path):
         save_path+=datetime.now().strftime('%Y%m%d%H%M%S')
 
