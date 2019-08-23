@@ -48,6 +48,12 @@ def create_dm_from_screenshots(screenshot_path,
         design_matrix[:, :, img_number][np.where(((downsampled_img[:, :, 0] == downsampled_img[:, :, 1]) & (
             downsampled_img[:, :, 1] == downsampled_img[:, :, 2]) & (downsampled_img[:,:,0] != 127) ))] = 1
     
+    #clipping edges
+    design_matrix[:2,:,:] = 0
+    design_matrix[-2:,:,:] = 0
+    design_matrix[:,0,:] = 0
+    design_matrix[:,-1,:] = 0
+    print("Design matrix completed")
     
     return design_matrix
 
