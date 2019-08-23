@@ -1,9 +1,7 @@
 import os
 import numpy as np
-import imageio
 import nibabel as nb
-from joblib import Parallel, delayed
-import time
+import matplotlib.image as mpimg
 
 opj = os.path.join
 
@@ -22,7 +20,7 @@ def create_dm_from_screenshots(screenshot_path,
         # assuming last three numbers before .png are the screenshot number
         img_number = int(image_file[-7:-4])-1
         # subtract one to start from zero
-        img = imageio.imread(os.path.join(screenshot_path, image_file))
+        img = mpimg.imread(os.path.join(screenshot_path, image_file))
         # make it square
         if img.shape[0] != img.shape[1]:
             offset = int((img.shape[1]-img.shape[0])/2)
