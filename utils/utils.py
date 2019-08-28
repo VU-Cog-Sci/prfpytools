@@ -20,7 +20,7 @@ def create_dm_from_screenshots(screenshot_path,
         # assuming last three numbers before .png are the screenshot number
         img_number = int(image_file[-7:-4])-1
         # subtract one to start from zero
-        img = mpimg.imread(os.path.join(screenshot_path, image_file))
+        img = (255*mpimg.imread(os.path.join(screenshot_path, image_file))).astype('int')
         # make it square
         if img.shape[0] != img.shape[1]:
             offset = int((img.shape[1]-img.shape[0])/2)
