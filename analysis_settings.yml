@@ -29,11 +29,12 @@ fitting_space: "fsaverage"
 #window length for savgol filtering
 window_length: 121
 
-n_jobs: 11
+n_jobs: 4
 
 #explicit hrf or spm hrf params. see prfpy for details
 hrf: [1,1,0]
-
+#number of voxel batches for grid fit
+n_batches: 1000
 #gradient method to be used in iterative fitting. numerical, analytic (must be set up in prfpy), or None.
 gradient_method: "numerical"
 verbose: True
