@@ -49,6 +49,7 @@ gradient_method = analysis_info["gradient_method"]
 verbose = analysis_info["verbose"]
 rsq_threshold = analysis_info["rsq_threshold"]
 models_to_fit = analysis_info["models_to_fit"]
+n_batches = analysis_info["n_batches"]
 
 
 
@@ -127,7 +128,8 @@ else:
     tc_full_iso_nonzerovar_dict = {}
     tc_full_iso_nonzerovar_dict['tc'] = np.load(analysis_info["timecourse_data_path"])
     
-
+if "mkl_num_threads" in analysis_info:
+    mkl.set_num_threads(1)
 
 if verbose == True:
     print("Finished preparing data for fitting. Now creating and fitting models...")
@@ -168,8 +170,11 @@ gf = Iso2DGaussianFitter(
 if "grid_data_path" not in analysis_info and "gauss_iterparams_path" not in analysis_info:
     gf.grid_fit(ecc_grid=eccs,
                 polar_grid=polars,
-                size_grid=sizes)
-    print("Gaussian gridfit completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". rsq: "+str(gf.gridsearch_params[:, -1].mean()))
+                size_grid=sizes,
+                verbose=verbose,
+                n_batches=n_batches)
+    print("Gaussian gridfit completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+\
+          ". voxels/vertices above threshold: "+str(np.sum(gf.gridsearch_params[:, -1]>rsq_threshold)))
 
 
     save_path = opj(data_path, subj+"_gridparams-gauss_space-"+fitting_space)
@@ -182,11 +187,10 @@ if "grid_data_path" not in analysis_info and "gauss_iterparams_path" not in anal
 elif "grid_data_path" in analysis_info:
     gf.gridsearch_params = np.load(analysis_info["grid_data_path"])
 
-if "mkl_num_threads" in analysis_info:
-    mkl.set_num_threads(standard_max_threads)
+
 
 # gaussian iterative fit
-if "gauss_iterparams_path" in analysis_info and "gauss" not in models_to_fit:
+if "gauss_iterparams_path" in analysis_info:
     gf.iterative_search_params = np.load(analysis_info["gauss_iterparams_path"])
 else:
     gf.iterative_fit(rsq_threshold=rsq_threshold, verbose=verbose)
