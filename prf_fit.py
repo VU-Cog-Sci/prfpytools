@@ -141,7 +141,7 @@ sizes, eccs, polars = max_ecc_size * np.linspace(0.25, 1, grid_nr)**2, \
     max_ecc_size * np.linspace(0.1, 1, grid_nr)**2, \
     np.linspace(0, 2*np.pi, grid_nr)
 
-# to avoid dividing by zero
+# to set up parameter bounds in iterfit
 inf = np.inf
 eps = 1e-1
 ss = prf_stim.screen_size_degrees
@@ -168,6 +168,7 @@ gf = Iso2DGaussianFitter(
 
 # gaussian fit
 if "grid_data_path" not in analysis_info and "gauss_iterparams_path" not in analysis_info:
+    print("Starting Gaussian grid fit at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S'))
     gf.grid_fit(ecc_grid=eccs,
                 polar_grid=polars,
                 size_grid=sizes,
@@ -205,7 +206,7 @@ else:
     np.save(save_path, gf.iterative_search_params)
 
 
-
+#iter gaussian result as starting params for all subsequent modeling
 starting_params = np.insert(gf.iterative_search_params, -1, 1.0, axis=-1)
 
 
