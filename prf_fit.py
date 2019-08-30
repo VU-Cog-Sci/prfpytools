@@ -141,7 +141,7 @@ sizes, eccs, polars = max_ecc_size * np.linspace(0.25, 1, grid_nr)**2, \
     max_ecc_size * np.linspace(0.1, 1, grid_nr)**2, \
     np.linspace(0, 2*np.pi, grid_nr)
 
-# to avoid dividing by zero
+# to set up parameter bounds in iterfit
 inf = np.inf
 eps = 1e-1
 ss = prf_stim.screen_size_degrees
@@ -168,6 +168,7 @@ gf = Iso2DGaussianFitter(
 
 # gaussian fit
 if "grid_data_path" not in analysis_info and "gauss_iterparams_path" not in analysis_info:
+    print("Starting Gaussian grid fit at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S'))
     gf.grid_fit(ecc_grid=eccs,
                 polar_grid=polars,
                 size_grid=sizes,
@@ -193,6 +194,7 @@ elif "grid_data_path" in analysis_info:
 if "gauss_iterparams_path" in analysis_info:
     gf.iterative_search_params = np.load(analysis_info["gauss_iterparams_path"])
 else:
+    print("Starting Gaussian iter fit at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S'))
     gf.iterative_fit(rsq_threshold=rsq_threshold, verbose=verbose)
 
     print("Gaussian iterfit completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". rsq: "+str(gf.iterative_search_params[gf.rsq_mask, -1].mean()))
@@ -205,7 +207,7 @@ else:
     np.save(save_path, gf.iterative_search_params)
 
 
-
+#iter gaussian result as starting params for all subsequent modeling
 starting_params = np.insert(gf.iterative_search_params, -1, 1.0, axis=-1)
 
 
@@ -220,7 +222,8 @@ if "CSS" in models_to_fit:
                 (0, +inf),  # bold baseline
                 (0.001, 3)],  # CSS exponent
         gradient_method=gradient_method)
-
+    
+    print("Starting CSS iter fit at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S'))
     gf_css.iterative_fit(rsq_threshold=0.4,
                          gridsearch_params=starting_params, verbose=verbose)
 
@@ -252,7 +255,8 @@ if "DoG" in models_to_fit:
                                              (-inf, +inf),  # surround amplitude
                                              (eps, 20*ss)],  # surround size
                                      gradient_method=gradient_method)
-
+    
+    print("Starting DoG iter fit at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S'))
     gf_dog.iterative_fit(rsq_threshold=0.4,
                          gridsearch_params=starting_params, verbose=verbose)
 
@@ -296,7 +300,8 @@ if "norm" in models_to_fit:
     surround_baseline_grid=np.array([1.0,5.0,10.0,100.0], dtype='float32')
     
     gaussian_params = np.concatenate((starting_params[:,:3], starting_params[:,-1][...,np.newaxis]), axis=-1)
-
+    
+    print("Starting norm grid fit at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S'))
     gf_norm.grid_fit(gaussian_params,
                      neural_baseline_grid,
                      surround_amplitude_grid,
@@ -307,7 +312,8 @@ if "norm" in models_to_fit:
                      rsq_threshold=0.4)
     
     print("Norm gridfit completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". rsq: "+str(gf_norm.gridsearch_params[gf_norm.gridsearch_rsq_mask, -1].mean()))
-
+    
+    print("Starting norm iter fit at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S'))
     gf_norm.iterative_fit(rsq_threshold=0.4, verbose=verbose)
 
     save_path = opj(data_path, subj+"_iterparams-norm_space-"+fitting_space)
