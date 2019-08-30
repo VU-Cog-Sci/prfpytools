@@ -288,10 +288,27 @@ if "norm" in models_to_fit:
                                                (eps, 20*ss),  # surround size
                                                (1e-6, +inf)],  # surround baseline
                                        gradient_method=gradient_method)
+    
+    #normalization grid stage
+    neural_baseline_grid=np.array([0,1,10,100], dtype='float32')
+    surround_amplitude_grid=np.array([0,1,10,100], dtype='float32')
+    surround_size_grid=np.array([5,10,20,40], dtype='float32')
+    surround_baseline_grid=np.array([1.0,5.0,10.0,100.0], dtype='float32')
+    
+    gaussian_params = np.concatenate((starting_params[:,:3], starting_params[:,-1][...,np.newaxis]), axis=-1)
 
-    gf_norm.iterative_fit(rsq_threshold=0.4,
-                          gridsearch_params=starting_params, verbose=verbose)
+    gf_norm.grid_fit(gaussian_params,
+                     neural_baseline_grid,
+                     surround_amplitude_grid,
+                     surround_size_grid,
+                     surround_baseline_grid,
+                     verbose=verbose,
+                     n_batches=n_batches,
+                     rsq_threshold=0.4)
+    
+    print("Norm gridfit completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". rsq: "+str(gf_norm.gridsearch_params[gf_norm.gridsearch_rsq_mask, -1].mean()))
 
+    gf_norm.iterative_fit(rsq_threshold=0.4, verbose=verbose)
 
     save_path = opj(data_path, subj+"_iterparams-norm_space-"+fitting_space)
 
