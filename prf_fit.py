@@ -294,31 +294,34 @@ if "norm" in models_to_fit:
                                        gradient_method=gradient_method)
     
     #normalization grid stage
-    neural_baseline_grid=np.array([0,1,10,100], dtype='float32')
-    surround_amplitude_grid=np.array([0,1,10,100], dtype='float32')
-    surround_size_grid=np.array([5,10,20,40], dtype='float32')
-    surround_baseline_grid=np.array([1.0,5.0,10.0,100.0], dtype='float32')
+    if "norm_gridparams_path" not in analysis_info:
+        neural_baseline_grid=np.array([0,1,10,100], dtype='float32')
+        surround_amplitude_grid=np.array([0,1,10,100], dtype='float32')
+        surround_size_grid=np.array([5,10,20,40], dtype='float32')
+        surround_baseline_grid=np.array([1.0,5.0,10.0,100.0], dtype='float32')
+        
+        gaussian_params = np.concatenate((starting_params[:,:3], starting_params[:,-1][...,np.newaxis]), axis=-1)
+        
+        print("Starting norm grid fit at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S'))
+        gf_norm.grid_fit(gaussian_params,
+                         neural_baseline_grid,
+                         surround_amplitude_grid,
+                         surround_size_grid,
+                         surround_baseline_grid,
+                         verbose=verbose,
+                         n_batches=n_batches,
+                         rsq_threshold=rsq_threshold)
+        
+        print("Norm gridfit completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Mean rsq>"+str(rsq_threshold)+": "+str(gf_norm.gridsearch_params[gf_norm.gridsearch_rsq_mask, -1].mean()))
+        
+        save_path = opj(data_path, subj+"_gridparams-norm_space-"+fitting_space)
     
-    gaussian_params = np.concatenate((starting_params[:,:3], starting_params[:,-1][...,np.newaxis]), axis=-1)
+        if os.path.exists(save_path+".npy"):
+            save_path+=datetime.now().strftime('%Y%m%d%H%M%S')
     
-    print("Starting norm grid fit at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S'))
-    gf_norm.grid_fit(gaussian_params,
-                     neural_baseline_grid,
-                     surround_amplitude_grid,
-                     surround_size_grid,
-                     surround_baseline_grid,
-                     verbose=verbose,
-                     n_batches=n_batches,
-                     rsq_threshold=rsq_threshold)
-    
-    print("Norm gridfit completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Mean rsq>"+str(rsq_threshold)+": "+str(gf_norm.gridsearch_params[gf_norm.gridsearch_rsq_mask, -1].mean()))
-    
-    save_path = opj(data_path, subj+"_gridparams-norm_space-"+fitting_space)
-
-    if os.path.exists(save_path+".npy"):
-        save_path+=datetime.now().strftime('%Y%m%d%H%M%S')
-
-    np.save(save_path, gf_norm.gridsearch_params)
+        np.save(save_path, gf_norm.gridsearch_params)
+    else:
+        gf_norm.gridsearch_params = np.load(analysis_info["norm_gridparams_path"])
 
     print("Starting norm iter fit at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S'))
     gf_norm.iterative_fit(rsq_threshold=rsq_threshold, verbose=verbose)
