@@ -287,7 +287,7 @@ if "norm" in models_to_fit:
                                                (eps, 10*ss),  # prf size
                                                (-inf, +inf),  # prf amplitude
                                                (0, +inf),  # bold baseline
-                                               (0, +inf),  # neural baseline
+                                               (-inf, +inf),  # neural baseline
                                                (0, +inf),  # surround amplitude
                                                (eps, 20*ss),  # surround size
                                                (1e-6, +inf)],  # surround baseline
