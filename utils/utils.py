@@ -179,8 +179,8 @@ def prepare_volume_data(subj,
                 
 
     #exclude timecourses with zero variance
-    tc_full_iso_nonzerovar_dict['brain_mask_shape'] = final_mask.shape
-    tc_full_iso_nonzerovar_dict['nonzerovar_brain_mask'] = np.ravel(final_mask) & (np.var(tc_full_iso, axis=-1)>0)
-    tc_full_iso_nonzerovar_dict['tc'] = tc_full_iso[tc_full_iso_nonzerovar_dict['nonzerovar_brain_mask']]
+    tc_full_iso_nonzerovar_dict['orig_data_shape'] = final_mask.shape
+    tc_full_iso_nonzerovar_dict['nonzerovar_mask'] = np.ravel(final_mask) & (np.var(tc_full_iso, axis=-1)>0)
+    tc_full_iso_nonzerovar_dict['tc'] = tc_full_iso[tc_full_iso_nonzerovar_dict['nonzerovar_mask']]
 
     return tc_full_iso_nonzerovar_dict

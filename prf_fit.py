@@ -123,6 +123,14 @@ if "timecourse_data_path" not in analysis_info:
         save_path+=datetime.now().strftime('%Y%m%d%H%M%S')
     
     np.save(save_path, tc_full_iso_nonzerovar_dict['tc'])
+    
+    save_path = opj(data_path, subj+"_nonzerovar-mask_space-"+fitting_space)
+    
+    if os.path.exists(save_path+".npy"):
+        save_path+=datetime.now().strftime('%Y%m%d%H%M%S')
+    
+    np.save(save_path, tc_full_iso_nonzerovar_dict['nonzerovar_mask'])
+    
 else:
     #mainly for testing purposes
     tc_full_iso_nonzerovar_dict = {}
