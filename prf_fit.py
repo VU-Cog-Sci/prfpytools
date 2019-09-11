@@ -28,8 +28,8 @@ import numpy as np
 
 from utils.utils import create_dm_from_screenshots, prepare_surface_data, prepare_volume_data
 from prfpy.stimulus import PRFStimulus2D
-from prfpy.grid import Iso2DGaussianGridder, Norm_Iso2DGaussianGridder, DoG_Iso2DGaussianGridder
-from prfpy.fit import Iso2DGaussianFitter, Norm_Iso2DGaussianFitter, DoG_Iso2DGaussianFitter
+from prfpy.grid import Iso2DGaussianGridder, Norm_Iso2DGaussianGridder, DoG_Iso2DGaussianGridder, CSS_Iso2DGaussianGridder
+from prfpy.fit import Iso2DGaussianFitter, Norm_Iso2DGaussianFitter, DoG_Iso2DGaussianFitter, CSS_Iso2DGaussianFitter
 
 
 # note that screenshot paths and task names should be in the same order
@@ -50,6 +50,7 @@ verbose = analysis_info["verbose"]
 rsq_threshold = analysis_info["rsq_threshold"]
 models_to_fit = analysis_info["models_to_fit"]
 n_batches = analysis_info["n_batches"]
+fit_hrf = analysis_info["fit_hrf"]
 
 
 
@@ -172,7 +173,8 @@ gf = Iso2DGaussianFitter(
             (eps, 10*ss),  # prf size
             (-inf, +inf),  # prf amplitude
             (0, +inf)],  # bold baseline
-    gradient_method=gradient_method)
+    gradient_method=gradient_method,
+    fit_hrf=fit_hrf)
 
 # gaussian fit
 if "grid_data_path" not in analysis_info and "gauss_iterparams_path" not in analysis_info:
@@ -184,6 +186,7 @@ if "grid_data_path" not in analysis_info and "gauss_iterparams_path" not in anal
                 n_batches=n_batches)
     print("Gaussian gridfit completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+\
           ". voxels/vertices above "+str(rsq_threshold)+": "+str(np.sum(gf.gridsearch_params[:, -1]>rsq_threshold)))
+    print("Mean rsq>"+str(rsq_threshold)+": "+str(gf.gridsearch_params[gf.gridsearch_params[:, -1]>rsq_threshold, -1].mean()))
 
 
     save_path = opj(data_path, subj+"_gridparams-gauss_space-"+fitting_space)
@@ -221,19 +224,25 @@ starting_params = np.insert(gf.iterative_search_params, -1, 1.0, axis=-1)
 
 # CSS iterative fit
 if "CSS" in models_to_fit:
-    gf_css = Iso2DGaussianFitter(
-        data=tc_full_iso_nonzerovar_dict['tc'], gridder=gg, n_jobs=n_jobs, fit_css=True,
+    gg_css = CSS_Iso2DGaussianGridder(stimulus=prf_stim,
+                                      hrf=hrf,
+                                      filter_predictions=True,
+                                      window_length=window_length,
+                                      task_lengths=task_lengths)
+    gf_css = CSS_Iso2DGaussianFitter(
+        data=tc_full_iso_nonzerovar_dict['tc'], gridder=gg_css, n_jobs=n_jobs,
         bounds=[(-10*ss, 10*ss),  # x
                 (-10*ss, 10*ss),  # y
                 (eps, 10*ss),  # prf size
                 (-inf, +inf),  # prf amplitude
                 (0, +inf),  # bold baseline
                 (0.001, 3)],  # CSS exponent
-        gradient_method=gradient_method)
-    
+        gradient_method=gradient_method,
+        fit_hrf=fit_hrf,
+        previous_gaussian_fitter=gf)
+
     print("Starting CSS iter fit at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S'))
-    gf_css.iterative_fit(rsq_threshold=rsq_threshold,
-                         gridsearch_params=starting_params, verbose=verbose)
+    gf_css.iterative_fit(rsq_threshold=rsq_threshold, verbose=verbose)
 
 
     save_path = opj(data_path, subj+"_iterparams-css_space-"+fitting_space)
@@ -262,11 +271,12 @@ if "DoG" in models_to_fit:
                                              (0, +inf),  # bold baseline
                                              (-inf, +inf),  # surround amplitude
                                              (eps, 20*ss)],  # surround size
-                                     gradient_method=gradient_method)
+                                     gradient_method=gradient_method,
+                                     fit_hrf=fit_hrf,
+                                     previous_gaussian_fitter=gf)
     
     print("Starting DoG iter fit at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S'))
-    gf_dog.iterative_fit(rsq_threshold=rsq_threshold,
-                         gridsearch_params=starting_params, verbose=verbose)
+    gf_dog.iterative_fit(rsq_threshold=rsq_threshold, verbose=verbose)
 
 
     save_path = opj(data_path, subj+"_iterparams-dog_space-"+fitting_space)
@@ -295,26 +305,26 @@ if "norm" in models_to_fit:
                                                (eps, 10*ss),  # prf size
                                                (-inf, +inf),  # prf amplitude
                                                (0, +inf),  # bold baseline
-                                               (-inf, +inf),  # neural baseline
                                                (0, +inf),  # surround amplitude
                                                (eps, 20*ss),  # surround size
+                                               (-inf, +inf),  # neural baseline
                                                (1e-6, +inf)],  # surround baseline
-                                       gradient_method=gradient_method)
+                                       gradient_method=gradient_method,
+                                       fit_hrf=fit_hrf,
+                                       previous_gaussian_fitter=gf)
     
     #normalization grid stage
     if "norm_gridparams_path" not in analysis_info:
-        neural_baseline_grid=np.array([0,1,10,100], dtype='float32')
         surround_amplitude_grid=np.array([0,1,10,100], dtype='float32')
         surround_size_grid=np.array([5,10,20,40], dtype='float32')
-        surround_baseline_grid=np.array([1.0,5.0,10.0,100.0], dtype='float32')
-        
-        gaussian_params = np.concatenate((starting_params[:,:3], starting_params[:,-1][...,np.newaxis]), axis=-1)
-        
+        neural_baseline_grid=np.array([0,1,10,100], dtype='float32')
+        surround_baseline_grid=np.array([1,5,10,100], dtype='float32')
+
+
         print("Starting norm grid fit at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S'))
-        gf_norm.grid_fit(gaussian_params,
-                         neural_baseline_grid,
-                         surround_amplitude_grid,
+        gf_norm.grid_fit(surround_amplitude_grid,
                          surround_size_grid,
+                         neural_baseline_grid,
                          surround_baseline_grid,
                          verbose=verbose,
                          n_batches=n_batches,
