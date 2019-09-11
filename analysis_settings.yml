@@ -33,6 +33,8 @@ n_jobs: 4
 
 #explicit hrf or spm hrf params. see prfpy for details
 hrf: [1,1,0]
+#whether to fit the hrf params or not
+fit_hrf: False
 #number of voxel batches for grid fit
 n_batches: 1000
 #gradient method to be used in iterative fitting. numerical, analytic (must be set up in prfpy), or None.
@@ -43,6 +45,6 @@ rsq_threshold: 0.2
 #if gaussian grid data was already obtained, can specify path
 #grid_data_path: "/Users/marcoaqil/PRFMapping/gauss_grid_sub-001.npy"
 #if timecourse was already preprocessed, specify
-#timecourse_data_path: "/Users/marcoaqil/PRFMapping/tc_fsaverage.npy"
+timecourse_data_path: "/Users/marcoaqil/PRFMapping/tc_fsaverage.npy"
 
     
