@@ -315,10 +315,10 @@ if "norm" in models_to_fit:
     
     #normalization grid stage
     if "norm_gridparams_path" not in analysis_info:
-        surround_amplitude_grid=np.array([0,1,10,100], dtype='float32')
-        surround_size_grid=np.array([5,10,20,40], dtype='float32')
+        surround_amplitude_grid=np.array([0,0.05,0.2,1], dtype='float32')
+        surround_size_grid=np.array([3,6,15,30], dtype='float32')
         neural_baseline_grid=np.array([0,1,10,100], dtype='float32')
-        surround_baseline_grid=np.array([1,5,10,100], dtype='float32')
+        surround_baseline_grid=np.array([1.0,10.0,100.0,1000.0], dtype='float32')
 
 
         print("Starting norm grid fit at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S'))
