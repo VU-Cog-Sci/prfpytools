@@ -26,8 +26,8 @@ if "mkl_num_threads" in analysis_info:
 
 import numpy as np
 
-from utils.utils import create_dm_from_screenshots, prepare_surface_data, prepare_volume_data
-from prfpy.stimulus import PRFStimulus2D
+from utils.utils import create_full_stim, prepare_surface_data, prepare_volume_data
+
 from prfpy.grid import Iso2DGaussianGridder, Norm_Iso2DGaussianGridder, DoG_Iso2DGaussianGridder, CSS_Iso2DGaussianGridder
 from prfpy.fit import Iso2DGaussianFitter, Norm_Iso2DGaussianFitter, DoG_Iso2DGaussianFitter, CSS_Iso2DGaussianFitter
 
@@ -57,45 +57,14 @@ fit_hrf = analysis_info["fit_hrf"]
 if verbose == True:
     print("Creating PRF stimulus from screenshots...")
 
-dm_list = []
-
-for screenshot_path in screenshot_paths:
-    # create stimulus
-    dm_list.append(create_dm_from_screenshots(screenshot_path,
-                                              n_pix)[..., discard_volumes:])
-
-
-task_lengths = [dm.shape[-1] for dm in dm_list]
-
-dm_full = np.concatenate(tuple(dm_list), axis=-1)
-
-prf_stim = PRFStimulus2D(screen_size_cm=screen_size_cm,
-                         screen_distance_cm=screen_distance_cm,
-                         design_matrix=dm_full,
-                         TR=TR)
-
-
-# late-empty DM periods (for calculation of BOLD baseline)
-shifted_dm = np.zeros_like(dm_full)
-
-# number of TRs in which activity may linger (hrf)
-shifted_dm[..., 7:] = dm_full[..., :-7]
-
-late_iso_dict = {}
-late_iso_dict['periods'] = np.where((np.sum(dm_full, axis=(0, 1)) == 0) & (
-    np.sum(shifted_dm, axis=(0, 1)) == 0))[0]
-
-start=0
-for i, task_name in enumerate(task_names):
-    stop=start+task_lengths[i]
-    if task_name not in screenshot_paths[i]:
-        print("WARNING: check that screenshot paths and task names are in the same order")
-    late_iso_dict[task_name] = late_iso_dict['periods'][np.where((late_iso_dict['periods']>=start) & (late_iso_dict['periods']<stop))]
-        
-    start+=task_lengths[i]
-
-if verbose == True:
-    print("Finished stimulus setup. Now preparing data for fitting...")
+#creating stimulus from screenshots
+task_lengths, prf_stim, late_iso_dict = create_full_stim(screenshot_paths,
+                n_pix,
+                discard_volumes,
+                screen_size_cm,
+                screen_distance_cm,
+                TR,
+                task_names)
 
 if "timecourse_data_path" not in analysis_info:
     if fitting_space == "fsaverage" or fitting_space == "fsnative":
@@ -167,14 +136,7 @@ gg = Iso2DGaussianGridder(stimulus=prf_stim,
 
 
 gf = Iso2DGaussianFitter(
-    data=tc_full_iso_nonzerovar_dict['tc'], gridder=gg, n_jobs=n_jobs,
-    bounds=[(-10*ss, 10*ss),  # x
-            (-10*ss, 10*ss),  # y
-            (eps, 10*ss),  # prf size
-            (-inf, +inf),  # prf amplitude
-            (0, +inf)],  # bold baseline
-    gradient_method=gradient_method,
-    fit_hrf=fit_hrf)
+    data=tc_full_iso_nonzerovar_dict['tc'], gridder=gg, n_jobs=n_jobs)
 
 # gaussian fit
 if "grid_data_path" not in analysis_info and "gauss_iterparams_path" not in analysis_info:
@@ -206,7 +168,15 @@ if "gauss_iterparams_path" in analysis_info:
     gf.iterative_search_params = np.load(analysis_info["gauss_iterparams_path"])
 else:
     print("Starting Gaussian iter fit at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S'))
-    gf.iterative_fit(rsq_threshold=rsq_threshold, verbose=verbose)
+
+    gf.iterative_fit(rsq_threshold=rsq_threshold, verbose=verbose,
+    bounds=[(-10*ss, 10*ss),  # x
+            (-10*ss, 10*ss),  # y
+            (eps, 10*ss),  # prf size
+            (-inf, +inf),  # prf amplitude
+            (0, +inf)],  # bold baseline
+    gradient_method=gradient_method,
+    fit_hrf=fit_hrf)
 
     print("Gaussian iterfit completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Mean rsq>"+str(rsq_threshold)+": "+str(gf.iterative_search_params[gf.rsq_mask, -1].mean()))
 
@@ -231,6 +201,11 @@ if "CSS" in models_to_fit:
                                       task_lengths=task_lengths)
     gf_css = CSS_Iso2DGaussianFitter(
         data=tc_full_iso_nonzerovar_dict['tc'], gridder=gg_css, n_jobs=n_jobs,
+        previous_gaussian_fitter=gf)
+
+    print("Starting CSS iter fit at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S'))
+
+    gf_css.iterative_fit(rsq_threshold=rsq_threshold, verbose=verbose,
         bounds=[(-10*ss, 10*ss),  # x
                 (-10*ss, 10*ss),  # y
                 (eps, 10*ss),  # prf size
@@ -238,11 +213,7 @@ if "CSS" in models_to_fit:
                 (0, +inf),  # bold baseline
                 (0.001, 3)],  # CSS exponent
         gradient_method=gradient_method,
-        fit_hrf=fit_hrf,
-        previous_gaussian_fitter=gf)
-
-    print("Starting CSS iter fit at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S'))
-    gf_css.iterative_fit(rsq_threshold=rsq_threshold, verbose=verbose)
+        fit_hrf=fit_hrf)
 
 
     save_path = opj(data_path, subj+"_iterparams-css_space-"+fitting_space)
@@ -264,6 +235,11 @@ if "DoG" in models_to_fit:
     gf_dog = DoG_Iso2DGaussianFitter(data=tc_full_iso_nonzerovar_dict['tc'],
                                      gridder=gg_dog,
                                      n_jobs=n_jobs,
+                                     previous_gaussian_fitter=gf)
+    
+    print("Starting DoG iter fit at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S'))
+
+    gf_dog.iterative_fit(rsq_threshold=rsq_threshold, verbose=verbose,
                                      bounds=[(-10*ss, 10*ss),  # x
                                              (-10*ss, 10*ss),  # y
                                              (eps, 10*ss),  # prf size
@@ -272,11 +248,7 @@ if "DoG" in models_to_fit:
                                              (-inf, +inf),  # surround amplitude
                                              (eps, 20*ss)],  # surround size
                                      gradient_method=gradient_method,
-                                     fit_hrf=fit_hrf,
-                                     previous_gaussian_fitter=gf)
-    
-    print("Starting DoG iter fit at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S'))
-    gf_dog.iterative_fit(rsq_threshold=rsq_threshold, verbose=verbose)
+                                     fit_hrf=fit_hrf)
 
 
     save_path = opj(data_path, subj+"_iterparams-dog_space-"+fitting_space)
@@ -300,17 +272,6 @@ if "norm" in models_to_fit:
     gf_norm = Norm_Iso2DGaussianFitter(data=tc_full_iso_nonzerovar_dict['tc'],
                                        gridder=gg_norm,
                                        n_jobs=n_jobs,
-                                       bounds=[(-10*ss, 10*ss),  # x
-                                               (-10*ss, 10*ss),  # y
-                                               (eps, 10*ss),  # prf size
-                                               (-inf, +inf),  # prf amplitude
-                                               (0, +inf),  # bold baseline
-                                               (0, +inf),  # surround amplitude
-                                               (eps, 20*ss),  # surround size
-                                               (-inf, +inf),  # neural baseline
-                                               (1e-6, +inf)],  # surround baseline
-                                       gradient_method=gradient_method,
-                                       fit_hrf=fit_hrf,
                                        previous_gaussian_fitter=gf)
     
     #normalization grid stage
@@ -342,7 +303,19 @@ if "norm" in models_to_fit:
         gf_norm.gridsearch_params = np.load(analysis_info["norm_gridparams_path"])
 
     print("Starting norm iter fit at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S'))
-    gf_norm.iterative_fit(rsq_threshold=rsq_threshold, verbose=verbose)
+
+    gf_norm.iterative_fit(rsq_threshold=rsq_threshold, verbose=verbose,
+                                       bounds=[(-10*ss, 10*ss),  # x
+                                               (-10*ss, 10*ss),  # y
+                                               (eps, 10*ss),  # prf size
+                                               (-inf, +inf),  # prf amplitude
+                                               (0, +inf),  # bold baseline
+                                               (0, +inf),  # surround amplitude
+                                               (eps, 20*ss),  # surround size
+                                               (-inf, +inf),  # neural baseline
+                                               (1e-6, +inf)],  # surround baseline
+                                       gradient_method=gradient_method,
+                                       fit_hrf=fit_hrf)
 
     save_path = opj(data_path, subj+"_iterparams-norm_space-"+fitting_space)
 
