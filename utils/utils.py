@@ -6,6 +6,7 @@ import matplotlib.image as mpimg
 opj = os.path.join
 
 from prfpy.timecourse import sgfilter_predictions
+from prfpy.stimulus import PRFStimulus2D
 
 
 def create_dm_from_screenshots(screenshot_path,
@@ -54,6 +55,53 @@ def create_dm_from_screenshots(screenshot_path,
     print("Design matrix completed")
     
     return design_matrix
+
+def create_full_stim(screenshot_paths,
+                n_pix,
+                discard_volumes,
+                screen_size_cm,
+                screen_distance_cm,
+                TR,
+                task_names):
+    dm_list = []
+
+    for screenshot_path in screenshot_paths:
+        # create stimulus
+        dm_list.append(create_dm_from_screenshots(screenshot_path,
+                                                  n_pix)[..., discard_volumes:])
+    
+    
+    task_lengths = [dm.shape[-1] for dm in dm_list]
+    
+    
+    dm_full = np.concatenate(tuple(dm_list), axis=-1)
+    
+    prf_stim = PRFStimulus2D(screen_size_cm=screen_size_cm,
+                             screen_distance_cm=screen_distance_cm,
+                             design_matrix=dm_full,
+                             TR=TR)
+
+    # late-empty DM periods (for calculation of BOLD baseline)
+    shifted_dm = np.zeros_like(dm_full)
+    
+    # number of TRs in which activity may linger (hrf)
+    shifted_dm[..., 7:] = dm_full[..., :-7]
+    
+    late_iso_dict = {}
+    late_iso_dict['periods'] = np.where((np.sum(dm_full, axis=(0, 1)) == 0) & (
+        np.sum(shifted_dm, axis=(0, 1)) == 0))[0]
+    
+    start=0
+    for i, task_name in enumerate(task_names):
+        stop=start+task_lengths[i]
+        if task_name not in screenshot_paths[i]:
+            print("WARNING: check that screenshot paths and task names are in the same order")
+        late_iso_dict[task_name] = late_iso_dict['periods'][np.where((late_iso_dict['periods']>=start) & (late_iso_dict['periods']<stop))]
+            
+        start+=task_lengths[i]
+
+    return task_lengths, prf_stim, late_iso_dict
+
 
 def prepare_surface_data(subj,
                          task_names,
