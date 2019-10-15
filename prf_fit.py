@@ -31,7 +31,6 @@ from utils.utils import create_full_stim, prepare_surface_data, prepare_volume_d
 from prfpy.grid import Iso2DGaussianGridder, Norm_Iso2DGaussianGridder, DoG_Iso2DGaussianGridder, CSS_Iso2DGaussianGridder
 from prfpy.fit import Iso2DGaussianFitter, Norm_Iso2DGaussianFitter, DoG_Iso2DGaussianFitter, CSS_Iso2DGaussianFitter
 
-
 # note that screenshot paths and task names should be in the same order
 n_pix = analysis_info["n_pix"]
 discard_volumes = analysis_info["discard_volumes"]
@@ -52,7 +51,15 @@ models_to_fit = analysis_info["models_to_fit"]
 n_batches = analysis_info["n_batches"]
 fit_hrf = analysis_info["fit_hrf"]
 
+analysis_time = datetime.now().strftime('%Y%m%d%H%M%S')
 
+save_path = opj(data_path, subj+"_analysis_settings")
+
+if os.path.exists(save_path+".yml"):
+    save_path+=analysis_time
+
+with open(save_path, 'w+') as outfile:
+    yaml.dump(analysis_info, outfile)
 
 if verbose == True:
     print("Creating PRF stimulus from screenshots...")
@@ -90,14 +97,14 @@ if "timecourse_data_path" not in analysis_info:
     save_path = opj(data_path, subj+"_timecourse_space-"+fitting_space)
     
     if os.path.exists(save_path+".npy"):
-        save_path+=datetime.now().strftime('%Y%m%d%H%M%S')
+        save_path+=analysis_time
     
     np.save(save_path, tc_full_iso_nonzerovar_dict['tc'])
     
     save_path = opj(data_path, subj+"_nonzerovar-mask_space-"+fitting_space)
     
     if os.path.exists(save_path+".npy"):
-        save_path+=datetime.now().strftime('%Y%m%d%H%M%S')
+        save_path+=analysis_time
     
     np.save(save_path, tc_full_iso_nonzerovar_dict['nonzerovar_mask'])
     
@@ -154,7 +161,7 @@ if "grid_data_path" not in analysis_info and "gauss_iterparams_path" not in anal
     save_path = opj(data_path, subj+"_gridparams-gauss_space-"+fitting_space)
 
     if os.path.exists(save_path+".npy"):
-        save_path+=datetime.now().strftime('%Y%m%d%H%M%S')
+        save_path+=analysis_time
     
     np.save(save_path, gf.gridsearch_params)
 
@@ -219,7 +226,7 @@ if "CSS" in models_to_fit:
     save_path = opj(data_path, subj+"_iterparams-css_space-"+fitting_space)
 
     if os.path.exists(save_path+".npy"):
-        save_path+=datetime.now().strftime('%Y%m%d%H%M%S')
+        save_path+=analysis_time
     np.save(save_path, gf_css.iterative_search_params)
 
     print("CSS iterfit completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Mean rsq>"+str(rsq_threshold)+": "+str(gf_css.iterative_search_params[gf_css.rsq_mask, -1].mean()))
@@ -254,7 +261,7 @@ if "DoG" in models_to_fit:
     save_path = opj(data_path, subj+"_iterparams-dog_space-"+fitting_space)
 
     if os.path.exists(save_path+".npy"):
-        save_path+=datetime.now().strftime('%Y%m%d%H%M%S')
+        save_path+=analysis_time
 
     np.save(save_path, gf_dog.iterative_search_params)
 
@@ -296,7 +303,7 @@ if "norm" in models_to_fit:
         save_path = opj(data_path, subj+"_gridparams-norm_space-"+fitting_space)
     
         if os.path.exists(save_path+".npy"):
-            save_path+=datetime.now().strftime('%Y%m%d%H%M%S')
+            save_path+=analysis_time
     
         np.save(save_path, gf_norm.gridsearch_params)
     else:
@@ -320,7 +327,7 @@ if "norm" in models_to_fit:
     save_path = opj(data_path, subj+"_iterparams-norm_space-"+fitting_space)
 
     if os.path.exists(save_path+".npy"):
-        save_path+=datetime.now().strftime('%Y%m%d%H%M%S')
+        save_path+=analysis_time
 
     np.save(save_path, gf_norm.iterative_search_params)
 
