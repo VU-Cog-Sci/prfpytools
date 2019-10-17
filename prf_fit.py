@@ -58,7 +58,7 @@ save_path = opj(data_path, subj+"_analysis_settings")
 if os.path.exists(save_path+".yml"):
     save_path+=analysis_time
 
-with open(save_path, 'w+') as outfile:
+with open(save_path+".yml", 'w+') as outfile:
     yaml.dump(analysis_info, outfile)
 
 if verbose == True:
