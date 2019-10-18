@@ -190,7 +190,7 @@ else:
     save_path = opj(data_path, subj+"_iterparams-gauss_space-"+fitting_space)
 
     if os.path.exists(save_path+".npy"):
-        save_path+=datetime.now().strftime('%Y%m%d%H%M%S')
+        save_path+=analysis_time
         
     np.save(save_path, gf.iterative_search_params)
 
