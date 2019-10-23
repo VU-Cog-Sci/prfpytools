@@ -131,7 +131,7 @@ def prepare_surface_data(subj,
         for task_name in task_names:
             tc_task = []
             tc_paths = sorted(Path(opj(data_path,'fmriprep',subj)).glob(opj('**',subj+'_ses-*_task-'+task_name+'_run-*_space-'+fitting_space+'_hemi-'+hemi+'.func.gii')))
-
+            print("For task "+task_name+", hemisphere "+hemi+" of subject "+subj+", a total of "+len(tc_paths)+" runs were found.")
             for tc_path in tc_paths:
                 tc_run = nb.load(str(tc_path))
 
