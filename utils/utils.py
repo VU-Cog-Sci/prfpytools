@@ -130,6 +130,7 @@ def prepare_surface_data(subj,
     for hemi in ['L', 'R']:
         for task_name in task_names:
             tc_task = []
+            tc_dict[hemi][task_name] = {}
             tc_paths = sorted(Path(opj(data_path,'fmriprep',subj)).glob(opj('**',subj+'_ses-*_task-'+task_name+'_run-*_space-'+fitting_space+'_hemi-'+hemi+'.func.gii')))
             print("For task "+task_name+", hemisphere "+hemi+" of subject "+subj+", a total of "+str(len(tc_paths))+" runs were found.")
             for tc_path in tc_paths:
@@ -198,6 +199,7 @@ def prepare_volume_data(subj,
     
     for task_name in task_names:
         tc_task = []
+        tc_dict[task_name] = {}
         tc_paths = sorted(Path(opj(data_path,'fmriprep',subj)).glob(opj('**',subj+'_ses-*_task-'+task_name+'_run-*_space-'+fitting_space+'_desc-preproc_bold.nii.gz')))
 
         for tc_path in tc_paths:
