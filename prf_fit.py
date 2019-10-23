@@ -51,8 +51,11 @@ models_to_fit = analysis_info["models_to_fit"]
 n_batches = analysis_info["n_batches"]
 fit_hrf = analysis_info["fit_hrf"]
 
-analysis_time = datetime.now().strftime('%Y%m%d%H%M%S')
+#new params to be added to analysis settings
+dm_edges_clipping = analysis_info["dm_edges_clipping"]
 
+
+analysis_time = datetime.now().strftime('%Y%m%d%H%M%S')
 save_path = opj(data_path, subj+"_analysis_settings")
 
 if os.path.exists(save_path+".yml"):
@@ -68,6 +71,7 @@ if verbose == True:
 task_lengths, prf_stim, late_iso_dict = create_full_stim(screenshot_paths,
                 n_pix,
                 discard_volumes,
+                dm_edges_clipping,
                 screen_size_cm,
                 screen_distance_cm,
                 TR,
