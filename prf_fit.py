@@ -177,6 +177,7 @@ elif "grid_data_path" in analysis_info:
 # gaussian iterative fit
 if "gauss_iterparams_path" in analysis_info:
     gf.iterative_search_params = np.load(analysis_info["gauss_iterparams_path"])
+    gf.fit_hrf = fit_hrf
 else:
     print("Starting Gaussian iter fit at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S'))
 
