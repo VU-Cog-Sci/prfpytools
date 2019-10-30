@@ -1,5 +1,9 @@
 import os
 import numpy as np
+import scipy as sp
+import matplotlib.pyplot as plt
+from matplotlib import colors
+import cortex
 import nibabel as nb
 from pathlib import Path
 import matplotlib.image as mpimg
@@ -236,3 +240,73 @@ def prepare_volume_data(subj,
     tc_full_iso_nonzerovar_dict['tc'] = tc_full_iso[tc_full_iso_nonzerovar_dict['nonzerovar_mask']]
 
     return tc_full_iso_nonzerovar_dict
+
+
+def create_retinotopy_colormaps():
+    hue, alpha = np.meshgrid(np.linspace(
+        0, 1, 256, endpoint=False), 1-np.linspace(0, 1, 256))
+
+    hsv = np.zeros(list(hue.shape)+[3])
+
+
+    # convert angles to colors, using correlations as weights
+    hsv[..., 0] = hue  # angs_discrete  # angs_n
+    # np.sqrt(rsq) #np.ones_like(rsq)  # np.sqrt(rsq)
+    hsv[..., 1] = np.ones_like(alpha)
+    # np.nan_to_num(rsq ** -3) # np.ones_like(rsq)#n
+    hsv[..., 2] = np.ones_like(alpha)
+    hsv[-1,:,2] = 0
+
+    rgb = colors.hsv_to_rgb(hsv)
+    rgba = np.vstack((rgb.T, alpha[..., np.newaxis].T)).T
+    plt.imshow(rgba)
+    hsv_fn = os.path.join(os.path.split(cortex.database.default_filestore)[
+                          0], 'colormaps', 'Retinotopy_HSV_alpha.png')
+    sp.misc.imsave(hsv_fn, rgba)
+
+    hue, alpha = np.meshgrid(
+        np.fmod(np.linspace(0, 2, 256), 1.0), 1-np.linspace(0, 1, 256))
+    hsv = np.zeros(list(hue.shape)+[3])
+    # convert angles to colors, using correlations as weights
+    hsv[..., 0] = hue  # angs_discrete  # angs_n
+    # np.sqrt(rsq) #np.ones_like(rsq)  # np.sqrt(rsq)
+    hsv[..., 1] = np.ones_like(alpha)
+    # np.nan_to_num(rsq ** -3) # np.ones_like(rsq)#n
+    hsv[..., 2] = np.ones_like(alpha)
+    hsv[-1,:,2] = 0
+
+    rgb = colors.hsv_to_rgb(hsv)
+    rgba = np.vstack((rgb.T, alpha[..., np.newaxis].T)).T
+    plt.imshow(rgba)
+    hsv_fn = os.path.join(os.path.split(cortex.database.default_filestore)[
+                          0], 'colormaps', 'Retinotopy_HSV_2x_alpha.png')
+    sp.misc.imsave(hsv_fn, rgba)
+    #####
+    jet = mpimg.imread('/Users/marcoaqil/pycortex/filestore/colormaps/jet_r.png')
+    jet = colors.rgb_to_hsv(jet[...,:3])
+
+    hue, alpha = np.meshgrid(jet[...,0], 1-np.linspace(0, 1, 256))
+
+    hsv = np.zeros(list(hue.shape)+[3])
+
+    # convert angles to colors, using correlations as weights
+    hsv[..., 0] = hue  # angs_discrete  # angs_n
+    # np.sqrt(rsq) #np.ones_like(rsq)  # np.sqrt(rsq)
+    hsv[..., 1] = np.ones_like(alpha)
+    # np.nan_to_num(rsq ** -3) # np.ones_like(rsq)#n
+    hsv[..., 2] = np.ones_like(alpha)#rdbu[...,2]
+    hsv[-1,:,2] = 0
+
+    rgb = colors.hsv_to_rgb(hsv)
+    rgba = np.vstack((rgb.T, alpha[..., np.newaxis].T)).T
+    plt.imshow(rgba)
+    hsv_fn = os.path.join(os.path.split(cortex.database.default_filestore)[
+                          0], 'colormaps', 'Jet_r_2D_alpha.png')
+    sp.misc.imsave(hsv_fn, rgba)
+
+
+def roi_mask(roi, array):
+    array_2 = np.zeros_like(array)
+    array_2[roi] = 1
+    masked_array = array * array_2
+    return masked_array
