@@ -2,7 +2,7 @@
 
 n_pix: 40
 discard_volumes: 5
-dm_edges_clipping: [2,2,0,1]
+dm_edges_clipping: [3,2,0,1]
 
 screenshot_paths:
                   - "/Users/marcoaqil/PRFMapping/PRFMapping-Raw/sub-001/ses-1/rawdata/sub-001_ses-1_Logs/sub-001_ses-1_task-1R_run-1_Logs/Screenshots"
@@ -46,6 +46,6 @@ rsq_threshold: 0.2
 #if gaussian grid data was already obtained, can specify path
 #grid_data_path: "/Users/marcoaqil/PRFMapping/gauss_grid_sub-001.npy"
 #if timecourse was already preprocessed, specify
-timecourse_data_path: "/Users/marcoaqil/PRFMapping/tc_fsaverage.npy"
+#timecourse_data_path: "/Users/marcoaqil/PRFMapping/tc_fsaverage.npy"
 
     
