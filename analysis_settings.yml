@@ -3,7 +3,7 @@
 n_pix: 40
 discard_volumes: 5
 #how many volumes at beginning (after discarded volumes) and end to use for baseline calculation
-baseline_volumes_begin_end: (5,5)
+baseline_volumes_begin_end: [5,5]
 #discard time series with too low variance (max	deviation from mean < min_percent_var %	of mean)
 min_percent_var: 0.25
 dm_edges_clipping: [3,2,0,1]

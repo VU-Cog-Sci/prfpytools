@@ -14,7 +14,7 @@ from datetime import datetime
 
 subj = sys.argv[1]
 analysis_settings = sys.argv[2]
-chunk_nr = sys.argv[3]
+chunk_nr = int(sys.argv[3])
 
 with open(analysis_settings) as f:
     analysis_info = yaml.safe_load(f)
@@ -60,9 +60,9 @@ n_chunks = analysis_info["n_chunks"]
 
 analysis_time = datetime.now().strftime('%Y%m%d%H%M%S')
 
-save_path = opj(data_path,'prfpy')
+data_path = opj(data_path,'prfpy')
 
-save_path = opj(save_path, subj+"_analysis_settings")
+save_path = opj(data_path, subj+"_analysis_settings")
 
 if os.path.exists(save_path+".yml"):
     save_path+=analysis_time
@@ -102,7 +102,7 @@ else:
                                                min_percent_var,
                                                window_length,
                                                late_iso_dict,
-                                               data_path,
+                                               data_path[:-5],
                                                fitting_space)
     
     save_path = opj(data_path, subj+"_timecourse_space-"+fitting_space)
