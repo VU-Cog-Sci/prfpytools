@@ -2,7 +2,14 @@
 
 n_pix: 40
 discard_volumes: 5
+#how many volumes at beginning (after discarded volumes) and end to use for baseline calculation
+baseline_volumes_begin_end: (5,5)
+#discard time series with too low variance (max	deviation from mean < min_percent_var %	of mean)
+min_percent_var: 0.25
 dm_edges_clipping: [3,2,0,1]
+
+#data chunks for array job submission
+n_chunks: 100
 
 screenshot_paths:
                   - "/Users/marcoaqil/PRFMapping/PRFMapping-Raw/sub-001/ses-1/rawdata/sub-001_ses-1_Logs/sub-001_ses-1_task-1R_run-1_Logs/Screenshots"
@@ -37,7 +44,7 @@ hrf: [1,1,0]
 #whether to fit the hrf params or not
 fit_hrf: False
 #number of voxel batches for grid fit
-n_batches: 1000
+n_batches: 10
 #gradient method to be used in iterative fitting. numerical, analytic (must be set up in prfpy), or None.
 gradient_method: "numerical"
 verbose: True

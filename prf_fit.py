@@ -14,6 +14,7 @@ from datetime import datetime
 
 subj = sys.argv[1]
 analysis_settings = sys.argv[2]
+chunk_nr = sys.argv[3]
 
 with open(analysis_settings) as f:
     analysis_info = yaml.safe_load(f)
@@ -26,7 +27,7 @@ if "mkl_num_threads" in analysis_info:
 
 import numpy as np
 
-from utils.utils import create_full_stim, prepare_surface_data, prepare_volume_data
+from utils.utils import create_full_stim, prepare_data
 
 from prfpy.grid import Iso2DGaussianGridder, Norm_Iso2DGaussianGridder, DoG_Iso2DGaussianGridder, CSS_Iso2DGaussianGridder
 from prfpy.fit import Iso2DGaussianFitter, Norm_Iso2DGaussianFitter, DoG_Iso2DGaussianFitter, CSS_Iso2DGaussianFitter
@@ -51,12 +52,17 @@ models_to_fit = analysis_info["models_to_fit"]
 n_batches = analysis_info["n_batches"]
 fit_hrf = analysis_info["fit_hrf"]
 
-#new params to be added to analysis settings
 dm_edges_clipping = analysis_info["dm_edges_clipping"]
+baseline_volumes_begin_end = analysis_info["baseline_volumes_begin_end"]
+min_percent_var = analysis_info["min_percent_var"]
 
+n_chunks = analysis_info["n_chunks"]
 
 analysis_time = datetime.now().strftime('%Y%m%d%H%M%S')
-save_path = opj(data_path, subj+"_analysis_settings")
+
+save_path = opj(data_path,'prfpy')
+
+save_path = opj(save_path, subj+"_analysis_settings")
 
 if os.path.exists(save_path+".yml"):
     save_path+=analysis_time
@@ -71,54 +77,48 @@ if verbose == True:
 task_lengths, prf_stim, late_iso_dict = create_full_stim(screenshot_paths,
                 n_pix,
                 discard_volumes,
+                baseline_volumes_begin_end,
                 dm_edges_clipping,
                 screen_size_cm,
                 screen_distance_cm,
                 TR,
                 task_names)
 
-if "timecourse_data_path" not in analysis_info:
-    if fitting_space == "fsaverage" or fitting_space == "fsnative":
-    
-        tc_full_iso_nonzerovar_dict = prepare_surface_data(subj,
-                                                           task_names,
-                                                           discard_volumes,
-                                                           window_length,
-                                                           late_iso_dict,
-                                                           data_path,
-                                                           fitting_space)
-    
-    else:
-    
-        tc_full_iso_nonzerovar_dict = prepare_volume_data(subj,
-                                                          task_names,
-                                                          discard_volumes,
-                                                          window_length,
-                                                          late_iso_dict,
-                                                          data_path,
-                                                          fitting_space)
-    
-    save_path = opj(data_path, subj+"_timecourse_space-"+fitting_space)
-    
-    if os.path.exists(save_path+".npy"):
-        save_path+=analysis_time
-    
-    np.save(save_path, tc_full_iso_nonzerovar_dict['tc'])
-    
-    save_path = opj(data_path, subj+"_nonzerovar-mask_space-"+fitting_space)
-    
-    if os.path.exists(save_path+".npy"):
-        save_path+=analysis_time
-    
-    np.save(save_path, tc_full_iso_nonzerovar_dict['nonzerovar_mask'])
-    
-else:
-    #mainly for testing purposes
+
+if "timecourse_data_path" in analysis_info:
+
     tc_full_iso_nonzerovar_dict = {}
     tc_full_iso_nonzerovar_dict['tc'] = np.load(analysis_info["timecourse_data_path"])
+
+elif os.path.exists(opj(data_path, subj+"_timecourse_space-"+fitting_space+".npy")):
+    print("Using time series from: "+opj(data_path, subj+"_timecourse_space-"+fitting_space+".npy"))
+    tc_full_iso_nonzerovar_dict = {}
+    tc_full_iso_nonzerovar_dict['tc'] = np.load(opj(data_path, subj+"_timecourse_space-"+fitting_space+".npy"))
+
+else:
+    tc_full_iso_nonzerovar_dict = prepare_data(subj,
+                                               task_names,
+                                               discard_volumes,
+                                               min_percent_var,
+                                               window_length,
+                                               late_iso_dict,
+                                               data_path,
+                                               fitting_space)
     
+    save_path = opj(data_path, subj+"_timecourse_space-"+fitting_space)
+
+    np.save(save_path, tc_full_iso_nonzerovar_dict['tc'])
+    
+    save_path = opj(data_path, subj+"_nonlow_var_mask_space-"+fitting_space)
+
+    np.save(save_path, tc_full_iso_nonzerovar_dict['nonlow_var_mask'])
+
+
+tc_full_iso_nonzerovar_dict['tc'] = np.array_split(tc_full_iso_nonzerovar_dict['tc'], n_chunks)[chunk_nr]
+
 if "mkl_num_threads" in analysis_info:
     mkl.set_num_threads(1)
+
 
 if verbose == True:
     print("Finished preparing data for fitting. Now creating and fitting models...")
@@ -162,7 +162,7 @@ if "grid_data_path" not in analysis_info and "gauss_iterparams_path" not in anal
     print("Mean rsq>"+str(rsq_threshold)+": "+str(gf.gridsearch_params[gf.gridsearch_params[:, -1]>rsq_threshold, -1].mean()))
 
 
-    save_path = opj(data_path, subj+"_gridparams-gauss_space-"+fitting_space)
+    save_path = opj(data_path, subj+"_gridparams-gauss_space-"+fitting_space+str(chunk_nr))
 
     if os.path.exists(save_path+".npy"):
         save_path+=analysis_time
@@ -170,13 +170,13 @@ if "grid_data_path" not in analysis_info and "gauss_iterparams_path" not in anal
     np.save(save_path, gf.gridsearch_params)
 
 elif "grid_data_path" in analysis_info:
-    gf.gridsearch_params = np.load(analysis_info["grid_data_path"])
+    gf.gridsearch_params = np.array_split(np.load(analysis_info["grid_data_path"]), n_chunks)[chunk_nr]
 
 
 
 # gaussian iterative fit
 if "gauss_iterparams_path" in analysis_info:
-    gf.iterative_search_params = np.load(analysis_info["gauss_iterparams_path"])
+    gf.iterative_search_params = np.array_split(np.load(analysis_info["gauss_iterparams_path"]), n_chunks)[chunk_nr]
     gf.fit_hrf = fit_hrf
 else:
     print("Starting Gaussian iter fit at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S'))
@@ -192,7 +192,7 @@ else:
 
     print("Gaussian iterfit completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Mean rsq>"+str(rsq_threshold)+": "+str(gf.iterative_search_params[gf.rsq_mask, -1].mean()))
 
-    save_path = opj(data_path, subj+"_iterparams-gauss_space-"+fitting_space)
+    save_path = opj(data_path, subj+"_iterparams-gauss_space-"+fitting_space+str(chunk_nr))
 
     if os.path.exists(save_path+".npy"):
         save_path+=analysis_time
@@ -228,7 +228,7 @@ if "CSS" in models_to_fit:
         fit_hrf=fit_hrf)
 
 
-    save_path = opj(data_path, subj+"_iterparams-css_space-"+fitting_space)
+    save_path = opj(data_path, subj+"_iterparams-css_space-"+fitting_space+str(chunk_nr))
 
     if os.path.exists(save_path+".npy"):
         save_path+=analysis_time
@@ -263,7 +263,7 @@ if "DoG" in models_to_fit:
                                      fit_hrf=fit_hrf)
 
 
-    save_path = opj(data_path, subj+"_iterparams-dog_space-"+fitting_space)
+    save_path = opj(data_path, subj+"_iterparams-dog_space-"+fitting_space+str(chunk_nr))
 
     if os.path.exists(save_path+".npy"):
         save_path+=analysis_time
@@ -305,14 +305,14 @@ if "norm" in models_to_fit:
         
         print("Norm gridfit completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Mean rsq>"+str(rsq_threshold)+": "+str(gf_norm.gridsearch_params[gf_norm.gridsearch_rsq_mask, -1].mean()))
         
-        save_path = opj(data_path, subj+"_gridparams-norm_space-"+fitting_space)
+        save_path = opj(data_path, subj+"_gridparams-norm_space-"+fitting_space+str(chunk_nr))
     
         if os.path.exists(save_path+".npy"):
             save_path+=analysis_time
     
         np.save(save_path, gf_norm.gridsearch_params)
     else:
-        gf_norm.gridsearch_params = np.load(analysis_info["norm_gridparams_path"])
+        gf_norm.gridsearch_params = np.array_split(np.load(analysis_info["norm_gridparams_path"]), n_chunks)[chunk_nr]
 
     print("Starting norm iter fit at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S'))
 
@@ -329,7 +329,7 @@ if "norm" in models_to_fit:
                                        gradient_method=gradient_method,
                                        fit_hrf=fit_hrf)
 
-    save_path = opj(data_path, subj+"_iterparams-norm_space-"+fitting_space)
+    save_path = opj(data_path, subj+"_iterparams-norm_space-"+fitting_space+str(chunk_nr))
 
     if os.path.exists(save_path+".npy"):
         save_path+=analysis_time

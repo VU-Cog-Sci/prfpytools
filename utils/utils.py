@@ -66,6 +66,7 @@ def create_dm_from_screenshots(screenshot_path,
 def create_full_stim(screenshot_paths,
                 n_pix,
                 discard_volumes,
+                baseline_volumes_begin_end,
                 dm_edges_clipping,
                 screen_size_cm,
                 screen_distance_cm,
@@ -113,133 +114,132 @@ def create_full_stim(screenshot_paths,
     for i, task_name in enumerate(task_names):
         #stimulus always appears on 16th TR. take the first and last datapoints
         #to estimate baseline across conditions
-        late_iso_dict[task_name] = np.concatenate((np.arange(16-discard_volumes),np.arange(task_lengths[i]-5, task_lengths[i])))
+        late_iso_dict[task_name] = np.concatenate((np.arange(baseline_volumes_begin_end[0]),np.arange(task_lengths[i]-baseline_volumes_begin_end[1], task_lengths[i])))
 
     return task_lengths, prf_stim, late_iso_dict
 
 
-def prepare_surface_data(subj,
-                         task_names,
-                         discard_volumes,
-                         window_length,
-                         late_iso_dict,
-                         data_path,
-                         fitting_space):
+def prepare_data(subj,
+                 task_names,
+                 discard_volumes,
+                 min_percent_var,
+                 window_length,
+                 late_iso_dict,
+                 data_path,
+                 fitting_space):
 
-    tc_dict = {}
-    tc_dict['L'] = {}
-    tc_dict['R'] = {}
-    tc_full_iso_dict ={}
-    tc_full_iso_nonzerovar_dict = {}
-    for hemi in ['L', 'R']:
+    if fitting_space == 'fsaverage' or fitting_space == 'fsnative':
+        tc_dict = {}
+        tc_dict['L'] = {}
+        tc_dict['R'] = {}
+        tc_full_iso_dict ={}
+        tc_full_iso_nonzerovar_dict = {}
+        for hemi in ['L', 'R']:
+            for task_name in task_names:
+                tc_task = []
+                tc_dict[hemi][task_name] = {}
+                tc_paths = sorted(Path(opj(data_path,'fmriprep',subj)).glob(opj('**',subj+'_ses-*_task-'+task_name+'_run-*_space-'+fitting_space+'_hemi-'+hemi+'.func.gii')))
+                print("For task "+task_name+", hemisphere "+hemi+" of subject "+subj+", a total of "+str(len(tc_paths))+" runs were found.")
+                for tc_path in tc_paths:
+                    tc_run = nb.load(str(tc_path))
+    
+                    tc_task.append(sgfilter_predictions(np.array([arr.data for arr in tc_run.darrays]).T[...,discard_volumes:],
+                                                     window_length=window_length))
+    
+                    #when scanning sub-001 i mistakenly set the length of the 4F scan to 147, while it should have been 145
+                    #therefore, there are two extra images at the end to discard in that time series.
+                    #from sub-002 onwards, this was corrected.
+                    if subj == 'sub-001' and task_name=='4F':
+                        tc_task[-1] = tc_task[-1][...,:-2]
+    
+    
+                tc_dict[hemi][task_name]['timecourse'] = np.median(tc_task, axis=0)
+    
+                tc_dict[hemi][task_name]['baseline'] = np.mean(tc_dict[hemi][task_name]['timecourse'][...,late_iso_dict[task_name]],
+                                                   axis=-1)
+    
+            #shift timeseries so they have the same average value in proper baseline periods across conditions
+            iso_full = np.mean([tc_dict[hemi][task_name]['baseline'] for task_name in task_names])
+    
+            for task_name in task_names:
+                iso_diff = iso_full - tc_dict[hemi][task_name]['baseline']
+                tc_dict[hemi][task_name]['timecourse'] += iso_diff[...,np.newaxis]
+               
+            tc_full_iso_dict[hemi]=np.concatenate(tuple([tc_dict[hemi][task_name]['timecourse'] for task_name in task_names]), axis=-1)
+            
+        tc_full_iso = np.concatenate((tc_full_iso_dict['L'], tc_full_iso_dict['R']), axis=0)
+        
+        tc_full_iso_nonzerovar_dict['orig_data_shape'] = {'R_shape':tc_full_iso_dict['R'].shape, 'L_shape':tc_full_iso_dict['L'].shape}
+        tc_mean = tc_full_iso.mean(-1)
+        nonlow_var = (tc_full_iso - tc_mean[...,np.newaxis]).max(-1) > tc_mean*min_percent_var/100
+    
+        tc_full_iso_nonzerovar_dict['nonlow_var_mask'] = nonlow_var
+        tc_full_iso_nonzerovar_dict['tc'] = tc_full_iso[nonlow_var]
+        
+        return tc_full_iso_nonzerovar_dict
+
+    else:
+
+        #############preparing the data (VOLUME FITTING)
+        #create a single brain mask in epi space
+        tc_dict={}
+        tc_full_iso_nonzerovar_dict = {}
+    
+        for task_name in task_names:
+            brain_masks = []
+            mask_paths = sorted(Path(opj(data_path,'fmriprep',subj)).glob(opj('**',subj+'_ses-*_task-'+task_name+'_run-*_space-'+fitting_space+'_desc-brain_mask.nii.gz')))
+    
+            for mask_path in mask_paths:
+                brain_masks.append(nb.load(str(mask_path)).get_data().astype(bool))
+    
+            final_mask = np.ones_like(brain_masks[0]).astype(bool)
+            for brain_mask in brain_masks:
+                final_mask = final_mask & brain_mask
+            
+
         for task_name in task_names:
             tc_task = []
-            tc_dict[hemi][task_name] = {}
-            tc_paths = sorted(Path(opj(data_path,'fmriprep',subj)).glob(opj('**',subj+'_ses-*_task-'+task_name+'_run-*_space-'+fitting_space+'_hemi-'+hemi+'.func.gii')))
-            print("For task "+task_name+", hemisphere "+hemi+" of subject "+subj+", a total of "+str(len(tc_paths))+" runs were found.")
+            tc_dict[task_name] = {}
+            tc_paths = sorted(Path(opj(data_path,'fmriprep',subj)).glob(opj('**',subj+'_ses-*_task-'+task_name+'_run-*_space-'+fitting_space+'_desc-preproc_bold.nii.gz')))
+    
             for tc_path in tc_paths:
-                tc_run = nb.load(str(tc_path))
-
-                tc_task.append(sgfilter_predictions(np.array([arr.data for arr in tc_run.darrays]).T[...,discard_volumes:],
-                                                 window_length=window_length))
-
+                tc_run = nb.load(str(tc_path)).get_data()[...,discard_volumes:]
+    
+                tc_task.append(sgfilter_predictions(np.reshape(tc_run,(-1, tc_run.shape[-1])),
+                                                     window_length=window_length))
+    
                 #when scanning sub-001 i mistakenly set the length of the 4F scan to 147, while it should have been 145
                 #therefore, there are two extra images at the end to discard in that time series.
                 #from sub-002 onwards, this was corrected.
                 if subj == 'sub-001' and task_name=='4F':
                     tc_task[-1] = tc_task[-1][...,:-2]
-
-
-            tc_dict[hemi][task_name]['timecourse'] = np.median(tc_task, axis=0)
-
-            tc_dict[hemi][task_name]['baseline'] = np.mean(tc_dict[hemi][task_name]['timecourse'][...,late_iso_dict[task_name]],
-                                               axis=-1)
-
+    
+    
+            tc_dict[task_name]['timecourse'] = np.median(tc_task,axis=0)
+            tc_dict[task_name]['baseline'] = np.mean(tc_dict[task_name]['timecourse'][...,late_iso_dict[task_name]],
+                                                   axis=-1)
+    
         #shift timeseries so they have the same average value in proper baseline periods across conditions
-        iso_full = np.mean([tc_dict[hemi][task_name]['baseline'] for task_name in task_names])
-
+        iso_full = np.mean([tc_dict[task_name]['baseline'] for task_name in task_names])
+    
         for task_name in task_names:
-            iso_diff = iso_full - tc_dict[hemi][task_name]['baseline']
-            tc_dict[hemi][task_name]['timecourse'] += iso_diff[...,np.newaxis]
-           
-        tc_full_iso_dict[hemi]=np.concatenate(tuple([tc_dict[hemi][task_name]['timecourse'] for task_name in task_names]), axis=-1)
-        
-    tc_full_iso = np.concatenate((tc_full_iso_dict['L'], tc_full_iso_dict['R']), axis=0)
+            iso_diff = iso_full - tc_dict[task_name]['baseline']
+            tc_dict[task_name]['timecourse'] += iso_diff[...,np.newaxis]
     
-    tc_full_iso_nonzerovar_dict['orig_data_shape'] = {'R_shape':tc_full_iso_dict['R'].shape, 'L_shape':tc_full_iso_dict['L'].shape}
-    tc_full_iso_nonzerovar_dict['nonzerovar_mask'] = np.var(tc_full_iso, axis=-1)>0
-    tc_full_iso_nonzerovar_dict['tc'] = tc_full_iso[tc_full_iso_nonzerovar_dict['nonzerovar_mask']]    
     
-    return tc_full_iso_nonzerovar_dict
-
-
-def prepare_volume_data(subj,
-                         task_names,
-                         discard_volumes,
-                         window_length,
-                         late_iso_dict,
-                         data_path,
-                         fitting_space):
+        tc_full_iso=np.concatenate(tuple([tc_dict[task_name]['timecourse'] for task_name in task_names]), axis=-1)
+                    
     
-    #############preparing the data (VOLUME FITTING)
-    #create a single brain mask in epi space
-    tc_dict={}
-    tc_full_iso_nonzerovar_dict = {}
-
-    for task_name in task_names:
-        brain_masks = []
-        mask_paths = sorted(Path(opj(data_path,'fmriprep',subj)).glob(opj('**',subj+'_ses-*_task-'+task_name+'_run-*_space-'+fitting_space+'_desc-brain_mask.nii.gz')))
-
-        for mask_path in mask_paths:
-            brain_masks.append(nb.load(str(mask_path)).get_data().astype(bool))
-
-        final_mask = np.ones_like(brain_masks[0]).astype(bool)
-        for brain_mask in brain_masks:
-            final_mask = final_mask & brain_mask
-        
+        #exclude timecourses with zero variance
+        tc_full_iso_nonzerovar_dict['orig_data_shape'] = final_mask.shape
     
-
-
+        tc_mean = tc_full_iso.mean(-1)
+        nonlow_var = (tc_full_iso - tc_mean[...,np.newaxis]).max(-1) > tc_mean*min_percent_var/100
     
-    for task_name in task_names:
-        tc_task = []
-        tc_dict[task_name] = {}
-        tc_paths = sorted(Path(opj(data_path,'fmriprep',subj)).glob(opj('**',subj+'_ses-*_task-'+task_name+'_run-*_space-'+fitting_space+'_desc-preproc_bold.nii.gz')))
-
-        for tc_path in tc_paths:
-            tc_run = nb.load(str(tc_path)).get_data()[...,discard_volumes:]
-
-            tc_task.append(sgfilter_predictions(np.reshape(tc_run,(-1, tc_run.shape[-1])),
-                                                 window_length=window_length))
-
-            #when scanning sub-001 i mistakenly set the length of the 4F scan to 147, while it should have been 145
-            #therefore, there are two extra images at the end to discard in that time series.
-            #from sub-002 onwards, this was corrected.
-            if subj == 'sub-001' and task_name=='4F':
-                tc_task[-1] = tc_task[-1][...,:-2]
-
-
-        tc_dict[task_name]['timecourse'] = np.median(tc_task,axis=0)
-        tc_dict[task_name]['baseline'] = np.mean(tc_dict[task_name]['timecourse'][...,late_iso_dict[task_name]],
-                                               axis=-1)
-
-    #shift timeseries so they have the same average value in proper baseline periods across conditions
-    iso_full = np.mean([tc_dict[task_name]['baseline'] for task_name in task_names])
-
-    for task_name in task_names:
-        iso_diff = iso_full - tc_dict[task_name]['baseline']
-        tc_dict[task_name]['timecourse'] += iso_diff[...,np.newaxis]
-
-
-    tc_full_iso=np.concatenate(tuple([tc_dict[task_name]['timecourse'] for task_name in task_names]), axis=-1)
-                
-
-    #exclude timecourses with zero variance
-    tc_full_iso_nonzerovar_dict['orig_data_shape'] = final_mask.shape
-    tc_full_iso_nonzerovar_dict['nonzerovar_mask'] = np.ravel(final_mask) & (np.var(tc_full_iso, axis=-1)>0)
-    tc_full_iso_nonzerovar_dict['tc'] = tc_full_iso[tc_full_iso_nonzerovar_dict['nonzerovar_mask']]
-
-    return tc_full_iso_nonzerovar_dict
+        tc_full_iso_nonzerovar_dict['nonlow_var_mask'] = np.ravel(final_mask) & nonlow_var
+        tc_full_iso_nonzerovar_dict['tc'] = tc_full_iso[tc_full_iso_nonzerovar_dict['nonlow_var_mask']]
+    
+        return tc_full_iso_nonzerovar_dict
 
 
 def create_retinotopy_colormaps():
