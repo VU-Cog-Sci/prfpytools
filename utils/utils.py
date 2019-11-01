@@ -172,7 +172,7 @@ def prepare_data(subj,
         tc_mean = tc_full_iso.mean(-1)
         nonlow_var = (tc_full_iso - tc_mean[...,np.newaxis]).max(-1) > tc_mean*min_percent_var/100
     
-        tc_full_iso_nonzerovar_dict['nonlow-var-mask'] = nonlow_var
+        tc_full_iso_nonzerovar_dict['nonlow_var_mask'] = nonlow_var
         tc_full_iso_nonzerovar_dict['tc'] = tc_full_iso[nonlow_var]
         
         return tc_full_iso_nonzerovar_dict

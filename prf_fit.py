@@ -113,7 +113,7 @@ else:
 
     np.save(save_path, tc_full_iso_nonzerovar_dict['tc'])
 
-    save_path = opj(data_path, subj+"_nonlow_var_mask_space-"+fitting_space)
+    save_path = opj(data_path, subj+"_nonlow-var-mask_space-"+fitting_space)
 
     np.save(save_path, tc_full_iso_nonzerovar_dict['nonlow_var_mask'])
 
