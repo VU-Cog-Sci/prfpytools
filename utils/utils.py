@@ -112,7 +112,6 @@ def create_full_stim(screenshot_paths,
 
     late_iso_dict = {}
     for i, task_name in enumerate(task_names):
-        #stimulus always appears on 16th TR. take the first and last datapoints
         #to estimate baseline across conditions
         late_iso_dict[task_name] = np.concatenate((np.arange(baseline_volumes_begin_end[0]),np.arange(task_lengths[i]-baseline_volumes_begin_end[1], task_lengths[i])))
 
@@ -159,7 +158,7 @@ def prepare_data(subj,
                                                    axis=-1)
     
             #shift timeseries so they have the same average value in proper baseline periods across conditions
-            iso_full = np.mean([tc_dict[hemi][task_name]['baseline'] for task_name in task_names])
+            iso_full = np.mean([tc_dict[hemi][task_name]['baseline'] for task_name in task_names], axis=0)
     
             for task_name in task_names:
                 iso_diff = iso_full - tc_dict[hemi][task_name]['baseline']
@@ -173,7 +172,7 @@ def prepare_data(subj,
         tc_mean = tc_full_iso.mean(-1)
         nonlow_var = (tc_full_iso - tc_mean[...,np.newaxis]).max(-1) > tc_mean*min_percent_var/100
     
-        tc_full_iso_nonzerovar_dict['nonlow_var_mask'] = nonlow_var
+        tc_full_iso_nonzerovar_dict['nonlow-var-mask'] = nonlow_var
         tc_full_iso_nonzerovar_dict['tc'] = tc_full_iso[nonlow_var]
         
         return tc_full_iso_nonzerovar_dict

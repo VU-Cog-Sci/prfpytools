@@ -58,7 +58,7 @@ min_percent_var = analysis_info["min_percent_var"]
 
 n_chunks = analysis_info["n_chunks"]
 refit_mode = analysis_info["refit_mode"]
-prepare_data = analysis_info["prepare_data"]
+
 
 analysis_time = datetime.now().strftime('%Y%m%d%H%M%S')
 
@@ -87,7 +87,19 @@ task_lengths, prf_stim, late_iso_dict = create_full_stim(screenshot_paths,
                 task_names)
 
 
-if "prepare_data" == True:
+
+if "timecourse_data_path" in analysis_info:
+    print("Using time series from: "+analysis_info["timecourse_data_path"])
+    tc_full_iso_nonzerovar_dict = {}
+    tc_full_iso_nonzerovar_dict['tc'] = np.load(analysis_info["timecourse_data_path"])
+
+elif os.path.exists(opj(data_path, subj+"_timecourse_space-"+fitting_space+".npy")):
+    print("Using time series from: "+opj(data_path, subj+"_timecourse_space-"+fitting_space+".npy"))
+    tc_full_iso_nonzerovar_dict = {}
+    tc_full_iso_nonzerovar_dict['tc'] = np.load(opj(data_path, subj+"_timecourse_space-"+fitting_space+".npy"))
+
+else:
+    print("Preparing data for fitting (see utils.prepare_data)...")
     tc_full_iso_nonzerovar_dict = prepare_data(subj,
                                                task_names,
                                                discard_volumes,
@@ -105,19 +117,6 @@ if "prepare_data" == True:
 
     np.save(save_path, tc_full_iso_nonzerovar_dict['nonlow_var_mask'])
 
-elif "timecourse_data_path" in analysis_info:
-
-    tc_full_iso_nonzerovar_dict = {}
-    tc_full_iso_nonzerovar_dict['tc'] = np.load(analysis_info["timecourse_data_path"])
-
-elif os.path.exists(opj(data_path, subj+"_timecourse_space-"+fitting_space+".npy")):
-    print("Using time series from: "+opj(data_path, subj+"_timecourse_space-"+fitting_space+".npy"))
-    tc_full_iso_nonzerovar_dict = {}
-    tc_full_iso_nonzerovar_dict['tc'] = np.load(opj(data_path, subj+"_timecourse_space-"+fitting_space+".npy"))
-
-else:
-    print("prepare_data is False but a timecourse file was not provided or found. Exiting.")
-    raise IOError
 
 
 tc_full_iso_nonzerovar_dict['tc'] = np.array_split(tc_full_iso_nonzerovar_dict['tc'], n_chunks)[chunk_nr]
