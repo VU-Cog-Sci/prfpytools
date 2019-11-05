@@ -12,6 +12,7 @@ import numpy as np
 opj = os.path.join
 import yaml
 import sys
+from datetime import datetime
 
 subj = sys.argv[1]
 analysis_settings = sys.argv[2]
@@ -50,15 +51,25 @@ refit_mode = analysis_info["refit_mode"]
 
 data_path = opj(data_path,'prfpy')
 
+harvest_time = datetime.now().strftime('%Y%m%d%H%M%S')
+
 for model in models_to_fit:
     model = model.lower()
     if model in ["gauss", "norm"]:
         grid_path = opj(data_path, subj+"_gridparams-"+model+"_space-"+fitting_space)
         grid_result = np.concatenate(tuple([np.load(grid_path+str(chunk_nr)+".npy") for chunk_nr in range(n_chunks)]), axis=0)
+
+        if os.path.exists(grid_path+".npy"):
+            grid_path+=harvest_time
+
         np.save(grid_path, grid_result)
 
     iter_path = opj(data_path, subj+"_iterparams-"+model+"_space-"+fitting_space)
     model_result = np.concatenate(tuple([np.load(iter_path+str(chunk_nr)+".npy") for chunk_nr in range(n_chunks)]), axis=0)
+
+    if os.path.exists(iter_path+".npy"):
+        iter_path+=harvest_time
+
     np.save(iter_path, model_result)
 
 
