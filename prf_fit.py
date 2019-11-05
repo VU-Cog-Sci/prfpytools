@@ -291,7 +291,7 @@ if "CSS" in models_to_fit:
     
             np.save(save_path, gf_css.iterative_search_params)
 
-        print("CSS iterfit completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Mean rsq>"+str(rsq_threshold)+": "\
+            print("CSS iterfit completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Mean rsq>"+str(rsq_threshold)+": "\
 +str(gf_css.iterative_search_params[gf_css.rsq_mask, -1].mean()))
 
     elif os.path.exists(save_path+".npy") and refit_mode == "skip":
@@ -356,8 +356,9 @@ if "DoG" in models_to_fit:
             np.save(save_path, gf_dog.iterative_search_params)
 
 
-        print("DoG iterfit completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Mean rsq>"+str(rsq_threshold)+": "+str\
+            print("DoG iterfit completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Mean rsq>"+str(rsq_threshold)+": "+str\
 (gf_dog.iterative_search_params[gf_dog.rsq_mask, -1].mean()))
+
     elif os.path.exists(save_path+".npy") and refit_mode == "skip":
         gf_dog.iterative_search_params = np.load(save_path+".npy")
 
@@ -457,7 +458,7 @@ if "norm" in models_to_fit:
     
             np.save(save_path, gf_norm.iterative_search_params)
 
-        print("Norm iterfit completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Mean rsq>"+str(rsq_threshold)+": \
+            print("Norm iterfit completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Mean rsq>"+str(rsq_threshold)+": \
 "+str(gf_norm.iterative_search_params[gf_norm.rsq_mask, -1].mean()))
 
     elif os.path.exists(save_path+".npy") and refit_mode == "skip":
