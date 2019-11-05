@@ -223,14 +223,16 @@ else:
                                      (0, +inf)],  # bold baseline
                              gradient_method=gradient_method,
                              fit_hrf=fit_hrf)
-        else:
-            gf.iterative_search_params = np.load(save_path+".npy")
+
 
             print("Gaussian iterfit completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Mean rsq>"+str(rsq_threshold)\
     +": "+str(gf.iterative_search_params[gf.rsq_mask, -1].mean()))
     
     
             np.save(save_path, gf.iterative_search_params)
+        else:
+            gf.iterative_search_params = np.load(save_path+".npy")
+
     elif os.path.exists(save_path+".npy") and refit_mode == "skip":
         gf.iterative_search_params = np.load(save_path+".npy")
 
