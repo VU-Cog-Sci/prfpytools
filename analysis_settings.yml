@@ -1,6 +1,6 @@
 #intended for single subject analysis
 
-n_pix: 40
+n_pix: 54
 discard_volumes: 5
 #how many volumes at beginning (after discarded volumes) and end to use for baseline calculation
 baseline_volumes_begin_end: [5,5]
