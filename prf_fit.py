@@ -58,6 +58,7 @@ min_percent_var = analysis_info["min_percent_var"]
 
 n_chunks = analysis_info["n_chunks"]
 refit_mode = analysis_info["refit_mode"]
+last_current_analysis_date = analysis_info["last_current_analysis_date"]
 
 
 analysis_time = datetime.now().strftime('%Y%m%d%H%M%S')
@@ -206,23 +207,28 @@ else:
             
         np.save(save_path, gf.iterative_search_params)
     elif os.path.exists(save_path+".npy") and refit_mode == "iterate":
-        print("Starting Gaussian iter fit at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S'))
 
-        gf.iterative_fit(rsq_threshold=rsq_threshold, verbose=verbose,
-                         starting_params=np.load(save_path+".npy"),
-                         bounds=[(-10*ss, 10*ss),  # x
-                                 (-10*ss, 10*ss),  # y
-                                 (eps, 10*ss),  # prf size
-                                 (-inf, +inf),  # prf amplitude
-                                 (0, +inf)],  # bold baseline
-                         gradient_method=gradient_method,
-                         fit_hrf=fit_hrf)
+        if (datetime.fromtimestamp(os.stat(save_path+".npy").st_mtime)) < datetime(last_current_analysis_date[0],
+           last_current_analysis_date[1], last_current_analysis_date[2], last_current_analysis_date[3],
+           last_current_analysis_date[4], 0, 0):
 
-        print("Gaussian iterfit completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Mean rsq>"+str(rsq_threshold)\
-+": "+str(gf.iterative_search_params[gf.rsq_mask, -1].mean()))
-
-
-        np.save(save_path, gf.iterative_search_params)
+            print("Starting Gaussian iter fit at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S'))
+    
+            gf.iterative_fit(rsq_threshold=rsq_threshold, verbose=verbose,
+                             starting_params=np.load(save_path+".npy"),
+                             bounds=[(-10*ss, 10*ss),  # x
+                                     (-10*ss, 10*ss),  # y
+                                     (eps, 10*ss),  # prf size
+                                     (-inf, +inf),  # prf amplitude
+                                     (0, +inf)],  # bold baseline
+                             gradient_method=gradient_method,
+                             fit_hrf=fit_hrf)
+    
+            print("Gaussian iterfit completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Mean rsq>"+str(rsq_threshold)\
+    +": "+str(gf.iterative_search_params[gf.rsq_mask, -1].mean()))
+    
+    
+            np.save(save_path, gf.iterative_search_params)
     elif os.path.exists(save_path+".npy") and refit_mode == "skip":
         gf.iterative_search_params = np.load(save_path+".npy")
 
@@ -262,20 +268,24 @@ if "CSS" in models_to_fit:
 
         print("CSS iterfit completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Mean rsq>"+str(rsq_threshold)+": "+str(gf_css.iterative_search_params[gf_css.rsq_mask, -1].mean()))
     elif os.path.exists(save_path+".npy") and refit_mode == "iterate":
-        print("Starting CSS iter fit at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S'))
 
-        gf_css.iterative_fit(rsq_threshold=rsq_threshold, verbose=verbose,
-                             starting_params=np.load(save_path+".npy"),
-                             bounds=[(-10*ss, 10*ss),  # x
-                                     (-10*ss, 10*ss),  # y
-                                     (eps, 10*ss),  # prf size
-                                     (-inf, +inf),  # prf amplitude
-                                     (0, +inf),  # bold baseline
-                                     (0.001, 3)],  # CSS exponent
-                             gradient_method=gradient_method,
-                             fit_hrf=fit_hrf)
-
-        np.save(save_path, gf_css.iterative_search_params)
+        if (datetime.fromtimestamp(os.stat(save_path+".npy").st_mtime)) < datetime(last_current_analysis_date[0],
+           last_current_analysis_date[1], last_current_analysis_date[2], last_current_analysis_date[3],
+           last_current_analysis_date[4], 0, 0):
+            print("Starting CSS iter fit at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S'))
+    
+            gf_css.iterative_fit(rsq_threshold=rsq_threshold, verbose=verbose,
+                                 starting_params=np.load(save_path+".npy"),
+                                 bounds=[(-10*ss, 10*ss),  # x
+                                         (-10*ss, 10*ss),  # y
+                                         (eps, 10*ss),  # prf size
+                                         (-inf, +inf),  # prf amplitude
+                                         (0, +inf),  # bold baseline
+                                         (0.001, 3)],  # CSS exponent
+                                 gradient_method=gradient_method,
+                                 fit_hrf=fit_hrf)
+    
+            np.save(save_path, gf_css.iterative_search_params)
 
         print("CSS iterfit completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Mean rsq>"+str(rsq_threshold)+": "\
 +str(gf_css.iterative_search_params[gf_css.rsq_mask, -1].mean()))
@@ -321,21 +331,25 @@ if "DoG" in models_to_fit:
 
 
     elif os.path.exists(save_path+".npy") and refit_mode == "iterate":
-        print("Starting DoG iter fit at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S'))
 
-        gf_dog.iterative_fit(rsq_threshold=rsq_threshold, verbose=verbose,
-                             starting_params=np.load(save_path+".npy"),
-                             bounds=[(-10*ss, 10*ss),  # x
-                                             (-10*ss, 10*ss),  # y
-                                             (eps, 10*ss),  # prf size
-                                             (-inf, +inf),  # prf amplitude
-                                             (0, +inf),  # bold baseline
-                                             (-inf, +inf),  # surround amplitude
-                                             (eps, 20*ss)],  # surround size
-                                     gradient_method=gradient_method,
-                                     fit_hrf=fit_hrf)
-
-        np.save(save_path, gf_dog.iterative_search_params)
+        if (datetime.fromtimestamp(os.stat(save_path+".npy").st_mtime)) < datetime(last_current_analysis_date[0],
+           last_current_analysis_date[1], last_current_analysis_date[2], last_current_analysis_date[3],
+           last_current_analysis_date[4], 0, 0):
+            print("Starting DoG iter fit at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S'))
+    
+            gf_dog.iterative_fit(rsq_threshold=rsq_threshold, verbose=verbose,
+                                 starting_params=np.load(save_path+".npy"),
+                                 bounds=[(-10*ss, 10*ss),  # x
+                                                 (-10*ss, 10*ss),  # y
+                                                 (eps, 10*ss),  # prf size
+                                                 (-inf, +inf),  # prf amplitude
+                                                 (0, +inf),  # bold baseline
+                                                 (-inf, +inf),  # surround amplitude
+                                                 (eps, 20*ss)],  # surround size
+                                         gradient_method=gradient_method,
+                                         fit_hrf=fit_hrf)
+    
+            np.save(save_path, gf_dog.iterative_search_params)
 
 
         print("DoG iterfit completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Mean rsq>"+str(rsq_threshold)+": "+str\
@@ -417,23 +431,27 @@ if "norm" in models_to_fit:
 
     elif os.path.exists(save_path+".npy") and refit_mode == "iterate":
 
-        print("Starting norm iter fit at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S'))
+        if (datetime.fromtimestamp(os.stat(save_path+".npy").st_mtime)) < datetime(last_current_analysis_date[0],
+           last_current_analysis_date[1], last_current_analysis_date[2], last_current_analysis_date[3],
+           last_current_analysis_date[4], 0, 0):
 
-        gf_norm.iterative_fit(rsq_threshold=rsq_threshold, verbose=verbose,
-                              starting_params=np.load(save_path+".npy"),
-                                      bounds=[(-10*ss, 10*ss),  # x
-                                               (-10*ss, 10*ss),  # y
-                                               (eps, 10*ss),  # prf size
-                                               (-inf, +inf),  # prf amplitude
-                                               (0, +inf),  # bold baseline
-                                               (0, +inf),  # surround amplitude
-                                               (eps, 20*ss),  # surround size
-                                               (-inf, +inf),  # neural baseline
-                                               (1e-6, +inf)],  # surround baseline
-                                       gradient_method=gradient_method,
-                                       fit_hrf=fit_hrf)
-
-        np.save(save_path, gf_norm.iterative_search_params)
+            print("Starting norm iter fit at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S'))
+    
+            gf_norm.iterative_fit(rsq_threshold=rsq_threshold, verbose=verbose,
+                                  starting_params=np.load(save_path+".npy"),
+                                          bounds=[(-10*ss, 10*ss),  # x
+                                                   (-10*ss, 10*ss),  # y
+                                                   (eps, 10*ss),  # prf size
+                                                   (-inf, +inf),  # prf amplitude
+                                                   (0, +inf),  # bold baseline
+                                                   (0, +inf),  # surround amplitude
+                                                   (eps, 20*ss),  # surround size
+                                                   (-inf, +inf),  # neural baseline
+                                                   (1e-6, +inf)],  # surround baseline
+                                           gradient_method=gradient_method,
+                                           fit_hrf=fit_hrf)
+    
+            np.save(save_path, gf_norm.iterative_search_params)
 
         print("Norm iterfit completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Mean rsq>"+str(rsq_threshold)+": \
 "+str(gf_norm.iterative_search_params[gf_norm.rsq_mask, -1].mean()))
