@@ -171,9 +171,10 @@ if "grid_data_path" not in analysis_info and "gauss_iterparams_path" not in anal
           ". voxels/vertices above "+str(rsq_threshold)+": "+str(np.sum(gf.gridsearch_params[:, -1]>rsq_threshold)))
         print("Mean rsq>"+str(rsq_threshold)+": "+str(gf.gridsearch_params[gf.gridsearch_params[:, -1]>rsq_threshold, -1].mean()))
 
-
-       
         np.save(save_path, gf.gridsearch_params)
+
+    elif os.path.exists(save_path+".npy") and (refit_mode == "iterate" or refit_mode == "skip"):
+        gf.gridsearch_params = np.load(save_path+".npy")
 
 elif "grid_data_path" in analysis_info:
     gf.gridsearch_params = np.array_split(np.load(analysis_info["grid_data_path"]), n_chunks)[chunk_nr]
