@@ -60,15 +60,12 @@ n_chunks = analysis_info["n_chunks"]
 refit_mode = analysis_info["refit_mode"]
 last_current_analysis_date = analysis_info["last_current_analysis_date"]
 
-
 analysis_time = datetime.now().strftime('%Y%m%d%H%M%S')
 
+analysis_info["analysis_time"] = analysis_time
+
 data_path = opj(data_path,'prfpy')
-
 save_path = opj(data_path, subj+"_analysis_settings")
-
-#if os.path.exists(save_path+".yml"):
-#    save_path+=analysis_time
 
 with open(save_path+".yml", 'w+') as outfile:
     yaml.dump(analysis_info, outfile)
@@ -86,8 +83,6 @@ task_lengths, prf_stim, late_iso_dict = create_full_stim(screenshot_paths,
                 screen_distance_cm,
                 TR,
                 task_names)
-
-
 
 if "timecourse_data_path" in analysis_info:
     print("Using time series from: "+analysis_info["timecourse_data_path"])
@@ -131,7 +126,7 @@ if verbose == True:
 
 # grid params
 grid_nr = 20
-max_ecc_size = prf_stim.max_ecc
+max_ecc_size = prf_stim.screen_size_degrees/2.0
 sizes, eccs, polars = max_ecc_size * np.linspace(0.25, 1, grid_nr)**2, \
     max_ecc_size * np.linspace(0.1, 1, grid_nr)**2, \
     np.linspace(0, 2*np.pi, grid_nr)
@@ -140,6 +135,38 @@ sizes, eccs, polars = max_ecc_size * np.linspace(0.25, 1, grid_nr)**2, \
 inf = np.inf
 eps = 1e-1
 ss = prf_stim.screen_size_degrees
+
+# model parameter bounds
+gauss_bounds = [(-2*ss, 2*ss),  # x
+                (-2*ss, 2*ss),  # y
+                (eps, 2*ss),  # prf size
+                (-inf, +inf),  # prf amplitude
+                (0, +inf)]  # bold baseline
+
+css_bounds = [(-2*ss, 2*ss),  # x
+              (-2*ss, 2*ss),  # y
+              (eps, 2*ss),  # prf size
+              (-inf, +inf),  # prf amplitude
+              (0, +inf),  # bold baseline
+              (0.001, 3)]  # CSS exponent
+
+dog_bounds = [(-2*ss, 2*ss),  # x
+              (-2*ss, 2*ss),  # y
+              (eps, 2*ss),  # prf size
+              (-inf, +inf),  # prf amplitude
+              (0, +inf),  # bold baseline
+              (-inf, +inf),  # surround amplitude
+              (2*eps, 4*ss)]  # surround size
+
+norm_bounds = [(-2*ss, 2*ss),  # x
+               (-2*ss, 2*ss),  # y
+               (eps, 2*ss),  # prf size
+               (-inf, +inf),  # prf amplitude
+               (0, +inf),  # bold baseline
+               (0, +inf),  # surround amplitude
+               (2*eps, 4*ss),  # surround size
+               (-inf, +inf),  # neural baseline
+               (1e-6, +inf)]  # surround baseline
 
 # MODEL COMPARISON
 print("Started modeling at: "+datetime.now().strftime('%Y/%m/%d %H:%M:%S'))
@@ -194,11 +221,7 @@ else:
         print("Starting Gaussian iter fit at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S'))
 
         gf.iterative_fit(rsq_threshold=rsq_threshold, verbose=verbose,
-                         bounds=[(-10*ss, 10*ss),  # x
-                                 (-10*ss, 10*ss),  # y
-                                 (eps, 10*ss),  # prf size
-                                 (-inf, +inf),  # prf amplitude
-                                 (0, +inf)],  # bold baseline
+                         bounds=gauss_bounds,
                          gradient_method=gradient_method,
                          fit_hrf=fit_hrf)
 
@@ -216,11 +239,7 @@ else:
     
             gf.iterative_fit(rsq_threshold=rsq_threshold, verbose=verbose,
                              starting_params=np.load(save_path+".npy"),
-                             bounds=[(-10*ss, 10*ss),  # x
-                                     (-10*ss, 10*ss),  # y
-                                     (eps, 10*ss),  # prf size
-                                     (-inf, +inf),  # prf amplitude
-                                     (0, +inf)],  # bold baseline
+                             bounds=gauss_bounds,
                              gradient_method=gradient_method,
                              fit_hrf=fit_hrf)
 
@@ -259,12 +278,7 @@ if "CSS" in models_to_fit:
         print("Starting CSS iter fit at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S'))
 
         gf_css.iterative_fit(rsq_threshold=rsq_threshold, verbose=verbose,
-                             bounds=[(-10*ss, 10*ss),  # x
-                                     (-10*ss, 10*ss),  # y
-                                     (eps, 10*ss),  # prf size
-                                     (-inf, +inf),  # prf amplitude
-                                     (0, +inf),  # bold baseline
-                                     (0.001, 3)],  # CSS exponent
+                             bounds=css_bounds,
                              gradient_method=gradient_method,
                              fit_hrf=fit_hrf)
 
@@ -280,12 +294,7 @@ if "CSS" in models_to_fit:
     
             gf_css.iterative_fit(rsq_threshold=rsq_threshold, verbose=verbose,
                                  starting_params=np.load(save_path+".npy"),
-                                 bounds=[(-10*ss, 10*ss),  # x
-                                         (-10*ss, 10*ss),  # y
-                                         (eps, 10*ss),  # prf size
-                                         (-inf, +inf),  # prf amplitude
-                                         (0, +inf),  # bold baseline
-                                         (0.001, 3)],  # CSS exponent
+                                 bounds=css_bounds,
                                  gradient_method=gradient_method,
                                  fit_hrf=fit_hrf)
     
@@ -318,13 +327,7 @@ if "DoG" in models_to_fit:
         print("Starting DoG iter fit at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S'))
 
         gf_dog.iterative_fit(rsq_threshold=rsq_threshold, verbose=verbose,
-                                     bounds=[(-10*ss, 10*ss),  # x
-                                             (-10*ss, 10*ss),  # y
-                                             (eps, 10*ss),  # prf size
-                                             (-inf, +inf),  # prf amplitude
-                                             (0, +inf),  # bold baseline
-                                             (-inf, +inf),  # surround amplitude
-                                             (eps, 20*ss)],  # surround size
+                                     bounds=dog_bounds,
                                      gradient_method=gradient_method,
                                      fit_hrf=fit_hrf)
 
@@ -343,13 +346,7 @@ if "DoG" in models_to_fit:
     
             gf_dog.iterative_fit(rsq_threshold=rsq_threshold, verbose=verbose,
                                  starting_params=np.load(save_path+".npy"),
-                                 bounds=[(-10*ss, 10*ss),  # x
-                                                 (-10*ss, 10*ss),  # y
-                                                 (eps, 10*ss),  # prf size
-                                                 (-inf, +inf),  # prf amplitude
-                                                 (0, +inf),  # bold baseline
-                                                 (-inf, +inf),  # surround amplitude
-                                                 (eps, 20*ss)],  # surround size
+                                 bounds=dog_bounds,
                                          gradient_method=gradient_method,
                                          fit_hrf=fit_hrf)
     
@@ -418,15 +415,7 @@ if "norm" in models_to_fit:
         print("Starting norm iter fit at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S'))
 
         gf_norm.iterative_fit(rsq_threshold=rsq_threshold, verbose=verbose,
-                                       bounds=[(-10*ss, 10*ss),  # x
-                                               (-10*ss, 10*ss),  # y
-                                               (eps, 10*ss),  # prf size
-                                               (-inf, +inf),  # prf amplitude
-                                               (0, +inf),  # bold baseline
-                                               (0, +inf),  # surround amplitude
-                                               (eps, 20*ss),  # surround size
-                                               (-inf, +inf),  # neural baseline
-                                               (1e-6, +inf)],  # surround baseline
+                                       bounds=norm_bounds,
                                        gradient_method=gradient_method,
                                        fit_hrf=fit_hrf)
 
@@ -444,15 +433,7 @@ if "norm" in models_to_fit:
     
             gf_norm.iterative_fit(rsq_threshold=rsq_threshold, verbose=verbose,
                                   starting_params=np.load(save_path+".npy"),
-                                          bounds=[(-10*ss, 10*ss),  # x
-                                                   (-10*ss, 10*ss),  # y
-                                                   (eps, 10*ss),  # prf size
-                                                   (-inf, +inf),  # prf amplitude
-                                                   (0, +inf),  # bold baseline
-                                                   (0, +inf),  # surround amplitude
-                                                   (eps, 20*ss),  # surround size
-                                                   (-inf, +inf),  # neural baseline
-                                                   (1e-6, +inf)],  # surround baseline
+                                          bounds=norm_bounds,
                                            gradient_method=gradient_method,
                                            fit_hrf=fit_hrf)
     
