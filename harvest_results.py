@@ -72,5 +72,5 @@ for model in models_to_fit:
 
     np.save(iter_path, model_result)
 
-
+print(harvest_time)
 
