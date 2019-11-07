@@ -26,6 +26,7 @@ if "mkl_num_threads" in analysis_info:
     mkl.set_num_threads(analysis_info["mkl_num_threads"])
 
 import numpy as np
+from scipy.optimize import LinearConstraint
 
 from utils.utils import create_full_stim, prepare_data
 
@@ -155,8 +156,8 @@ dog_bounds = [(-2*ss, 2*ss),  # x
               (eps, 2*ss),  # prf size
               (-inf, +inf),  # prf amplitude
               (0, +inf),  # bold baseline
-              (-inf, +inf),  # surround amplitude
-              (2*eps, 4*ss)]  # surround size
+              (0, +inf),  # surround amplitude
+              (eps, 4*ss)]  # surround size
 
 norm_bounds = [(-2*ss, 2*ss),  # x
                (-2*ss, 2*ss),  # y
@@ -164,9 +165,24 @@ norm_bounds = [(-2*ss, 2*ss),  # x
                (-inf, +inf),  # prf amplitude
                (0, +inf),  # bold baseline
                (0, +inf),  # surround amplitude
-               (2*eps, 4*ss),  # surround size
+               (eps, 4*ss),  # surround size
                (-inf, +inf),  # neural baseline
                (1e-6, +inf)]  # surround baseline
+
+#constraining dog and norm surrounds to be larger in size than prf (only works for no-gradient minimzation)
+if gradient_method.lower() not in ["analytic", "numerical"]:
+    A_ssc_dog = np.array([0,0,-1,0,0,0,1]).reshape((-1,7))
+    constraints_dog = LinearConstraint(A_ssc_dog,
+                                                lb=0,
+                                                ub=+inf)
+    A_ssc_norm = np.array([0,0,-1,0,0,0,1,0,0]).reshape((-1,7))
+    constraints_norm = LinearConstraint(A_ssc_norm,
+                                                lb=0,
+                                                ub=+inf)
+else:
+    constraints_dog = []
+    constraints_norm = []
+
 
 # MODEL COMPARISON
 print("Started modeling at: "+datetime.now().strftime('%Y/%m/%d %H:%M:%S'))
@@ -329,7 +345,8 @@ if "DoG" in models_to_fit:
         gf_dog.iterative_fit(rsq_threshold=rsq_threshold, verbose=verbose,
                                      bounds=dog_bounds,
                                      gradient_method=gradient_method,
-                                     fit_hrf=fit_hrf)
+                                     fit_hrf=fit_hrf,
+                                     constraints=constraints_dog)
 
         np.save(save_path, gf_dog.iterative_search_params)
 
@@ -347,9 +364,10 @@ if "DoG" in models_to_fit:
             gf_dog.iterative_fit(rsq_threshold=rsq_threshold, verbose=verbose,
                                  starting_params=np.load(save_path+".npy"),
                                  bounds=dog_bounds,
-                                         gradient_method=gradient_method,
-                                         fit_hrf=fit_hrf)
-    
+                                 gradient_method=gradient_method,
+                                 fit_hrf=fit_hrf,
+                                 constraints=constraints_dog)
+
             np.save(save_path, gf_dog.iterative_search_params)
 
 
@@ -417,7 +435,8 @@ if "norm" in models_to_fit:
         gf_norm.iterative_fit(rsq_threshold=rsq_threshold, verbose=verbose,
                                        bounds=norm_bounds,
                                        gradient_method=gradient_method,
-                                       fit_hrf=fit_hrf)
+                                       fit_hrf=fit_hrf,
+                                       constraints=constraints_norm)
 
         np.save(save_path, gf_norm.iterative_search_params)
 
@@ -435,8 +454,9 @@ if "norm" in models_to_fit:
                                   starting_params=np.load(save_path+".npy"),
                                           bounds=norm_bounds,
                                            gradient_method=gradient_method,
-                                           fit_hrf=fit_hrf)
-    
+                                           fit_hrf=fit_hrf,
+                                           constraints=constraints_norm)
+
             np.save(save_path, gf_norm.iterative_search_params)
 
             print("Norm iterfit completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Mean rsq>"+str(rsq_threshold)+": \
