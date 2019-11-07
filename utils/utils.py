@@ -219,7 +219,7 @@ def prepare_data(subj,
                                                    axis=-1)
     
         #shift timeseries so they have the same average value in proper baseline periods across conditions
-        iso_full = np.mean([tc_dict[task_name]['baseline'] for task_name in task_names])
+        iso_full = np.mean([tc_dict[task_name]['baseline'] for task_name in task_names], axis=0)
     
         for task_name in task_names:
             iso_diff = iso_full - tc_dict[task_name]['baseline']
