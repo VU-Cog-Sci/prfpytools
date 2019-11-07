@@ -175,7 +175,7 @@ if gradient_method.lower() not in ["analytic", "numerical"]:
     constraints_dog = LinearConstraint(A_ssc_dog,
                                                 lb=0,
                                                 ub=+inf)
-    A_ssc_norm = np.array([0,0,-1,0,0,0,1,0,0]).reshape((-1,7))
+    A_ssc_norm = np.array([0,0,-1,0,0,0,1,0,0]).reshape((-1,9))
     constraints_norm = LinearConstraint(A_ssc_norm,
                                                 lb=0,
                                                 ub=+inf)
