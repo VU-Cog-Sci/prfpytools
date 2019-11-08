@@ -26,7 +26,7 @@ if "mkl_num_threads" in analysis_info:
     mkl.set_num_threads(analysis_info["mkl_num_threads"])
 
 import numpy as np
-from scipy.optimize import LinearConstraint
+from scipy.optimize import LinearConstraint, NonlinearConstraint
 
 from utils.utils import create_full_stim, prepare_data
 
@@ -141,20 +141,20 @@ ss = prf_stim.screen_size_degrees
 gauss_bounds = [(-2*ss, 2*ss),  # x
                 (-2*ss, 2*ss),  # y
                 (eps, 2*ss),  # prf size
-                (-inf, +inf),  # prf amplitude
+                (0, +inf),  # prf amplitude
                 (0, +inf)]  # bold baseline
 
 css_bounds = [(-2*ss, 2*ss),  # x
               (-2*ss, 2*ss),  # y
               (eps, 2*ss),  # prf size
-              (-inf, +inf),  # prf amplitude
+              (0, +inf),  # prf amplitude
               (0, +inf),  # bold baseline
-              (0.001, 3)]  # CSS exponent
+              (0.01, 3)]  # CSS exponent
 
 dog_bounds = [(-2*ss, 2*ss),  # x
               (-2*ss, 2*ss),  # y
               (eps, 2*ss),  # prf size
-              (-inf, +inf),  # prf amplitude
+              (0, +inf),  # prf amplitude
               (0, +inf),  # bold baseline
               (0, +inf),  # surround amplitude
               (eps, 4*ss)]  # surround size
@@ -162,23 +162,33 @@ dog_bounds = [(-2*ss, 2*ss),  # x
 norm_bounds = [(-2*ss, 2*ss),  # x
                (-2*ss, 2*ss),  # y
                (eps, 2*ss),  # prf size
-               (-inf, +inf),  # prf amplitude
+               (0, +inf),  # prf amplitude
                (0, +inf),  # bold baseline
                (0, +inf),  # surround amplitude
                (eps, 4*ss),  # surround size
-               (-inf, +inf),  # neural baseline
+               (0, +inf),  # neural baseline
                (1e-6, +inf)]  # surround baseline
 
 #constraining dog and norm surrounds to be larger in size than prf (only works for no-gradient minimzation)
 if gradient_method.lower() not in ["analytic", "numerical"]:
-    A_ssc_dog = np.array([0,0,-1,0,0,0,1]).reshape((-1,7))
+
+    A_ssc_dog = np.array([[0,0,-1,0,0,0,1],[0,0,0,1,0,-1,0]])
+
     constraints_dog = LinearConstraint(A_ssc_dog,
                                                 lb=0,
                                                 ub=+inf)
+
     A_ssc_norm = np.array([0,0,-1,0,0,0,1,0,0]).reshape((-1,9))
-    constraints_norm = LinearConstraint(A_ssc_norm,
+
+    def tall_center_constraint(x):
+        return (x[3]+x[7])/(x[5]+x[8]) - x[7]/x[8]
+
+    constraints_norm = [LinearConstraint(A_ssc_norm,
                                                 lb=0,
-                                                ub=+inf)
+                                                ub=+inf),
+                        NonlinearConstraint(tall_center_constraint,
+                                            lb=0,
+                                            ub=+inf)]
 else:
     constraints_dog = []
     constraints_norm = []
