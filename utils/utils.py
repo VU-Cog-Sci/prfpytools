@@ -170,11 +170,12 @@ def prepare_data(subj,
         
         tc_full_iso_nonzerovar_dict['orig_data_shape'] = {'R_shape':tc_full_iso_dict['R'].shape, 'L_shape':tc_full_iso_dict['L'].shape}
         tc_mean = tc_full_iso.mean(-1)
-        nonlow_var = (tc_full_iso - tc_mean[...,np.newaxis]).max(-1) > tc_mean*min_percent_var/100
+        nonlow_var = ((tc_full_iso - tc_mean[...,np.newaxis]).max(-1) > tc_mean*min_percent_var/100) * tc_mean>0
     
         tc_full_iso_nonzerovar_dict['nonlow_var_mask'] = nonlow_var
-        tc_full_iso_nonzerovar_dict['tc'] = tc_full_iso[nonlow_var]
-        
+        #conversion to +- of % of mean
+        tc_full_iso_nonzerovar_dict['tc'] = 100*(tc_full_iso[nonlow_var] / tc_mean[nonlow_var,np.newaxis])
+
         return tc_full_iso_nonzerovar_dict
 
     else:
@@ -233,10 +234,10 @@ def prepare_data(subj,
         tc_full_iso_nonzerovar_dict['orig_data_shape'] = final_mask.shape
     
         tc_mean = tc_full_iso.mean(-1)
-        nonlow_var = (tc_full_iso - tc_mean[...,np.newaxis]).max(-1) > tc_mean*min_percent_var/100
+        nonlow_var = np.ravel(final_mask) & (((tc_full_iso - tc_mean[...,np.newaxis]).max(-1) > tc_mean*min_percent_var/100) * tc_mean>0)
     
-        tc_full_iso_nonzerovar_dict['nonlow_var_mask'] = np.ravel(final_mask) & nonlow_var
-        tc_full_iso_nonzerovar_dict['tc'] = tc_full_iso[tc_full_iso_nonzerovar_dict['nonlow_var_mask']]
+        tc_full_iso_nonzerovar_dict['nonlow_var_mask'] =  nonlow_var
+        tc_full_iso_nonzerovar_dict['tc'] = 100*(tc_full_iso[nonlow_var]/ tc_mean[nonlow_var,np.newaxis])
     
         return tc_full_iso_nonzerovar_dict
 
@@ -309,3 +310,18 @@ def roi_mask(roi, array):
     array_2[roi] = 1
     masked_array = array * array_2
     return masked_array
+
+def fwhmax_fwmin(model, params, return_profile=False):
+    model = model.lower()
+    x=np.linspace(-50,50,1000)
+    if model == 'gauss':
+        profile = params[...,3] * np.exp(-0.5*x**2 / params[...,2]**2)
+        half_max = np.max(profile, axis=0)/2
+        fwhmax = np.abs(2*x[np.argmin(np.abs(half_max-profile), axis=0)])
+
+
+        if norm or dog:
+            find fwidth at min
+    and so on
+
+

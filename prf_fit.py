@@ -11,6 +11,7 @@ opj = os.path.join
 import yaml
 import sys
 from datetime import datetime
+import time
 
 subj = sys.argv[1]
 analysis_settings = sys.argv[2]
@@ -56,13 +57,14 @@ fit_hrf = analysis_info["fit_hrf"]
 dm_edges_clipping = analysis_info["dm_edges_clipping"]
 baseline_volumes_begin_end = analysis_info["baseline_volumes_begin_end"]
 min_percent_var = analysis_info["min_percent_var"]
+pos_prfs_only = analysis_info["pos_prfs_only"]
+
 
 n_chunks = analysis_info["n_chunks"]
 refit_mode = analysis_info["refit_mode"].lower()
-last_current_analysis_date = analysis_info["last_current_analysis_date"]
 
-analysis_time = datetime.now().strftime('%Y%m%d%H%M%S')
 
+analysis_time = datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
 analysis_info["analysis_time"] = analysis_time
 
 data_path = opj(data_path,'prfpy')
@@ -70,6 +72,15 @@ save_path = opj(data_path, subj+"_analysis_settings")
 
 
 if chunk_nr == 0:
+    if os.path.exists(save_path+".yml"):
+        with open(save_path+".yml") as f:
+            previous_analysis_info = yaml.safe_load(f)
+
+        previous_analysis_time = previous_analysis_info["analysis_time"]
+        previous_analysis_refit_mode = previous_analysis_info["refit_mode"].lower()
+
+        os.rename(save_path+".yml",save_path+previous_analysis_time+".yml")
+
     with open(save_path+".yml", 'w+') as outfile:
         yaml.dump(analysis_info, outfile)
 
@@ -99,23 +110,35 @@ elif os.path.exists(opj(data_path, subj+"_timecourse_space-"+fitting_space+".npy
     tc_full_iso_nonzerovar_dict['tc'] = np.load(opj(data_path, subj+"_timecourse_space-"+fitting_space+".npy"))
 
 else:
-    print("Preparing data for fitting (see utils.prepare_data)...")
-    tc_full_iso_nonzerovar_dict = prepare_data(subj,
-                                               task_names,
-                                               discard_volumes,
-                                               min_percent_var,
-                                               window_length,
-                                               late_iso_dict,
-                                               data_path[:-5],
-                                               fitting_space)
+    if chunk_nr == 0:
+        print("Preparing data for fitting (see utils.prepare_data)...")
+        tc_full_iso_nonzerovar_dict = prepare_data(subj,
+                                                   task_names,
+                                                   discard_volumes,
+                                                   min_percent_var,
+                                                   window_length,
+                                                   late_iso_dict,
+                                                   data_path[:-5],
+                                                   fitting_space)
+    
+        save_path = opj(data_path, subj+"_timecourse_space-"+fitting_space)
+    
+        np.save(save_path, tc_full_iso_nonzerovar_dict['tc'])
+    
+        save_path = opj(data_path, subj+"_nonlow-var-mask_space-"+fitting_space)
+    
+        np.save(save_path, tc_full_iso_nonzerovar_dict['nonlow_var_mask'])
+    else:
 
-    save_path = opj(data_path, subj+"_timecourse_space-"+fitting_space)
+        while not os.path.exists(opj(data_path, subj+"_timecourse_space-"+fitting_space+".npy")):
+            time.sleep(30)
+        else:
+            print("Using time series from: "+opj(data_path, subj+"_timecourse_space-"+fitting_space+".npy"))
+            tc_full_iso_nonzerovar_dict = {}
+            tc_full_iso_nonzerovar_dict['tc'] = np.load(opj(data_path, subj+"_timecourse_space-"+fitting_space+".npy"))
 
-    np.save(save_path, tc_full_iso_nonzerovar_dict['tc'])
 
-    save_path = opj(data_path, subj+"_nonlow-var-mask_space-"+fitting_space)
 
-    np.save(save_path, tc_full_iso_nonzerovar_dict['nonlow_var_mask'])
 
 
 
@@ -223,7 +246,8 @@ if "grid_data_path" not in analysis_info and "gauss_iterparams_path" not in anal
                 polar_grid=polars,
                 size_grid=sizes,
                 verbose=verbose,
-                n_batches=n_batches)
+                n_batches=n_batches,
+                pos_prfs_only=pos_prfs_only)
         print("Gaussian gridfit completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+\
           ". voxels/vertices above "+str(rsq_threshold)+": "+str(np.sum(gf.gridsearch_params[:, -1]>rsq_threshold)))
         print("Mean rsq>"+str(rsq_threshold)+": "+str(gf.gridsearch_params[gf.gridsearch_params[:, -1]>rsq_threshold, -1].mean()))
@@ -275,9 +299,13 @@ else:
         np.save(save_path, gf.iterative_search_params)
     elif os.path.exists(save_path+".npy") and refit_mode == "iterate":
 
-        if (datetime.fromtimestamp(os.stat(save_path+".npy").st_mtime)) < datetime(last_current_analysis_date[0],
-           last_current_analysis_date[1], last_current_analysis_date[2], last_current_analysis_date[3],
-           last_current_analysis_date[4], 0, 0):
+        if previous_analysis_refit_mode != "iterate" or (datetime.fromtimestamp(os.stat(save_path+".npy").st_mtime)) < datetime(\
+                                                        previous_analysis_time.split('-')[0],
+                                                        previous_analysis_time.split('-')[1],
+                                                        previous_analysis_time.split('-')[2],
+                                                        previous_analysis_time.split('-')[3],
+                                                        previous_analysis_time.split('-')[4],
+                                                        previous_analysis_time.split('-')[5], 0):
 
             print("Starting Gaussian iter fit at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S'))
     
@@ -351,9 +379,13 @@ if "CSS" in models_to_fit:
             print("CSS iterfit completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Mean rsq>"+str(rsq_threshold)+": "+str(gf_css.iterative_search_params[gf_css.rsq_mask, -1].mean()))
         elif os.path.exists(save_path+".npy") and refit_mode == "iterate":
     
-            if (datetime.fromtimestamp(os.stat(save_path+".npy").st_mtime)) < datetime(last_current_analysis_date[0],
-               last_current_analysis_date[1], last_current_analysis_date[2], last_current_analysis_date[3],
-               last_current_analysis_date[4], 0, 0):
+            if previous_analysis_refit_mode != "iterate" or (datetime.fromtimestamp(os.stat(save_path+".npy").st_mtime)) < datetime(\
+                                                        previous_analysis_time.split('-')[0],
+                                                        previous_analysis_time.split('-')[1],
+                                                        previous_analysis_time.split('-')[2],
+                                                        previous_analysis_time.split('-')[3],
+                                                        previous_analysis_time.split('-')[4],
+                                                        previous_analysis_time.split('-')[5], 0):
                 print("Starting CSS iter fit at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S'))
         
                 gf_css.iterative_fit(rsq_threshold=rsq_threshold, verbose=verbose,
@@ -423,9 +455,13 @@ if "DoG" in models_to_fit:
     
         elif os.path.exists(save_path+".npy") and refit_mode == "iterate":
     
-            if (datetime.fromtimestamp(os.stat(save_path+".npy").st_mtime)) < datetime(last_current_analysis_date[0],
-               last_current_analysis_date[1], last_current_analysis_date[2], last_current_analysis_date[3],
-               last_current_analysis_date[4], 0, 0):
+            if previous_analysis_refit_mode != "iterate" or (datetime.fromtimestamp(os.stat(save_path+".npy").st_mtime)) < datetime(\
+                                                        previous_analysis_time.split('-')[0],
+                                                        previous_analysis_time.split('-')[1],
+                                                        previous_analysis_time.split('-')[2],
+                                                        previous_analysis_time.split('-')[3],
+                                                        previous_analysis_time.split('-')[4],
+                                                        previous_analysis_time.split('-')[5], 0):
                 print("Starting DoG iter fit at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S'))
         
                 gf_dog.iterative_fit(rsq_threshold=rsq_threshold, verbose=verbose,
@@ -481,7 +517,8 @@ if "norm" in models_to_fit:
                          surround_baseline_grid,
                          verbose=verbose,
                          n_batches=n_batches,
-                         rsq_threshold=rsq_threshold)
+                         rsq_threshold=rsq_threshold,
+                         pos_prfs_only=pos_prfs_only)
         
             print("Norm gridfit completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Mean rsq>"+str(rsq_threshold)+": "+str(gf_norm.gridsearch_params[gf_norm.gridsearch_rsq_mask, -1].mean()))
         
@@ -528,9 +565,13 @@ if "norm" in models_to_fit:
     
         elif os.path.exists(save_path+".npy") and refit_mode == "iterate":
     
-            if (datetime.fromtimestamp(os.stat(save_path+".npy").st_mtime)) < datetime(last_current_analysis_date[0],
-               last_current_analysis_date[1], last_current_analysis_date[2], last_current_analysis_date[3],
-               last_current_analysis_date[4], 0, 0):
+            if previous_analysis_refit_mode != "iterate" or (datetime.fromtimestamp(os.stat(save_path+".npy").st_mtime)) < datetime(\
+                                                        previous_analysis_time.split('-')[0],
+                                                        previous_analysis_time.split('-')[1],
+                                                        previous_analysis_time.split('-')[2],
+                                                        previous_analysis_time.split('-')[3],
+                                                        previous_analysis_time.split('-')[4],
+                                                        previous_analysis_time.split('-')[5], 0):
     
                 print("Starting norm iter fit at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S'))
         

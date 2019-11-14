@@ -47,30 +47,30 @@ baseline_volumes_begin_end = analysis_info["baseline_volumes_begin_end"]
 min_percent_var = analysis_info["min_percent_var"]
 
 n_chunks = analysis_info["n_chunks"]
-refit_mode = analysis_info["refit_mode"]
+refit_mode = analysis_info["refit_mode"].lower()
 
 data_path = opj(data_path,'prfpy')
 
-harvest_time = datetime.now().strftime('%Y%m%d%H%M%S')
+analysis_time = analysis_info["analysis_time"]
 
 for model in models_to_fit:
     model = model.lower()
-    if model in ["gauss", "norm"]:
+    if model in ["gauss", "norm"] and refit_mode != "iterate":
         grid_path = opj(data_path, subj+"_gridparams-"+model+"_space-"+fitting_space)
         grid_result = np.concatenate(tuple([np.load(grid_path+str(chunk_nr)+".npy") for chunk_nr in range(n_chunks)]), axis=0)
 
-        if os.path.exists(grid_path+".npy"):
-            grid_path+=harvest_time
+        grid_path+=analysis_time
 
-        np.save(grid_path, grid_result)
+        np.save(grid_path.replace('scratch-shared', 'home'), grid_result)
 
     iter_path = opj(data_path, subj+"_iterparams-"+model+"_space-"+fitting_space)
+
+    
     model_result = np.concatenate(tuple([np.load(iter_path+str(chunk_nr)+".npy") for chunk_nr in range(n_chunks)]), axis=0)
 
-    if os.path.exists(iter_path+".npy"):
-        iter_path+=harvest_time
+    iter_path+=analysis_time
 
-    np.save(iter_path, model_result)
+    np.save(iter_path.replace('scratch-shared', 'home'), model_result)
 
-print(harvest_time)
+print("harvest completed")
 
