@@ -320,8 +320,5 @@ def fwhmax_fwmin(model, params, return_profile=False):
         fwhmax = np.abs(2*x[np.argmin(np.abs(half_max-profile), axis=0)])
 
 
-        if norm or dog:
-            find fwidth at min
-    and so on
 
 
