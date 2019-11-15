@@ -88,15 +88,17 @@ if chunk_nr == 0:
         yaml.dump(analysis_info, outfile)
 else:
     while True:
-        time.sleep(10)
+        time.sleep(1)
         try:
             with open(save_path+".yml") as f:
-                previous_analysis_time = yaml.safe_load(f)["previous_analysis_time"]
-                previous_analysis_refit_mode = yaml.safe_load(f)["previous_analysis_refit_mode"]
+                current_an = yaml.safe_load(f)
+            previous_analysis_time = current_an["previous_analysis_time"]
+            previous_analysis_refit_mode = current_an["previous_analysis_refit_mode"]
         except Exception as e:
             print(e)
             continue
         break
+
 
 
 if verbose == True:
