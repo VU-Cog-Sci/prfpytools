@@ -79,10 +79,23 @@ if chunk_nr == 0:
         previous_analysis_time = previous_analysis_info["analysis_time"]
         previous_analysis_refit_mode = previous_analysis_info["refit_mode"].lower()
 
+        analysis_info["previous_analysis_time"] = previous_analysis_time
+        analysis_info["previous_analysis_refit_mode"] = previous_analysis_refit_mode
+
         os.rename(save_path+".yml",save_path+previous_analysis_time+".yml")
 
     with open(save_path+".yml", 'w+') as outfile:
         yaml.dump(analysis_info, outfile)
+else:
+    while True:
+        time.sleep(1)
+        try:
+            with open(save_path+".yml") as f:
+                previous_analysis_time = yaml.safe_load(f)["previous_analysis_time"]
+                previous_analysis_refit_mode = yaml.safe_load(f)["previous_analysis_refit_mode"]
+        except:
+            continue
+        break
 
 
 if verbose == True:

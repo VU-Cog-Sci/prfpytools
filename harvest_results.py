@@ -53,6 +53,24 @@ data_path = opj(data_path,'prfpy')
 
 analysis_time = analysis_info["analysis_time"]
 
+#first check if iteration was completed
+if refit_mode == "iterate":
+    for model in models_to_fit:
+
+        if np.any(np.array([(datetime.fromtimestamp(os.stat(opj(data_path,
+            subj+"_iterparams-"+model+"_space-"+fitting_space+str(chunk_nr)+".npy")).st_mtime)) < datetime(\
+                                                        analysis_time.split('-')[0],
+                                                        analysis_time.split('-')[1],
+                                                        analysis_time.split('-')[2],
+                                                        analysis_time.split('-')[3],
+                                                        analysis_time.split('-')[4],
+                                                        analysis_time.split('-')[5], 0) for chunk_nr in range(n_chunks)])):
+
+            print("iterate mode refitting was not completed")
+            raise IOError
+
+
+
 for model in models_to_fit:
     model = model.lower()
     if model in ["gauss", "norm"] and refit_mode != "iterate":
@@ -65,7 +83,7 @@ for model in models_to_fit:
 
     iter_path = opj(data_path, subj+"_iterparams-"+model+"_space-"+fitting_space)
 
-    
+
     model_result = np.concatenate(tuple([np.load(iter_path+str(chunk_nr)+".npy") for chunk_nr in range(n_chunks)]), axis=0)
 
     iter_path+=analysis_time
