@@ -313,12 +313,12 @@ else:
     elif os.path.exists(save_path+".npy") and refit_mode == "iterate":
 
         if previous_analysis_refit_mode != "iterate" or (datetime.fromtimestamp(os.stat(save_path+".npy").st_mtime)) < datetime(\
-                                                        previous_analysis_time.split('-')[0],
-                                                        previous_analysis_time.split('-')[1],
-                                                        previous_analysis_time.split('-')[2],
-                                                        previous_analysis_time.split('-')[3],
-                                                        previous_analysis_time.split('-')[4],
-                                                        previous_analysis_time.split('-')[5], 0):
+                                                        int(previous_analysis_time.split('-')[0]),
+                                                        int(previous_analysis_time.split('-')[1]),
+                                                        int(previous_analysis_time.split('-')[2]),
+                                                        int(previous_analysis_time.split('-')[3]),
+                                                        int(previous_analysis_time.split('-')[4]),
+                                                        int(previous_analysis_time.split('-')[5]), 0):
 
             print("Starting Gaussian iter fit at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S'))
     
@@ -393,12 +393,12 @@ if "CSS" in models_to_fit:
         elif os.path.exists(save_path+".npy") and refit_mode == "iterate":
     
             if previous_analysis_refit_mode != "iterate" or (datetime.fromtimestamp(os.stat(save_path+".npy").st_mtime)) < datetime(\
-                                                        previous_analysis_time.split('-')[0],
-                                                        previous_analysis_time.split('-')[1],
-                                                        previous_analysis_time.split('-')[2],
-                                                        previous_analysis_time.split('-')[3],
-                                                        previous_analysis_time.split('-')[4],
-                                                        previous_analysis_time.split('-')[5], 0):
+                                                        int(previous_analysis_time.split('-')[0]),
+                                                        int(previous_analysis_time.split('-')[1]),
+                                                        int(previous_analysis_time.split('-')[2]),
+                                                        int(previous_analysis_time.split('-')[3]),
+                                                        int(previous_analysis_time.split('-')[4]),
+                                                        int(previous_analysis_time.split('-')[5]), 0):
                 print("Starting CSS iter fit at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S'))
         
                 gf_css.iterative_fit(rsq_threshold=rsq_threshold, verbose=verbose,
@@ -469,12 +469,12 @@ if "DoG" in models_to_fit:
         elif os.path.exists(save_path+".npy") and refit_mode == "iterate":
     
             if previous_analysis_refit_mode != "iterate" or (datetime.fromtimestamp(os.stat(save_path+".npy").st_mtime)) < datetime(\
-                                                        previous_analysis_time.split('-')[0],
-                                                        previous_analysis_time.split('-')[1],
-                                                        previous_analysis_time.split('-')[2],
-                                                        previous_analysis_time.split('-')[3],
-                                                        previous_analysis_time.split('-')[4],
-                                                        previous_analysis_time.split('-')[5], 0):
+                                                        int(previous_analysis_time.split('-')[0]),
+                                                        int(previous_analysis_time.split('-')[1]),
+                                                        int(previous_analysis_time.split('-')[2]),
+                                                        int(previous_analysis_time.split('-')[3]),
+                                                        int(previous_analysis_time.split('-')[4]),
+                                                        int(previous_analysis_time.split('-')[5]), 0):
                 print("Starting DoG iter fit at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S'))
         
                 gf_dog.iterative_fit(rsq_threshold=rsq_threshold, verbose=verbose,
@@ -579,12 +579,12 @@ if "norm" in models_to_fit:
         elif os.path.exists(save_path+".npy") and refit_mode == "iterate":
     
             if previous_analysis_refit_mode != "iterate" or (datetime.fromtimestamp(os.stat(save_path+".npy").st_mtime)) < datetime(\
-                                                        previous_analysis_time.split('-')[0],
-                                                        previous_analysis_time.split('-')[1],
-                                                        previous_analysis_time.split('-')[2],
-                                                        previous_analysis_time.split('-')[3],
-                                                        previous_analysis_time.split('-')[4],
-                                                        previous_analysis_time.split('-')[5], 0):
+                                                        int(previous_analysis_time.split('-')[0]),
+                                                        int(previous_analysis_time.split('-')[1]),
+                                                        int(previous_analysis_time.split('-')[2]),
+                                                        int(previous_analysis_time.split('-')[3]),
+                                                        int(previous_analysis_time.split('-')[4]),
+                                                        int(previous_analysis_time.split('-')[5]), 0):
     
                 print("Starting norm iter fit at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S'))
         

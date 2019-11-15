@@ -59,12 +59,12 @@ if refit_mode == "iterate":
 
         if np.any(np.array([(datetime.fromtimestamp(os.stat(opj(data_path,
             subj+"_iterparams-"+model+"_space-"+fitting_space+str(chunk_nr)+".npy")).st_mtime)) < datetime(\
-                                                        analysis_time.split('-')[0],
-                                                        analysis_time.split('-')[1],
-                                                        analysis_time.split('-')[2],
-                                                        analysis_time.split('-')[3],
-                                                        analysis_time.split('-')[4],
-                                                        analysis_time.split('-')[5], 0) for chunk_nr in range(n_chunks)])):
+                                                        int(analysis_time.split('-')[0]),
+                                                        int(analysis_time.split('-')[1]),
+                                                        int(analysis_time.split('-')[2]),
+                                                        int(analysis_time.split('-')[3]),
+                                                        int(analysis_time.split('-')[4]),
+                                                        int(analysis_time.split('-')[5]), 0) for chunk_nr in range(n_chunks)])):
 
             print("iterate mode refitting was not completed")
             raise IOError
