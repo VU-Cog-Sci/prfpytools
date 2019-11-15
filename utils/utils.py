@@ -311,14 +311,35 @@ def roi_mask(roi, array):
     masked_array = array * array_2
     return masked_array
 
-def fwhmax_fwmin(model, params, return_profile=False):
+def fwhmax(model, params):
     model = model.lower()
     x=np.linspace(-50,50,1000)
     if model == 'gauss':
-        profile = params[...,3] * np.exp(-0.5*x**2 / params[...,2]**2)
-        half_max = np.max(profile, axis=0)/2
-        fwhmax = np.abs(2*x[np.argmin(np.abs(half_max-profile), axis=0)])
+        profile = params[...,3] * np.exp(-0.5*x[...,np.newaxis]**2 / params[...,2]**2)
+    elif model == 'css':
+        profile = params[...,3] * (np.exp(-0.5*x[...,np.newaxis]**2 / params[...,2]**2))**params[...,5]
+    elif model =='dog':
+        profile = params[...,3] * np.exp(-0.5*x[...,np.newaxis]**2 / params[...,2]**2) - params[...,5] * np.exp(-0.5*x[...,np.newaxis]**2 / params[...,6]**2)
+    elif model == 'norm':
+        profile = (params[...,3] * np.exp(-0.5*x[...,np.newaxis]**2 / params[...,2]**2) + params[...,7]) \
+        / (params[...,5] * np.exp(-0.5*x[...,np.newaxis]**2 / params[...,6]**2) + params[...,8]) - params[...,7]/params[...,8]
 
+    half_max = np.max(profile, axis=0)/2
+    fwhmax = np.abs(2*x[np.argmin(np.abs(half_max-profile), axis=0)])
+    return fwhmax
+
+def fwatmin(model, params):
+    model = model.lower()
+    x=np.linspace(-50,50,1000)
+    if model =='dog':
+        profile = params[...,3] * np.exp(-0.5*x[...,np.newaxis]**2 / params[...,2]**2) - params[...,5] * np.exp(-0.5*x[...,np.newaxis]**2 / params[...,6]**2)
+    elif model == 'norm':
+        profile = (params[...,3] * np.exp(-0.5*x[...,np.newaxis]**2 / params[...,2]**2) + params[...,7]) \
+        / (params[...,5] * np.exp(-0.5*x[...,np.newaxis]**2 / params[...,6]**2) + params[...,8]) - params[...,7]/params[...,8]
+
+    min_profile = np.min(profile, axis=0)
+    fwatmin = np.abs(2*x[np.argmin(np.abs(min_profile-profile), axis=0)])
+    return fwatmin
 
 
 
