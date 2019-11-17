@@ -125,7 +125,8 @@ def prepare_data(subj,
                  window_length,
                  late_iso_dict,
                  data_path,
-                 fitting_space):
+                 fitting_space,
+                 roi_idx=None):
 
     if fitting_space == 'fsaverage' or fitting_space == 'fsnative':
         tc_dict = {}
@@ -165,16 +166,28 @@ def prepare_data(subj,
                 tc_dict[hemi][task_name]['timecourse'] += iso_diff[...,np.newaxis]
                
             tc_full_iso_dict[hemi]=np.concatenate(tuple([tc_dict[hemi][task_name]['timecourse'] for task_name in task_names]), axis=-1)
-            
-        tc_full_iso = np.concatenate((tc_full_iso_dict['L'], tc_full_iso_dict['R']), axis=0)
-        
+
+
         tc_full_iso_nonzerovar_dict['orig_data_shape'] = {'R_shape':tc_full_iso_dict['R'].shape, 'L_shape':tc_full_iso_dict['L'].shape}
+
+        tc_full_iso = np.concatenate((tc_full_iso_dict['L'], tc_full_iso_dict['R']), axis=0)
+
         tc_mean = tc_full_iso.mean(-1)
         nonlow_var = ((tc_full_iso - tc_mean[...,np.newaxis]).max(-1) > tc_mean*min_percent_var/100) * tc_mean>0
-    
-        tc_full_iso_nonzerovar_dict['nonlow_var_mask'] = nonlow_var
+
+        if roi_idx is not None:
+            tc_full_iso_nonzerovar_dict['nonlow_var_mask'] = roi_mask(roi_idx, nonlow_var)
+        else:
+            tc_full_iso_nonzerovar_dict['nonlow_var_mask'] = nonlow_var
+
         #conversion to +- of % of mean
-        tc_full_iso_nonzerovar_dict['tc'] = 100*(tc_full_iso[nonlow_var] / tc_mean[nonlow_var,np.newaxis])
+        tc_full_iso_nonzerovar = 100*(tc_full_iso[nonlow_var]/ tc_mean[nonlow_var,np.newaxis])
+
+        order = np.random.permutation(tc_full_iso_nonzerovar.shape[0])
+
+        tc_full_iso_nonzerovar_dict['order'] = order
+
+        tc_full_iso_nonzerovar_dict['tc'] = tc_full_iso_nonzerovar[order]
 
         return tc_full_iso_nonzerovar_dict
 
@@ -236,8 +249,11 @@ def prepare_data(subj,
         tc_mean = tc_full_iso.mean(-1)
         nonlow_var = np.ravel(final_mask) & (((tc_full_iso - tc_mean[...,np.newaxis]).max(-1) > tc_mean*min_percent_var/100) * tc_mean>0)
     
-        tc_full_iso_nonzerovar_dict['nonlow_var_mask'] =  nonlow_var
-        tc_full_iso_nonzerovar_dict['tc'] = 100*(tc_full_iso[nonlow_var]/ tc_mean[nonlow_var,np.newaxis])
+        tc_full_iso_nonzerovar_dict['nonlow_var_mask'] =  roi_mask(roi_idx, nonlow_var)
+
+        tc_full_iso_nonzerovar = 100*(tc_full_iso[nonlow_var]/ tc_mean[nonlow_var,np.newaxis])
+
+        tc_full_iso_nonzerovar_dict['tc'] = tc_full_iso_nonzerovar[roi_mask,:]
     
         return tc_full_iso_nonzerovar_dict
 

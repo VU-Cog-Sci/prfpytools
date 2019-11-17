@@ -59,10 +59,13 @@ baseline_volumes_begin_end = analysis_info["baseline_volumes_begin_end"]
 min_percent_var = analysis_info["min_percent_var"]
 pos_prfs_only = analysis_info["pos_prfs_only"]
 
-
 n_chunks = analysis_info["n_chunks"]
 refit_mode = analysis_info["refit_mode"].lower()
 
+if "roi_idx_path" in analysis_info and os.path.exists(analysis_info["roi_idx_path"]):
+    roi_idx = np.load(analysis_info["roi_idx_path"])
+else:
+    roi_idx = None
 
 analysis_time = datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
 analysis_info["analysis_time"] = analysis_time
@@ -135,12 +138,17 @@ else:
                                                    window_length,
                                                    late_iso_dict,
                                                    data_path[:-5],
-                                                   fitting_space)
+                                                   fitting_space,
+                                                   roi_idx)
     
         save_path = opj(data_path, subj+"_timecourse_space-"+fitting_space)
     
         np.save(save_path, tc_full_iso_nonzerovar_dict['tc'])
+
+        save_path = opj(data_path, subj+"_order_space-"+fitting_space)
     
+        np.save(save_path, tc_full_iso_nonzerovar_dict['order'])
+
         save_path = opj(data_path, subj+"_nonlow-var-mask_space-"+fitting_space)
     
         np.save(save_path, tc_full_iso_nonzerovar_dict['nonlow_var_mask'])
@@ -167,12 +175,18 @@ if "mkl_num_threads" in analysis_info:
 if verbose == True:
     print("Finished preparing data for fitting. Now creating and fitting models...")
 
-# grid params
+# gauss grid params
 grid_nr = 20
 max_ecc_size = prf_stim.screen_size_degrees/2.0
 sizes, eccs, polars = max_ecc_size * np.linspace(0.25, 1, grid_nr)**2, \
     max_ecc_size * np.linspace(0.1, 1, grid_nr)**2, \
     np.linspace(0, 2*np.pi, grid_nr)
+
+# norm grid params
+surround_amplitude_grid=np.array([0,0.05,0.2,1], dtype='float32')
+surround_size_grid=np.array([3,6,10,20], dtype='float32')
+neural_baseline_grid=np.array([0,1,10,100], dtype='float32')
+surround_baseline_grid=np.array([1.0,10.0,100.0,1000.0], dtype='float32')
 
 # to set up parameter bounds in iterfit
 inf = np.inf
@@ -520,10 +534,6 @@ if "norm" in models_to_fit:
         save_path = opj(data_path, subj+"_gridparams-norm_space-"+fitting_space+str(chunk_nr))
 
         if not os.path.exists(save_path+".npy") or refit_mode == "overwrite":
-            surround_amplitude_grid=np.array([0,0.05,0.2,1], dtype='float32')
-            surround_size_grid=np.array([3,6,15,30], dtype='float32')
-            neural_baseline_grid=np.array([0,1,10,100], dtype='float32')
-            surround_baseline_grid=np.array([1.0,10.0,100.0,1000.0], dtype='float32')
 
 
             print("Starting norm grid fit at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S'))
