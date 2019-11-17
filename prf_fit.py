@@ -86,6 +86,9 @@ if chunk_nr == 0:
         analysis_info["previous_analysis_refit_mode"] = previous_analysis_refit_mode
 
         os.rename(save_path+".yml",save_path+previous_analysis_time+".yml")
+    else:
+        analysis_info["previous_analysis_time"] = ""
+        analysis_info["previous_analysis_refit_mode"] = ""
 
     with open(save_path+".yml", 'w+') as outfile:
         yaml.dump(analysis_info, outfile)
@@ -149,7 +152,7 @@ else:
     
         np.save(save_path, tc_full_iso_nonzerovar_dict['order'])
 
-        save_path = opj(data_path, subj+"_nonlow-var-mask_space-"+fitting_space)
+        save_path = opj(data_path, subj+"_mask_space-"+fitting_space)
     
         np.save(save_path, tc_full_iso_nonzerovar_dict['nonlow_var_mask'])
     else:
