@@ -87,7 +87,7 @@ if refit_mode in ["iterate", "overwrite"]:
 
         if np.any(last_edited):
 
-            print("Refitting of model"+model+" has not been completed")
+            print("Fitting of "+model+" model has not been completed")
             for value in np.where(last_edited)[0]:
                 unfinished_chunks.append(value)
 
@@ -101,8 +101,8 @@ if refit_mode in ["iterate", "overwrite"]:
 print("Chunks to resubmit (in skip or iterate mode)")
 str_resub='"( '
 for value in np.unique(unfinished_chunks):
-    str_resub.append(str(value)+' ')
-str_resub.append(')"')
+    str_resub+=(str(value)+' ')
+str_resub+=')"'
 print(str_resub)
 
 if failed:
