@@ -74,6 +74,7 @@ if refit_mode in ["skip", "overwrite"]:
 
 if refit_mode in ["iterate", "overwrite"]:
     for model in models_to_fit:
+        model=model.lower()
         last_edited = np.array([(datetime.fromtimestamp(os.stat(opj(data_path,
                                                         subj+"_iterparams-"+model+"_space-"+fitting_space+str(chunk_nr)+".npy")).st_mtime)) < datetime(\
                                                         int(analysis_time.split('-')[0]),
@@ -101,7 +102,7 @@ print("Chunks to resubmit (in skip or iterate mode)")
 str_resub='"( '
 for value in np.unique(unfinished_chunks):
     str_resub.append(str(value)+' ')
-
+str_resub.append(')"')
 print(str_resub)
 
 if failed:
