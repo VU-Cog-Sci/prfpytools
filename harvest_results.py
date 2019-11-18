@@ -59,6 +59,7 @@ previous_analysis_refit_mode = analysis_info["previous_analysis_refit_mode"]
 if refit_mode == previous_analysis_refit_mode:
     analysis_time = previous_analysis_time
 
+failed=False
 #first check if iteration was completed
 unfinished_chunks=[]
 if refit_mode in ["skip", "overwrite"]:
