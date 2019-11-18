@@ -56,12 +56,23 @@ analysis_time = analysis_info["analysis_time"]
 previous_analysis_time = analysis_info["previous_analysis_time"]
 previous_analysis_refit_mode = analysis_info["previous_analysis_refit_mode"]
 
+if refit_mode == previous_analysis_refit_mode:
+    analysis_time = previous_analysis_time
+
 #first check if iteration was completed
+unfinished_chunks=[]
+if refit_mode in ["skip", "overwrite"]:
+    exists = np.array([os.path.exists(opj(data_path, subj+"_iterparams-norm_space-"\
+                        +fitting_space+str(chunk_nr)+".npy")) for chunk_nr in range(n_chunks)])
+    finished_chunks = np.where(exists)[0]
+    if np.any(exists==False):
+        for value in np.where(exists==False)[0]:
+            unfinished_chunks.append(value)
+
+        failed=True
+
+
 if refit_mode in ["iterate", "overwrite"]:
-
-    if refit_mode == previous_analysis_refit_mode:
-        analysis_time = previous_analysis_time
-
     for model in models_to_fit:
         last_edited = np.array([(datetime.fromtimestamp(os.stat(opj(data_path,
                                                         subj+"_iterparams-"+model+"_space-"+fitting_space+str(chunk_nr)+".npy")).st_mtime)) < datetime(\
@@ -70,15 +81,31 @@ if refit_mode in ["iterate", "overwrite"]:
                                                         int(analysis_time.split('-')[2]),
                                                         int(analysis_time.split('-')[3]),
                                                         int(analysis_time.split('-')[4]),
-                                                        int(analysis_time.split('-')[5]), 0) for chunk_nr in range(n_chunks)])
+                                                        int(analysis_time.split('-')[5]), 0) for chunk_nr in finished_chunks])
 
 
         if np.any(last_edited):
 
-            print("Refitting may have not been completed for the following chunks:")
-            print(np.where(last_edited)[0])
-            raise IOError
+            print("Refitting of model"+model+" has not been completed")
+            for value in np.where(last_edited)[0]:
+                unfinished_chunks.append(value)
 
+                filepath = opj(data_path,subj+"_iterparams-"+model+"_space-"+fitting_space+str(value)+".npy")
+                if refit_mode == "overwrite":
+                    print("Renaming unfinished files to _old, so can run next in skip mode.")
+                    os.rename(filepath,filepath[:-4]+"_old.npy")
+
+            failed=True
+
+print("Chunks to resubmit (in skip or iterate mode)")
+str_resub='"( '
+for value in np.unique(unfinished_chunks):
+    str_resub.append(str(value)+' ')
+
+print(str_resub)
+
+if failed:
+    sys.exit("harvest not completed. resubmit chunks.")
 
 
 for model in models_to_fit:
