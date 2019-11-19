@@ -231,16 +231,22 @@ norm_bounds = [(-2*ss, 2*ss),  # x
 #constraining dog and norm surrounds to be larger in size than prf (only works for no-gradient minimzation)
 if gradient_method not in ["analytic", "numerical"]:
 
-    A_ssc_dog = np.array([[0,0,-1,0,0,0,1],[0,0,0,1,0,-1,0]])
+    A_ssc_dog = np.array([[0,0,-1,0,0,0,1]])#,[0,0,0,1,0,-1,0]])
 
-    constraints_dog = LinearConstraint(A_ssc_dog,
+    def overall_positive_prf(x):
+        return x[3]/(2*np.pi*x[2]**2)-x[5]/(2*np.pi*x[6]**2)
+
+    constraints_dog = [LinearConstraint(A_ssc_dog,
                                                 lb=0,
-                                                ub=+inf)
+                                                ub=+inf),
+                        NonlinearConstraint(overall_positive_prf,
+                                            lb=0,
+                                            ub=+inf)]
 
-    A_ssc_norm = np.array([0,0,-1,0,0,0,1,0,0]).reshape((-1,9))
+    A_ssc_norm = np.array([[0,0,-1,0,0,0,1,0,0]])
 
     def tall_center_constraint(x):
-        return (x[3]+x[7])/(x[5]+x[8]) - x[7]/x[8]
+        return (x[3]/(2*np.pi*x[2]**2)+x[7])/(x[5]/(2*np.pi*x[6]**2)+x[8]) - x[7]/x[8]
 
     constraints_norm = [LinearConstraint(A_ssc_norm,
                                                 lb=0,

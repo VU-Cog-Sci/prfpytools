@@ -59,7 +59,6 @@ previous_analysis_refit_mode = analysis_info["previous_analysis_refit_mode"]
 if refit_mode == previous_analysis_refit_mode:
     analysis_time = previous_analysis_time
 
-failed=False
 #first check if iteration was completed
 unfinished_chunks=[]
 if refit_mode in ["skip", "overwrite"]:
@@ -70,7 +69,7 @@ if refit_mode in ["skip", "overwrite"]:
         for value in np.where(exists==False)[0]:
             unfinished_chunks.append(value)
 
-        failed=True
+
 else:
     finished_chunks = np.arange(n_chunks)
 
@@ -98,18 +97,20 @@ if refit_mode in ["iterate", "overwrite"]:
                     print("Renaming unfinished files to _old, so can run next in skip mode.")
                     os.rename(filepath,filepath[:-4]+"_old.npy")
 
-            failed=True
 
-print("Maake sure to be in skip or iterate mode first! Then run:)")
-str_resub='"( '
-for value in np.unique(unfinished_chunks):
-    str_resub+=(str(value)+' ')
-str_resub+=')"'
-print("python array_submit_prf_fit_only.py "+subj+" analysis_settings_cartesius.yml "+str_resub)
 
-if failed:
+if len(unfinished_chunks)>0:
+    print("Make sure to be in skip or iterate mode first! Then run:")
+    str_resub='"( '
+    for value in np.unique(unfinished_chunks):
+        str_resub+=(str(value)+' ')
+    str_resub+=')"'
+    print("python array_submit_prf_fit_only.py "+subj+" analysis_settings_cartesius.yml "+str_resub)
+    
+
     sys.exit("harvest not completed. resubmit chunks.")
 
+order = np.load(opj(data_path, subj+"_order_space-"+fitting_space+".npy"))
 
 for model in models_to_fit:
     model = model.lower()
@@ -119,14 +120,17 @@ for model in models_to_fit:
 
         grid_path+=analysis_time
 
+        grid_result[order] = np.copy(grid_result)
+
         np.save(grid_path.replace('scratch-shared', 'home'), grid_result)
 
     iter_path = opj(data_path, subj+"_iterparams-"+model+"_space-"+fitting_space)
 
-
     model_result = np.concatenate(tuple([np.load(iter_path+str(chunk_nr)+".npy") for chunk_nr in range(n_chunks)]), axis=0)
 
     iter_path+=analysis_time
+
+    model_result[order] = np.copy(model_result)
 
     np.save(iter_path.replace('scratch-shared', 'home'), model_result)
 
