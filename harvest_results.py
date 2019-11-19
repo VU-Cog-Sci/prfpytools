@@ -71,7 +71,8 @@ if refit_mode in ["skip", "overwrite"]:
             unfinished_chunks.append(value)
 
         failed=True
-
+else:
+    finished_chunks = np.arange(n_chunks)
 
 if refit_mode in ["iterate", "overwrite"]:
     for model in models_to_fit:
@@ -99,12 +100,12 @@ if refit_mode in ["iterate", "overwrite"]:
 
             failed=True
 
-print("Chunks to resubmit (in skip or iterate mode)")
+print("Maake sure to be in skip or iterate mode first! Then run:)")
 str_resub='"( '
 for value in np.unique(unfinished_chunks):
     str_resub+=(str(value)+' ')
 str_resub+=')"'
-print(str_resub)
+print("python array_submit_prf_fit_only.py "+subj+" analysis_settings_cartesius.yml "+str_resub)
 
 if failed:
     sys.exit("harvest not completed. resubmit chunks.")
