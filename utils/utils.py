@@ -176,12 +176,14 @@ def prepare_data(subj,
         nonlow_var = ((tc_full_iso - tc_mean[...,np.newaxis]).max(-1) > tc_mean*min_percent_var/100) * tc_mean>0
 
         if roi_idx is not None:
-            tc_full_iso_nonzerovar_dict['nonlow_var_mask'] = roi_mask(roi_idx, nonlow_var)
+            mask = roi_mask(roi_idx, nonlow_var)
         else:
-            tc_full_iso_nonzerovar_dict['nonlow_var_mask'] = nonlow_var
+            mask = nonlow_var
+
+        tc_full_iso_nonzerovar_dict['mask'] = mask
 
         #conversion to +- of % of mean
-        tc_full_iso_nonzerovar = 100*(tc_full_iso[nonlow_var]/ tc_mean[nonlow_var,np.newaxis])
+        tc_full_iso_nonzerovar = 100*(tc_full_iso[mask]/ tc_mean[mask,np.newaxis])
 
         order = np.random.permutation(tc_full_iso_nonzerovar.shape[0])
 
