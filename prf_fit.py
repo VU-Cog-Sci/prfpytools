@@ -64,6 +64,7 @@ refit_mode = analysis_info["refit_mode"].lower()
 
 if "roi_idx_path" in analysis_info and os.path.exists(analysis_info["roi_idx_path"]):
     roi_idx = np.load(analysis_info["roi_idx_path"])
+    print("Using ROI mask from: "+analysis_info["roi_idx_path"])
 else:
     roi_idx = None
 
