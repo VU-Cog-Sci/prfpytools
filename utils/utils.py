@@ -329,35 +329,53 @@ def roi_mask(roi, array):
     masked_array = array * array_2
     return masked_array
 
-def fwhmax(model, params):
+def fwhmax_fwatmin(model, params, normalize_RFs=False):
     model = model.lower()
     x=np.linspace(-50,50,1000)
-    if model == 'gauss':
-        profile = params[...,3] * np.exp(-0.5*x[...,np.newaxis]**2 / params[...,2]**2)
-    elif model == 'css':
-        profile = params[...,3] * (np.exp(-0.5*x[...,np.newaxis]**2 / params[...,2]**2))**params[...,5]
-    elif model =='dog':
-        profile = params[...,3] * np.exp(-0.5*x[...,np.newaxis]**2 / params[...,2]**2) - params[...,5] * np.exp(-0.5*x[...,np.newaxis]**2 / params[...,6]**2)
-    elif model == 'norm':
-        profile = (params[...,3] * np.exp(-0.5*x[...,np.newaxis]**2 / params[...,2]**2) + params[...,7]) \
-        / (params[...,5] * np.exp(-0.5*x[...,np.newaxis]**2 / params[...,6]**2) + params[...,8]) - params[...,7]/params[...,8]
+
+    prf = params[...,3] * np.exp(-0.5*x[...,np.newaxis]**2 / params[...,2]**2)
+    vol_prf =  2*np.pi*params[...,2]**2
+
+    if model in ['dog', 'norm']:
+        srf = params[...,5] * np.exp(-0.5*x[...,np.newaxis]**2 / params[...,6]**2)
+        vol_srf = 2*np.pi*params[...,6]**2
+
+    if normalize_RFs==True:
+
+        if model == 'gauss':
+            profile =  prf / vol_prf
+        elif model == 'css':
+            #amplitude is outside exponent in CSS
+            profile = (prf / vol_prf)**params[...,5] * params[...,3]**(1 - params[...,5])
+        elif model =='dog':
+            profile = prf / vol_prf - \
+                       srf / vol_srf
+        elif model == 'norm':
+            profile = (prf / vol_prf + params[...,7]) /\
+                      (srf / vol_srf + params[...,8]) - params[...,7]/params[...,8]
+    else:
+        if model == 'gauss':
+            profile = prf
+        elif model == 'css':
+            #amplitude is outside exponent in CSS
+            profile = prf**params[...,5] * params[...,3]**(1 - params[...,5])
+        elif model =='dog':
+            profile = prf - srf
+        elif model == 'norm':
+            profile = (prf + params[...,7])/(srf + params[...,8]) - params[...,7]/params[...,8]
 
     half_max = np.max(profile, axis=0)/2
     fwhmax = np.abs(2*x[np.argmin(np.abs(half_max-profile), axis=0)])
-    return fwhmax
 
-def fwatmin(model, params):
-    model = model.lower()
-    x=np.linspace(-50,50,1000)
-    if model =='dog':
-        profile = params[...,3] * np.exp(-0.5*x[...,np.newaxis]**2 / params[...,2]**2) - params[...,5] * np.exp(-0.5*x[...,np.newaxis]**2 / params[...,6]**2)
-    elif model == 'norm':
-        profile = (params[...,3] * np.exp(-0.5*x[...,np.newaxis]**2 / params[...,2]**2) + params[...,7]) \
-        / (params[...,5] * np.exp(-0.5*x[...,np.newaxis]**2 / params[...,6]**2) + params[...,8]) - params[...,7]/params[...,8]
+    if model in ['dog', 'norm']:
 
-    min_profile = np.min(profile, axis=0)
-    fwatmin = np.abs(2*x[np.argmin(np.abs(min_profile-profile), axis=0)])
-    return fwatmin
+        min_profile = np.min(profile, axis=0)
+        fwatmin = np.abs(2*x[np.argmin(np.abs(min_profile-profile), axis=0)])
+
+        return fwhmax, fwatmin
+    else:
+        return fwhmax
+
 
 
 

@@ -58,6 +58,7 @@ dm_edges_clipping = analysis_info["dm_edges_clipping"]
 baseline_volumes_begin_end = analysis_info["baseline_volumes_begin_end"]
 min_percent_var = analysis_info["min_percent_var"]
 pos_prfs_only = analysis_info["pos_prfs_only"]
+normalize_RFs = analysis_info["normalize_RFs"]
 
 n_chunks = analysis_info["n_chunks"]
 refit_mode = analysis_info["refit_mode"].lower()
@@ -268,7 +269,8 @@ gg = Iso2DGaussianGridder(stimulus=prf_stim,
                           hrf=hrf,
                           filter_predictions=True,
                           window_length=window_length,
-                          task_lengths=task_lengths)
+                          task_lengths=task_lengths,
+                          normalize_RFs=normalize_RFs)
 
 
 gf = Iso2DGaussianFitter(
@@ -379,7 +381,8 @@ if "CSS" in models_to_fit:
                                       hrf=hrf,
                                       filter_predictions=True,
                                       window_length=window_length,
-                                      task_lengths=task_lengths)
+                                      task_lengths=task_lengths,
+                                      normalize_RFs=normalize_RFs)
     gf_css = CSS_Iso2DGaussianFitter(
         data=tc_full_iso_nonzerovar_dict['tc'], gridder=gg_css, n_jobs=n_jobs,
         previous_gaussian_fitter=gf)
@@ -450,7 +453,8 @@ if "DoG" in models_to_fit:
                                       hrf=hrf,
                                       filter_predictions=True,
                                       window_length=window_length,
-                                      task_lengths=task_lengths)
+                                      task_lengths=task_lengths,
+                                      normalize_RFs=normalize_RFs)
 
     gf_dog = DoG_Iso2DGaussianFitter(data=tc_full_iso_nonzerovar_dict['tc'],
                                      gridder=gg_dog,
@@ -531,7 +535,8 @@ if "norm" in models_to_fit:
                                         hrf=hrf,
                                         filter_predictions=True,
                                         window_length=window_length,
-                                        task_lengths=task_lengths)
+                                        task_lengths=task_lengths,
+                                        normalize_RFs=normalize_RFs)
 
     gf_norm = Norm_Iso2DGaussianFitter(data=tc_full_iso_nonzerovar_dict['tc'],
                                        gridder=gg_norm,
