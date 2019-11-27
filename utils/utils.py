@@ -126,7 +126,8 @@ def prepare_data(subj,
                  late_iso_dict,
                  data_path,
                  fitting_space,
-                 roi_idx=None):
+                 data_scaling,
+                 roi_idx):
 
     if fitting_space == 'fsaverage' or fitting_space == 'fsnative':
         tc_dict = {}
@@ -183,7 +184,11 @@ def prepare_data(subj,
         tc_full_iso_nonzerovar_dict['mask'] = mask
 
         #conversion to +- of % of mean
-        tc_full_iso_nonzerovar = 100*(tc_full_iso[mask]/ tc_mean[mask,np.newaxis])
+        if data_scaling.lower() in ["psc", "percent_signal_change"]:
+            tc_full_iso_nonzerovar = 100*(tc_full_iso[mask]/ tc_mean[mask,np.newaxis])
+        else:
+            tc_full_iso_nonzerovar = tc_full_iso[mask]
+
 
         order = np.random.permutation(tc_full_iso_nonzerovar.shape[0])
 
