@@ -69,6 +69,12 @@ if "roi_idx_path" in analysis_info and os.path.exists(analysis_info["roi_idx_pat
 else:
     roi_idx = None
 
+if "data_scaling" in analysis_info:
+    data_scaling = analysis_info["data_scaling"]
+else:
+    data_scaling = None
+
+
 analysis_time = datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
 analysis_info["analysis_time"] = analysis_time
 
@@ -144,7 +150,9 @@ else:
                                                    late_iso_dict,
                                                    data_path[:-5],
                                                    fitting_space,
-                                                   roi_idx)
+                                                   data_scaling,
+                                                   roi_idx,
+                                                   )
     
         save_path = opj(data_path, subj+"_timecourse_space-"+fitting_space)
     
