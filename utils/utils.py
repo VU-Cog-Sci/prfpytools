@@ -184,9 +184,12 @@ def prepare_data(subj,
         tc_full_iso_nonzerovar_dict['mask'] = mask
 
         #conversion to +- of % of mean
-        if data_scaling.lower() in ["psc", "percent_signal_change"]:
+        if data_scaling in ["psc", "percent_signal_change"]:
             tc_full_iso_nonzerovar = 100*(tc_full_iso[mask]/ tc_mean[mask,np.newaxis])
+        elif data_scaling == None:
+            tc_full_iso_nonzerovar = tc_full_iso[mask]
         else:
+            print("Warning: data scaling option not recognized. Using raw data.")
             tc_full_iso_nonzerovar = tc_full_iso[mask]
 
 
