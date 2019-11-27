@@ -164,7 +164,7 @@ else:
 
         save_path = opj(data_path, subj+"_mask_space-"+fitting_space)
     
-        np.save(save_path, tc_full_iso_nonzerovar_dict['nonlow_var_mask'])
+        np.save(save_path, tc_full_iso_nonzerovar_dict['mask'])
     else:
 
         while not os.path.exists(opj(data_path, subj+"_timecourse_space-"+fitting_space+".npy")):
