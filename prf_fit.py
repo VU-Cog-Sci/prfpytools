@@ -168,9 +168,6 @@ else:
 
 
 
-
-
-
 tc_full_iso_nonzerovar_dict['tc'] = np.array_split(tc_full_iso_nonzerovar_dict['tc'], n_chunks)[chunk_nr]
 
 if "mkl_num_threads" in analysis_info:
@@ -194,7 +191,7 @@ neural_baseline_grid=np.array([0,1,10,100], dtype='float32')
 surround_baseline_grid=np.array([1.0,10.0,100.0,1000.0], dtype='float32')
 
 # to set up parameter bounds in iterfit
-inf = np.inf
+inf = 1e3
 eps = 1e-1
 ss = prf_stim.screen_size_degrees
 
@@ -231,34 +228,43 @@ norm_bounds = [(-2*ss, 2*ss),  # x
                (1e-6, +inf)]  # surround baseline
 
 #constraining dog and norm surrounds to be larger in size than prf (only works for no-gradient minimzation)
+constraints_dog = []
+constraints_norm = []
 if gradient_method not in ["analytic", "numerical"]:
 
-    A_ssc_dog = np.array([[0,0,-1,0,0,0,1]])#,[0,0,0,1,0,-1,0]])
-
-    def overall_positive_prf(x):
-        return x[3]/(2*np.pi*x[2]**2)-x[5]/(2*np.pi*x[6]**2)
-
-    constraints_dog = [LinearConstraint(A_ssc_dog,
-                                                lb=0,
-                                                ub=+inf),
-                        NonlinearConstraint(overall_positive_prf,
-                                            lb=0,
-                                            ub=+inf)]
-
+    #enforcing surround size larger than prf size
+    A_ssc_dog = np.array([[0,0,-1,0,0,0,1]])
     A_ssc_norm = np.array([[0,0,-1,0,0,0,1,0,0]])
 
-    def tall_center_constraint(x):
-        return (x[3]/(2*np.pi*x[2]**2)+x[7])/(x[5]/(2*np.pi*x[6]**2)+x[8]) - x[7]/x[8]
-
-    constraints_norm = [LinearConstraint(A_ssc_norm,
+    constraints_dog.append(LinearConstraint(A_ssc_dog,
                                                 lb=0,
-                                                ub=+inf),
-                        NonlinearConstraint(tall_center_constraint,
+                                                ub=+inf))
+
+    constraints_norm.append(LinearConstraint(A_ssc_norm,
+                                                lb=0,
+                                                ub=+inf))
+
+    if pos_prfs_only:
+        #enforcing positive central amplitude
+        def positive_centre_prf_dog(x):
+            if normalize_RFs:
+                return x[3]/(2*np.pi*x[2]**2)-x[5]/(2*np.pi*x[6]**2)
+            else:
+                return x[3] - x[5]
+
+        def positive_centre_prf_norm(x):
+            if normalize_RFs:
+                return (x[3]/(2*np.pi*x[2]**2)+x[7])/(x[5]/(2*np.pi*x[6]**2)+x[8]) - x[7]/x[8]
+            else:
+                return (x[3]+x[7])/(x[5]+x[8]) - x[7]/x[8]
+
+        constraints_dog.append(NonlinearConstraint(positive_centre_prf_dog,
+                                                lb=0,
+                                                ub=+inf))
+        constraints_norm.append(NonlinearConstraint(positive_centre_prf_norm,
                                             lb=0,
-                                            ub=+inf)]
-else:
-    constraints_dog = []
-    constraints_norm = []
+                                            ub=+inf))
+
 
 
 # MODEL COMPARISON
@@ -305,9 +311,9 @@ elif "grid_data_path" in analysis_info:
 
 
 # gaussian iterative fit
+save_path = opj(data_path, subj+"_iterparams-gauss_space-"+fitting_space+str(chunk_nr))
 if "gauss_iterparams_path" in analysis_info:
     gf.iterative_search_params = np.array_split(np.load(analysis_info["gauss_iterparams_path"]), n_chunks)[chunk_nr]
-    save_path = opj(data_path, subj+"_iterparams-gauss_space-"+fitting_space+str(chunk_nr))
 
     if refit_mode in ["overwrite", "iterate"]:
 
@@ -323,8 +329,6 @@ if "gauss_iterparams_path" in analysis_info:
         print("Gaussian iterfit completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Mean rsq>"+str(rsq_threshold)+": "+str(gf.iterative_search_params[gf.rsq_mask, -1].mean()))
 
 else:
-
-    save_path = opj(data_path, subj+"_iterparams-gauss_space-"+fitting_space+str(chunk_nr))
 
     if not os.path.exists(save_path+".npy") or refit_mode == "overwrite":
 
