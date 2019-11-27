@@ -199,7 +199,7 @@ neural_baseline_grid=np.array([0,1,10,100], dtype='float32')
 surround_baseline_grid=np.array([1.0,10.0,100.0,1000.0], dtype='float32')
 
 # to set up parameter bounds in iterfit
-inf = 1e3
+inf = np.inf
 eps = 1e-1
 ss = prf_stim.screen_size_degrees
 
