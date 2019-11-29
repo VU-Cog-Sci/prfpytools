@@ -241,6 +241,22 @@ if norm_model_variant == "abcd":
                (0, +inf),  # neural baseline
                (1e-6, +inf)]  # surround baseline
 
+elif norm_model_variant == "abc":
+    surround_amplitude_grid=np.array([0,0.05,0.2,1,2,5,10], dtype='float32')
+    surround_size_grid=np.array([2,3,4,6,10,15], dtype='float32')
+    neural_baseline_grid=np.array([0,0.1,0.5,1,2,4,8,10], dtype='float32')
+    surround_baseline_grid=np.array([1], dtype='float32')
+
+    norm_bounds = [(-2*ss, 2*ss),  # x
+               (-2*ss, 2*ss),  # y
+               (eps, 2*ss),  # prf size
+               (0, +inf),  # prf amplitude
+               (0, +inf),  # bold baseline
+               (-inf, +inf),  # surround amplitude allow negative stuff
+               (eps, 4*ss),  # surround size
+               (0, +inf),  # neural baseline
+               (1, 1)]  # surround baseline
+
 elif norm_model_variant == "ab":
     surround_amplitude_grid=np.array([1], dtype='float32')
     surround_size_grid=np.array([2,3,4,5,6,8,10,20], dtype='float32')
@@ -264,7 +280,7 @@ constraints_dog = []
 constraints_norm = []
 if gradient_method not in ["analytic", "numerical"]:
 
-    #enforcing surround size larger than prf size
+    #enforcing surround size larger than prf size in DoG model
     A_ssc_dog = np.array([[0,0,-1,0,0,0,1]])
 
     constraints_dog.append(LinearConstraint(A_ssc_dog,
@@ -272,7 +288,7 @@ if gradient_method not in ["analytic", "numerical"]:
                                                 ub=+inf))
 
     if pos_prfs_only:
-        #enforcing positive central amplitude
+        #enforcing positive central amplitude in DoG
         def positive_centre_prf_dog(x):
             if normalize_RFs:
                 return x[3]/(2*np.pi*x[2]**2)-x[5]/(2*np.pi*x[6]**2)
@@ -285,6 +301,8 @@ if gradient_method not in ["analytic", "numerical"]:
 
     #for now, fit new norm model variants without constraints
     if norm_model_variant == "abcd":
+        #enforcing surround size larger than prf size in norm abcd
+        #enforcing positive central amplitude in norm abcd
 
         A_ssc_norm = np.array([[0,0,-1,0,0,0,1,0,0]])
     
