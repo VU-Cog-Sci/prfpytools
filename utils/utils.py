@@ -203,7 +203,7 @@ def prepare_data(subj,
 
     else:
 
-        #############preparing the data (VOLUME FITTING)
+        #############preparing the data (VOLUME FITTING) (OUTDATED, CHECK BEFORE USING)
         #create a single brain mask in epi space
         tc_dict={}
         tc_full_iso_nonzerovar_dict = {}
@@ -337,9 +337,9 @@ def roi_mask(roi, array):
     masked_array = array * array_2
     return masked_array
 
-def fwhmax_fwatmin(model, params, normalize_RFs=False):
+def fwhmax_fwatmin(model, params, normalize_RFs=False, return_profiles=False):
     model = model.lower()
-    x=np.linspace(-50,50,1000)
+    x=np.linspace(-50,50,1000).astype('float32')
 
     prf = params[...,3] * np.exp(-0.5*x[...,np.newaxis]**2 / params[...,2]**2)
     vol_prf =  2*np.pi*params[...,2]**2
@@ -372,17 +372,29 @@ def fwhmax_fwatmin(model, params, normalize_RFs=False):
         elif model == 'norm':
             profile = (prf + params[...,7])/(srf + params[...,8]) - params[...,7]/params[...,8]
 
+
     half_max = np.max(profile, axis=0)/2
     fwhmax = np.abs(2*x[np.argmin(np.abs(half_max-profile), axis=0)])
+
 
     if model in ['dog', 'norm']:
 
         min_profile = np.min(profile, axis=0)
         fwatmin = np.abs(2*x[np.argmin(np.abs(min_profile-profile), axis=0)])
 
-        return fwhmax, fwatmin
+        result = fwhmax, fwatmin
     else:
-        return fwhmax
+        result = fwhmax
+
+    if return_profiles:
+        if model == 'norm':
+            #accounting for the previous subtraction of baseline
+            profile += params[...,7]/params[...,8]
+
+        return result, profile
+    else:
+        return result
+
 
 
 
