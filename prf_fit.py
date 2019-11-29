@@ -63,6 +63,11 @@ normalize_RFs = analysis_info["normalize_RFs"]
 n_chunks = analysis_info["n_chunks"]
 refit_mode = analysis_info["refit_mode"].lower()
 
+if "norm" in models_to_fit and "norm_model_variant" in analysis_info:
+    norm_model_variant = analysis_info["norm_model_variant"]
+else:
+    norm_model_variant = "abcd"
+
 if "roi_idx_path" in analysis_info and os.path.exists(analysis_info["roi_idx_path"]):
     roi_idx = np.load(analysis_info["roi_idx_path"])
     print("Using ROI mask from: "+analysis_info["roi_idx_path"])
@@ -192,12 +197,6 @@ sizes, eccs, polars = max_ecc_size * np.linspace(0.25, 1, grid_nr)**2, \
     max_ecc_size * np.linspace(0.1, 1, grid_nr)**2, \
     np.linspace(0, 2*np.pi, grid_nr)
 
-# norm grid params
-surround_amplitude_grid=np.array([0,0.05,0.2,1], dtype='float32')
-surround_size_grid=np.array([3,6,10,20], dtype='float32')
-neural_baseline_grid=np.array([0,1,10,100], dtype='float32')
-surround_baseline_grid=np.array([1.0,10.0,100.0,1000.0], dtype='float32')
-
 # to set up parameter bounds in iterfit
 inf = np.inf
 eps = 1e-1
@@ -225,7 +224,14 @@ dog_bounds = [(-2*ss, 2*ss),  # x
               (0, +inf),  # surround amplitude
               (eps, 4*ss)]  # surround size
 
-norm_bounds = [(-2*ss, 2*ss),  # x
+# norm grid params
+if norm_model_variant == "abcd":
+    surround_amplitude_grid=np.array([0,0.05,0.2,1], dtype='float32')
+    surround_size_grid=np.array([3,6,10,20], dtype='float32')
+    neural_baseline_grid=np.array([0,1,10,100], dtype='float32')
+    surround_baseline_grid=np.array([1.0,10.0,100.0,1000.0], dtype='float32')
+
+    norm_bounds = [(-2*ss, 2*ss),  # x
                (-2*ss, 2*ss),  # y
                (eps, 2*ss),  # prf size
                (0, +inf),  # prf amplitude
@@ -235,20 +241,33 @@ norm_bounds = [(-2*ss, 2*ss),  # x
                (0, +inf),  # neural baseline
                (1e-6, +inf)]  # surround baseline
 
-#constraining dog and norm surrounds to be larger in size than prf (only works for no-gradient minimzation)
+elif norm_model_variant == "ab":
+    surround_amplitude_grid=np.array([1], dtype='float32')
+    surround_size_grid=np.array([2,3,4,5,6,8,10,20], dtype='float32')
+    neural_baseline_grid=np.array([0,0.1,0.5,1,2,4,8,10,20,100], dtype='float32')
+    surround_baseline_grid=np.array([1], dtype='float32')
+
+    norm_bounds = [(-2*ss, 2*ss),  # x
+               (-2*ss, 2*ss),  # y
+               (eps, 2*ss),  # prf size
+               (0, +inf),  # prf amplitude
+               (0, +inf),  # bold baseline
+               (1, 1),  # surround amplitude
+               (eps, 4*ss),  # surround size
+               (0, +inf),  # neural baseline
+               (1, 1)]  # surround baseline
+
+
+
+#more specific parameter constraints
 constraints_dog = []
 constraints_norm = []
 if gradient_method not in ["analytic", "numerical"]:
 
     #enforcing surround size larger than prf size
     A_ssc_dog = np.array([[0,0,-1,0,0,0,1]])
-    A_ssc_norm = np.array([[0,0,-1,0,0,0,1,0,0]])
 
     constraints_dog.append(LinearConstraint(A_ssc_dog,
-                                                lb=0,
-                                                ub=+inf))
-
-    constraints_norm.append(LinearConstraint(A_ssc_norm,
                                                 lb=0,
                                                 ub=+inf))
 
@@ -260,18 +279,31 @@ if gradient_method not in ["analytic", "numerical"]:
             else:
                 return x[3] - x[5]
 
-        def positive_centre_prf_norm(x):
-            if normalize_RFs:
-                return (x[3]/(2*np.pi*x[2]**2)+x[7])/(x[5]/(2*np.pi*x[6]**2)+x[8]) - x[7]/x[8]
-            else:
-                return (x[3]+x[7])/(x[5]+x[8]) - x[7]/x[8]
-
         constraints_dog.append(NonlinearConstraint(positive_centre_prf_dog,
                                                 lb=0,
                                                 ub=+inf))
-        constraints_norm.append(NonlinearConstraint(positive_centre_prf_norm,
-                                            lb=0,
-                                            ub=+inf))
+
+    #for now, fit new norm model variants without constraints
+    if norm_model_variant == "abcd":
+
+        A_ssc_norm = np.array([[0,0,-1,0,0,0,1,0,0]])
+    
+        constraints_norm.append(LinearConstraint(A_ssc_norm,
+                                                    lb=0,
+                                                    ub=+inf))
+
+        if pos_prfs_only:
+            def positive_centre_prf_norm(x):
+                if normalize_RFs:
+                    return (x[3]/(2*np.pi*x[2]**2)+x[7])/(x[5]/(2*np.pi*x[6]**2)+x[8]) - x[7]/x[8]
+                else:
+                    return (x[3]+x[7])/(x[5]+x[8]) - x[7]/x[8]
+    
+            constraints_norm.append(NonlinearConstraint(positive_centre_prf_norm,
+                                                lb=0,
+                                                ub=+inf))
+
+
 
 
 
