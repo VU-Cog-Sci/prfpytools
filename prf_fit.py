@@ -113,8 +113,7 @@ else:
                 current_an = yaml.safe_load(f)
             previous_analysis_time = current_an["previous_analysis_time"]
             previous_analysis_refit_mode = current_an["previous_analysis_refit_mode"]
-        except Exception as e:
-            print(e)
+        except:
             continue
         break
 

@@ -13,6 +13,7 @@ opj = os.path.join
 import yaml
 import sys
 from datetime import datetime
+from shutil import copyfile as cp
 
 subj = sys.argv[1]
 analysis_settings = sys.argv[2]
@@ -133,6 +134,15 @@ for model in models_to_fit:
     model_result[order] = np.copy(model_result)
 
     np.save(iter_path.replace('scratch-shared', 'home'), model_result)
+
+cp(analysis_settings, analysis_settings.replace('scratch-shared', 'home').replace('.npy',analysis_time+'.npy'))
+
+if len(sys.argv>3):
+    print("Grabbing timecourse and mask for this analysis...")
+    mask_path=opj(data_path,  subj+"_mask_space-"+fitting_space+".npy")
+    cp(mask_path, mask_path.replace('scratch-shared', 'home').replace('.npy',analysis_time+'.npy'))
+    tc_path=opj(data_path,  subj+"_timecourse_space-"+fitting_space+".npy")
+    cp(tc_path, tc_path.replace('scratch-shared', 'home').replace('.npy',analysis_time+'.npy'))
 
 print("harvest completed")
 
