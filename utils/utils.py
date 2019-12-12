@@ -169,12 +169,10 @@ def prepare_data(subj,
             tc_full_iso_dict[hemi]=np.concatenate(tuple([tc_dict[hemi][task_name]['timecourse'] for task_name in task_names]), axis=-1)
 
 
-        tc_full_iso_nonzerovar_dict['orig_data_shape'] = {'R_shape':tc_full_iso_dict['R'].shape, 'L_shape':tc_full_iso_dict['L'].shape}
-
         tc_full_iso = np.concatenate((tc_full_iso_dict['L'], tc_full_iso_dict['R']), axis=0)
 
         tc_mean = tc_full_iso.mean(-1)
-        nonlow_var = ((tc_full_iso - tc_mean[...,np.newaxis]).max(-1) > tc_mean*min_percent_var/100) * tc_mean>0
+        nonlow_var = (np.abs(tc_full_iso - tc_mean[...,np.newaxis]).max(-1) > tc_mean*min_percent_var/100) * tc_mean>0
 
         if roi_idx is not None:
             mask = roi_mask(roi_idx, nonlow_var)
@@ -192,7 +190,6 @@ def prepare_data(subj,
             print("Warning: data scaling option not recognized. Using raw data.")
             tc_full_iso_nonzerovar = tc_full_iso[mask]
 
-
         order = np.random.permutation(tc_full_iso_nonzerovar.shape[0])
 
         tc_full_iso_nonzerovar_dict['order'] = order
@@ -203,28 +200,30 @@ def prepare_data(subj,
 
     else:
 
-        #############preparing the data (VOLUME FITTING) (OUTDATED, CHECK BEFORE USING)
-        #create a single brain mask in epi space
+        #############preparing the data (VOLUME FITTING)
         tc_dict={}
         tc_full_iso_nonzerovar_dict = {}
-    
+
+        #create a single brain mask in BOLD space
+        brain_masks = []
         for task_name in task_names:
-            brain_masks = []
+
             mask_paths = sorted(Path(opj(data_path,'fmriprep',subj)).glob(opj('**',subj+'_ses-*_task-'+task_name+'_run-*_space-'+fitting_space+'_desc-brain_mask.nii.gz')))
     
             for mask_path in mask_paths:
                 brain_masks.append(nb.load(str(mask_path)).get_data().astype(bool))
     
-            final_mask = np.ones_like(brain_masks[0]).astype(bool)
-            for brain_mask in brain_masks:
-                final_mask = final_mask & brain_mask
+        combined_brain_mask = np.ones_like(brain_masks[0]).astype(bool)
+        for brain_mask in brain_masks:
+            combined_brain_mask *= brain_mask
             
 
         for task_name in task_names:
             tc_task = []
             tc_dict[task_name] = {}
             tc_paths = sorted(Path(opj(data_path,'fmriprep',subj)).glob(opj('**',subj+'_ses-*_task-'+task_name+'_run-*_space-'+fitting_space+'_desc-preproc_bold.nii.gz')))
-    
+            print("For task "+task_name+", of subject "+subj+", a total of "+str(len(tc_paths))+" runs were found.")
+
             for tc_path in tc_paths:
                 tc_run = nb.load(str(tc_path)).get_data()[...,discard_volumes:]
     
@@ -251,20 +250,32 @@ def prepare_data(subj,
     
     
         tc_full_iso=np.concatenate(tuple([tc_dict[task_name]['timecourse'] for task_name in task_names]), axis=-1)
-                    
-    
-        #exclude timecourses with zero variance
-        tc_full_iso_nonzerovar_dict['orig_data_shape'] = final_mask.shape
-    
+
         tc_mean = tc_full_iso.mean(-1)
-        nonlow_var = np.ravel(final_mask) & (((tc_full_iso - tc_mean[...,np.newaxis]).max(-1) > tc_mean*min_percent_var/100) * tc_mean>0)
-    
-        tc_full_iso_nonzerovar_dict['nonlow_var_mask'] =  roi_mask(roi_idx, nonlow_var)
+        nonlow_var = np.reshape(combined_brain_mask, tc_full_iso.shape[0]) * (np.abs(tc_full_iso - tc_mean[...,np.newaxis]).max(-1) > tc_mean*min_percent_var/100) * tc_mean>0
 
-        tc_full_iso_nonzerovar = 100*(tc_full_iso[nonlow_var]/ tc_mean[nonlow_var,np.newaxis])
+        if roi_idx is not None:
+            mask = roi_mask(roi_idx, nonlow_var)
+        else:
+            mask = nonlow_var
 
-        tc_full_iso_nonzerovar_dict['tc'] = tc_full_iso_nonzerovar[roi_mask,:]
-    
+        tc_full_iso_nonzerovar_dict['mask'] = np.reshape(mask, combined_brain_mask.shape)
+
+        #conversion to +- of % of mean
+        if data_scaling in ["psc", "percent_signal_change"]:
+            tc_full_iso_nonzerovar = 100*(tc_full_iso[mask]/ tc_mean[mask,np.newaxis])
+        elif data_scaling == None:
+            tc_full_iso_nonzerovar = tc_full_iso[mask]
+        else:
+            print("Warning: data scaling option not recognized. Using raw data.")
+            tc_full_iso_nonzerovar = tc_full_iso[mask]
+
+        order = np.random.permutation(tc_full_iso_nonzerovar.shape[0])
+
+        tc_full_iso_nonzerovar_dict['order'] = order
+
+        tc_full_iso_nonzerovar_dict['tc'] = tc_full_iso_nonzerovar[order]
+
         return tc_full_iso_nonzerovar_dict
 
 
