@@ -135,7 +135,7 @@ for model in models_to_fit:
 
     np.save(iter_path.replace('scratch-shared', 'home'), model_result)
 
-cp(analysis_settings, analysis_settings.replace('scratch-shared', 'home').replace('.npy',analysis_time+'.npy'))
+cp(analysis_settings, analysis_settings.replace('scratch-shared', 'home').replace('.yml',analysis_time+'.yml'))
 
 if len(sys.argv)>3:
     print("Grabbing timecourse and mask for this analysis...")
