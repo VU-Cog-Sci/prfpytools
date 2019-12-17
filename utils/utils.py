@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 from matplotlib import colors
 import cortex
 import nibabel as nb
+from collections import defaultdict as dd
 from pathlib import Path
 import matplotlib.image as mpimg
 
@@ -402,34 +403,143 @@ def fwhmax_fwatmin(model, params, normalize_RFs=False, return_profiles=False):
             #accounting for the previous subtraction of baseline
             profile += params[...,7]/params[...,8]
 
-        return result, profile
+        return result, profile.T
     else:
         return result
 
 
-def combine_results(results_folder, subj, fitting_space, suffix_list):
+def combine_results(subj, fitting_space, results_folder, suffix_list, normalize_RFs=False):
+    mask = np.load(opj(results_folder, subj+'_mask_space-'+fitting_space+'.npy'))
     for i, suffix in enumerate(suffix_list):
         if i == 0:
-            gauss = np.load(opj(results_folder,subj+'_iterparams-gauss_space-'+fitting_space+suffix+'.npy'))
-            css = np.load(opj(results_folder,subj+'_iterparams-css_space-'+fitting_space+suffix+'.npy'))
-            dog = np.load(opj(results_folder,subj+'_iterparams-dog_space-'+fitting_space+suffix+'.npy'))
-            norm = np.load(opj(results_folder,subj+'_iterparams-norm_space-'+fitting_space+suffix+'.npy'))
-
-            gauss_grid = np.load(opj(results_folder,subj+'_gridparams-gauss_space-'+fitting_space+suffix+'.npy'))
-            norm_grid = np.load(opj(results_folder,subj+'_gridparams-norm_space-'+fitting_space+suffix+'.npy'))
+            try:
+                gauss = np.load(opj(results_folder,subj+'_iterparams-gauss_space-'+fitting_space+suffix+'.npy'))
+            except Exception as e:
+                gauss = 0
+                print(e)
+                pass
+            try:
+                css = np.load(opj(results_folder,subj+'_iterparams-css_space-'+fitting_space+suffix+'.npy'))
+            except Exception as e:
+                css = 0
+                print(e)
+                pass
+            try:
+                dog = np.load(opj(results_folder,subj+'_iterparams-dog_space-'+fitting_space+suffix+'.npy'))
+            except Exception as e:
+                dog = 0
+                print(e)
+                pass
+            try:
+                norm = np.load(opj(results_folder,subj+'_iterparams-norm_space-'+fitting_space+suffix+'.npy'))
+            except Exception as e:
+                norm = 0
+                print(e)
+                pass
+            try:
+                gauss_grid = np.load(opj(results_folder,subj+'_gridparams-gauss_space-'+fitting_space+suffix+'.npy'))
+            except Exception as e:
+                gauss_grid = 0
+                print(e)
+                pass
+            try:
+                norm_grid = np.load(opj(results_folder,subj+'_gridparams-norm_space-'+fitting_space+suffix+'.npy'))
+            except Exception as e:
+                norm_grid = 0
+                print(e)
+                pass
         else:
-            gauss_it = np.load(opj(results_folder,subj+'_iterparams-gauss_space-'+fitting_space+suffix+'.npy'))
-            css_it = np.load(opj(results_folder,subj+'_iterparams-css_space-'+fitting_space+suffix+'.npy'))
-            dog_it = np.load(opj(results_folder,subj+'_iterparams-dog_space-'+fitting_space+suffix+'.npy'))
-            norm_it = np.load(opj(results_folder,subj+'_iterparams-norm_space-'+fitting_space+suffix+'.npy'))
+            try:
+                gauss_it = np.load(opj(results_folder,subj+'_iterparams-gauss_space-'+fitting_space+suffix+'.npy'))
+            except Exception as e:
+                print(e)
+                pass
+            try:
+                css_it = np.load(opj(results_folder,subj+'_iterparams-css_space-'+fitting_space+suffix+'.npy'))
+            except Exception as e:
+                print(e)
+                pass
+            try:
+                dog_it = np.load(opj(results_folder,subj+'_iterparams-dog_space-'+fitting_space+suffix+'.npy'))
+            except Exception as e:
+                print(e)
+                pass
+            try:
+                norm_it = np.load(opj(results_folder,subj+'_iterparams-norm_space-'+fitting_space+suffix+'.npy'))
+            except Exception as e:
+                print(e)
+                pass
+            try:
+                gauss[(gauss[:,-1]<gauss_it[:,-1])] = np.copy(gauss_it[(gauss[:,-1]<gauss_it[:,-1])])
+            except Exception as e:
+                print(e)
+                pass
+            try:
+                css[(css[:,-1]<css_it[:,-1])] = np.copy(css_it[(css[:,-1]<css_it[:,-1])])
+            except Exception as e:
+                print(e)
+                pass
+            try:
+                dog[(dog[:,-1]<dog_it[:,-1])] = np.copy(dog_it[(dog[:,-1]<dog_it[:,-1])])
+            except Exception as e:
+                print(e)
+                pass
+            try:
+                norm[(norm[:,-1]<norm_it[:,-1])] = np.copy(norm_it[(norm[:,-1]<norm_it[:,-1])])
+            except Exception as e:
+                print(e)
+                pass
 
-            gauss[(gauss[:,-1]<gauss_it[:,-1])] = np.copy(gauss_it[(gauss[:,-1]<gauss_it[:,-1])])
-            css[(css[:,-1]<css_it[:,-1])] = np.copy(css_it[(css[:,-1]<css_it[:,-1])])
-            dog[(dog[:,-1]<dog_it[:,-1])] = np.copy(dog_it[(dog[:,-1]<dog_it[:,-1])])
-            norm[(norm[:,-1]<norm_it[:,-1])] = np.copy(norm_it[(norm[:,-1]<norm_it[:,-1])])
+    return {'Gauss grid':gauss_grid, 'Norm grid':norm_grid, 'Gauss':gauss,
+            'CSS':css, 'DoG':dog, 'Norm':norm,
+            'mask':mask, 'normalize_RFs':normalize_RFs}
 
-    return gauss_grid, norm_grid, gauss, css, dog, norm
+def process_results(results_dict, return_norm_profiles):
+    for k, v in results_dict.items():
+        if 'sub-' not in k:
+            process_results(v, return_norm_profiles)
+        else:
+            normalize_RFs = v['Raw results']['normalize_RFs']
+            mask = v['Raw results']['mask']
 
+            #store processed results in nested default dictionary
+            processed_results = dd(lambda:dd(lambda:np.zeros(mask.shape)))
+
+            #loop over contents of single-subject analysis results (models and mask)
+            for k2, v2 in v['Raw results'].items():
+                if k2 != 'mask' and isinstance(v2, np.ndarray) and 'grid' not in k2:
+
+                    processed_results['RSq'][k2][mask] = v2[:,-1]
+                    processed_results['Eccentricity'][k2][mask] = np.sqrt(v2[:,0]**2+v2[:,1]**2)
+                    #note that this takes into account the swapped axes in prfpy
+                    processed_results['Polar Angle'][k2][mask] = np.arctan2(-v2[:,0], v2[:,1])
+
+                    if k2 == 'CSS':
+                        processed_results['CSS Exponent'][k2][mask] = v2[:,5]
+
+                    if k2 == 'DoG':
+                        (processed_results['Size (fwhmax)'][k2][mask],
+                        processed_results['Surround Size (fwatmin)'][k2][mask]) = fwhmax_fwatmin(k2, v2, normalize_RFs)
+
+                    elif k2 == 'Norm':
+                        processed_results['Norm Param. B'][k2][mask] = v2[:,7]
+                        processed_results['Norm Param. D'][k2][mask] = v2[:,8]
+                        processed_results['Ratio (B/D)'][k2][mask] = v2[:,7]/v2[:,8]
+
+                        if return_norm_profiles:
+                            processed_results['pRF Profiles'][k2] = np.zeros((mask.shape[0],1000))
+                            (processed_results['Size (fwhmax)'][k2][mask],
+                            processed_results['Surround Size (fwatmin)'][k2][mask]),
+                            processed_results['pRF Profiles'][k2][mask] = fwhmax_fwatmin(k2, v2, normalize_RFs, True)
+                        else:
+                            (processed_results['Size (fwhmax)'][k2][mask],
+                            processed_results['Surround Size (fwatmin)'][k2][mask]) = fwhmax_fwatmin(k2, v2, normalize_RFs, False)
+
+                    else:
+                        processed_results['Size (fwhmax)'][k2][mask] = fwhmax_fwatmin(k2, v2, normalize_RFs)
+
+
+            v['Processed results'] = {ke : dict(va) for ke, va in processed_results.items()}
 
 
 

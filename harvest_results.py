@@ -137,12 +137,12 @@ for model in models_to_fit:
 
 cp(analysis_settings, analysis_settings.replace('scratch-shared', 'home').replace('.npy',analysis_time+'.npy'))
 
-if len(sys.argv>3):
+if len(sys.argv)>3:
     print("Grabbing timecourse and mask for this analysis...")
     mask_path=opj(data_path,  subj+"_mask_space-"+fitting_space+".npy")
-    cp(mask_path, mask_path.replace('scratch-shared', 'home').replace('.npy',analysis_time+'.npy'))
+    cp(mask_path, mask_path.replace('scratch-shared', 'home'))
     tc_path=opj(data_path,  subj+"_timecourse_space-"+fitting_space+".npy")
-    cp(tc_path, tc_path.replace('scratch-shared', 'home').replace('.npy',analysis_time+'.npy'))
+    cp(tc_path, tc_path.replace('scratch-shared', 'home'))
 
 print("harvest completed")
 
