@@ -47,7 +47,6 @@ fitting_space = analysis_info["fitting_space"]
 window_length = analysis_info["window_length"]
 n_jobs = analysis_info["n_jobs"]
 hrf = analysis_info["hrf"]
-gradient_method = analysis_info["gradient_method"].lower()
 verbose = analysis_info["verbose"]
 rsq_threshold = analysis_info["rsq_threshold"]
 models_to_fit = analysis_info["models_to_fit"]
@@ -59,6 +58,7 @@ baseline_volumes_begin_end = analysis_info["baseline_volumes_begin_end"]
 min_percent_var = analysis_info["min_percent_var"]
 pos_prfs_only = analysis_info["pos_prfs_only"]
 normalize_RFs = analysis_info["normalize_RFs"]
+param_constraints = analysis_info["param_constraints"]
 
 n_chunks = analysis_info["n_chunks"]
 refit_mode = analysis_info["refit_mode"].lower()
@@ -277,7 +277,7 @@ elif norm_model_variant == "ab":
 #more specific parameter constraints
 constraints_dog = []
 constraints_norm = []
-if gradient_method not in ["analytic", "numerical"]:
+if param_constraints == True:
 
     #enforcing surround size larger than prf size in DoG model
     A_ssc_dog = np.array([[0,0,-1,0,0,0,1]])
@@ -333,6 +333,8 @@ gg = Iso2DGaussianGridder(stimulus=prf_stim,
                           filter_predictions=True,
                           window_length=window_length,
                           task_lengths=task_lengths,
+                          task_names=task_names,
+                          late_iso_dict=late_iso_dict,
                           normalize_RFs=normalize_RFs)
 
 
@@ -379,7 +381,6 @@ if "gauss_iterparams_path" in analysis_info:
         gf.iterative_fit(rsq_threshold=rsq_threshold, verbose=verbose,
                          starting_params=gf.iterative_search_params,
                          bounds=gauss_bounds,
-                         gradient_method=gradient_method,
                          fit_hrf=fit_hrf)
         np.save(save_path, gf.iterative_search_params)
 
@@ -393,7 +394,6 @@ else:
 
         gf.iterative_fit(rsq_threshold=rsq_threshold, verbose=verbose,
                          bounds=gauss_bounds,
-                         gradient_method=gradient_method,
                          fit_hrf=fit_hrf)
 
         print("Gaussian iterfit completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Mean rsq>"+str(rsq_threshold)+": "+str(gf.iterative_search_params[gf.rsq_mask, -1].mean()))
@@ -415,7 +415,6 @@ else:
             gf.iterative_fit(rsq_threshold=rsq_threshold, verbose=verbose,
                              starting_params=np.load(save_path+".npy"),
                              bounds=gauss_bounds,
-                             gradient_method=gradient_method,
                              fit_hrf=fit_hrf)
 
 
@@ -443,6 +442,8 @@ if "CSS" in models_to_fit:
                                       filter_predictions=True,
                                       window_length=window_length,
                                       task_lengths=task_lengths,
+                                      task_names=task_names,
+                                      late_iso_dict=late_iso_dict,
                                       normalize_RFs=normalize_RFs)
     gf_css = CSS_Iso2DGaussianFitter(
         data=tc_full_iso_nonzerovar_dict['tc'], gridder=gg_css, n_jobs=n_jobs,
@@ -459,7 +460,6 @@ if "CSS" in models_to_fit:
             gf_css.iterative_fit(rsq_threshold=rsq_threshold, verbose=verbose,
                              starting_params=gf_css.iterative_search_params,
                              bounds=css_bounds,
-                             gradient_method=gradient_method,
                              fit_hrf=fit_hrf)
 
             np.save(save_path, gf_css.iterative_search_params)
@@ -475,7 +475,6 @@ if "CSS" in models_to_fit:
     
             gf_css.iterative_fit(rsq_threshold=rsq_threshold, verbose=verbose,
                                  bounds=css_bounds,
-                                 gradient_method=gradient_method,
                                  fit_hrf=fit_hrf)
     
             np.save(save_path, gf_css.iterative_search_params)
@@ -495,7 +494,6 @@ if "CSS" in models_to_fit:
                 gf_css.iterative_fit(rsq_threshold=rsq_threshold, verbose=verbose,
                                      starting_params=np.load(save_path+".npy"),
                                      bounds=css_bounds,
-                                     gradient_method=gradient_method,
                                      fit_hrf=fit_hrf)
         
                 np.save(save_path, gf_css.iterative_search_params)
@@ -515,6 +513,8 @@ if "DoG" in models_to_fit:
                                       filter_predictions=True,
                                       window_length=window_length,
                                       task_lengths=task_lengths,
+                                      task_names=task_names,
+                                      late_iso_dict=late_iso_dict,
                                       normalize_RFs=normalize_RFs)
 
     gf_dog = DoG_Iso2DGaussianFitter(data=tc_full_iso_nonzerovar_dict['tc'],
@@ -533,7 +533,6 @@ if "DoG" in models_to_fit:
             gf_dog.iterative_fit(rsq_threshold=rsq_threshold, verbose=verbose,
                              starting_params=gf_dog.iterative_search_params,
                              bounds=dog_bounds,
-                             gradient_method=gradient_method,
                              fit_hrf=fit_hrf)
 
             np.save(save_path, gf_dog.iterative_search_params)
@@ -548,7 +547,6 @@ if "DoG" in models_to_fit:
     
             gf_dog.iterative_fit(rsq_threshold=rsq_threshold, verbose=verbose,
                                          bounds=dog_bounds,
-                                         gradient_method=gradient_method,
                                          fit_hrf=fit_hrf,
                                          constraints=constraints_dog)
     
@@ -572,7 +570,6 @@ if "DoG" in models_to_fit:
                 gf_dog.iterative_fit(rsq_threshold=rsq_threshold, verbose=verbose,
                                      starting_params=np.load(save_path+".npy"),
                                      bounds=dog_bounds,
-                                     gradient_method=gradient_method,
                                      fit_hrf=fit_hrf,
                                      constraints=constraints_dog)
     
@@ -597,6 +594,8 @@ if "norm" in models_to_fit:
                                         filter_predictions=True,
                                         window_length=window_length,
                                         task_lengths=task_lengths,
+                                        task_names=task_names,
+                                        late_iso_dict=late_iso_dict,
                                         normalize_RFs=normalize_RFs)
 
     gf_norm = Norm_Iso2DGaussianFitter(data=tc_full_iso_nonzerovar_dict['tc'],
@@ -643,7 +642,6 @@ if "norm" in models_to_fit:
             gf_norm.iterative_fit(rsq_threshold=rsq_threshold, verbose=verbose,
                              starting_params=gf_norm.iterative_search_params,
                              bounds=norm_bounds,
-                             gradient_method=gradient_method,
                              fit_hrf=fit_hrf)
 
             np.save(save_path, gf_norm.iterative_search_params)
@@ -657,7 +655,6 @@ if "norm" in models_to_fit:
     
             gf_norm.iterative_fit(rsq_threshold=rsq_threshold, verbose=verbose,
                                            bounds=norm_bounds,
-                                           gradient_method=gradient_method,
                                            fit_hrf=fit_hrf,
                                            constraints=constraints_norm)
     
@@ -680,9 +677,8 @@ if "norm" in models_to_fit:
                 gf_norm.iterative_fit(rsq_threshold=rsq_threshold, verbose=verbose,
                                       starting_params=np.load(save_path+".npy"),
                                               bounds=norm_bounds,
-                                               gradient_method=gradient_method,
-                                               fit_hrf=fit_hrf,
-                                               constraints=constraints_norm)
+                                              fit_hrf=fit_hrf,
+                                              constraints=constraints_norm)
     
                 np.save(save_path, gf_norm.iterative_search_params)
     

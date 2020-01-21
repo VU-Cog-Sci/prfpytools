@@ -490,29 +490,43 @@ def combine_results(subj, fitting_space, results_folder, suffix_list, normalize_
                 print(e)
                 pass
 
+    tc_stats = dict()
+    tc_raw = np.load(opj(results_folder, subj+'_timecourse_space-'+fitting_space+'.npy'))
+
+    tc_mean_full = np.zeros(mask.shape)
+    tc_mean_full[mask] = tc_raw.mean(-1)
+    tc_stats['Mean'] = tc_mean_full
+
+    tc_var_full = np.zeros(mask.shape)
+    tc_var_full[mask] = tc_raw.var(-1)
+    tc_stats['Variance'] = tc_var_full
+
+    tc_stats['TSNR'] = tc_mean_full/np.sqrt(tc_var_full)
+
     return {'Gauss grid':gauss_grid, 'Norm grid':norm_grid, 'Gauss':gauss,
             'CSS':css, 'DoG':dog, 'Norm':norm,
-            'mask':mask, 'normalize_RFs':normalize_RFs}
+            'mask':mask, 'normalize_RFs':normalize_RFs, 'Timecourse Stats':tc_stats}
 
 def process_results(results_dict, return_norm_profiles):
     for k, v in results_dict.items():
         if 'sub-' not in k:
             process_results(v, return_norm_profiles)
         else:
-            normalize_RFs = v['Raw results']['normalize_RFs']
-            mask = v['Raw results']['mask']
+            normalize_RFs = v['Results']['normalize_RFs']
+            mask = v['Results']['mask']
 
             #store processed results in nested default dictionary
             processed_results = dd(lambda:dd(lambda:np.zeros(mask.shape)))
 
             #loop over contents of single-subject analysis results (models and mask)
-            for k2, v2 in v['Raw results'].items():
-                if k2 != 'mask' and isinstance(v2, np.ndarray) and 'grid' not in k2:
+            for k2, v2 in v['Results'].items():
+                if k2 != 'mask' and isinstance(v2, np.ndarray) and 'grid' not in k2 and 'Stats' not in k2:
 
                     processed_results['RSq'][k2][mask] = v2[:,-1]
                     processed_results['Eccentricity'][k2][mask] = np.sqrt(v2[:,0]**2+v2[:,1]**2)
-                    #note that this takes into account the swapped axes in prfpy
+                    #note that this takes into account the swapped axes in prfpy (which was fixed on )
                     processed_results['Polar Angle'][k2][mask] = np.arctan2(-v2[:,0], v2[:,1])
+                    processed_results['Amplitude'][k2][mask] = v2[:,3]
 
                     if k2 == 'CSS':
                         processed_results['CSS Exponent'][k2][mask] = v2[:,5]
@@ -538,8 +552,14 @@ def process_results(results_dict, return_norm_profiles):
                     else:
                         processed_results['Size (fwhmax)'][k2][mask] = fwhmax_fwatmin(k2, v2, normalize_RFs)
 
-
             v['Processed results'] = {ke : dict(va) for ke, va in processed_results.items()}
 
 
-
+def get_subjects(main_dict,subject_list = []):
+    for k, v in main_dict.items():
+        if 'sub-' not in k:# and isinstance(v, (dict,dd)):
+            get_subjects(v, subject_list)
+        else:
+            if k not in subject_list:
+                subject_list.append(k)
+    return subject_list
