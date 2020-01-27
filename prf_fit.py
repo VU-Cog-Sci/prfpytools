@@ -41,10 +41,16 @@ screenshot_paths = analysis_info["screenshot_paths"]
 screen_size_cm = analysis_info["screen_size_cm"]
 screen_distance_cm = analysis_info["screen_distance_cm"]
 TR = analysis_info["TR"]
+
 task_names = analysis_info["task_names"]
 data_path = analysis_info["data_path"]
 fitting_space = analysis_info["fitting_space"]
+
 window_length = analysis_info["window_length"]
+polyorder = analysis_info["polyorder"]
+highpass = analysis_info["highpass"]
+add_mean = analysis_info["add_mean"]
+
 n_jobs = analysis_info["n_jobs"]
 hrf = analysis_info["hrf"]
 verbose = analysis_info["verbose"]
@@ -53,9 +59,30 @@ models_to_fit = analysis_info["models_to_fit"]
 n_batches = analysis_info["n_batches"]
 fit_hrf = analysis_info["fit_hrf"]
 
+crossvalidate = analysis_info["crossvalidate"]
+if crossvalidate and "fit_task" in analysis_info and "fit_runs" in analysis_info:
+    print("Can only specify one between fit_task and fit_runs for crossvalidation.")
+    raise IOError
+elif crossvalidate and "fit_task" in analysis_info:
+    print("Performing crossvalidation over tasks.") 
+    fit_task = analysis_info["fit_task"]
+    fit_runs = None
+elif crossvalidate and "fit_runs" in analysis_info:
+    print("Performing crossvalidation over runs.")    
+    fit_task = None
+    fit_runs = analysis_info["fit_runs"]
+else:
+    print("Not performing crossvalidation.")
+    fit_task = None
+    fit_runs = None        
+    
+xtol = analysis_info["xtol"]
+ftol = analysis_info["ftol"]
+
 dm_edges_clipping = analysis_info["dm_edges_clipping"]
 baseline_volumes_begin_end = analysis_info["baseline_volumes_begin_end"]
 min_percent_var = analysis_info["min_percent_var"]
+
 pos_prfs_only = analysis_info["pos_prfs_only"]
 normalize_RFs = analysis_info["normalize_RFs"]
 param_constraints = analysis_info["param_constraints"]
@@ -121,9 +148,32 @@ else:
 
 if verbose == True:
     print("Creating PRF stimulus from screenshots...")
-
-#creating stimulus from screenshots
-task_lengths, prf_stim, late_iso_dict = create_full_stim(screenshot_paths,
+    
+    
+if crossvalidate and fit_task is not None:
+    
+    #creating stimulus from screenshots
+    prf_stim = create_full_stim(screenshot_paths,
+                n_pix,
+                discard_volumes,
+                baseline_volumes_begin_end,
+                dm_edges_clipping,
+                screen_size_cm,
+                screen_distance_cm,
+                TR,
+                [fit_task])
+    
+    test_prf_stim = create_full_stim(screenshot_paths,
+                n_pix,
+                discard_volumes,
+                baseline_volumes_begin_end,
+                dm_edges_clipping,
+                screen_size_cm,
+                screen_distance_cm,
+                TR,
+                [task for task in task_names if task is not fit_task])
+else:
+    prf_stim = create_full_stim(screenshot_paths,
                 n_pix,
                 discard_volumes,
                 baseline_volumes_begin_end,
@@ -132,43 +182,65 @@ task_lengths, prf_stim, late_iso_dict = create_full_stim(screenshot_paths,
                 screen_distance_cm,
                 TR,
                 task_names)
+    #for all other cases, a separate test-set stimulus it not needed
+    test_prf_stim = prf_stim
+    
+
 
 if "timecourse_data_path" in analysis_info:
     print("Using time series from: "+analysis_info["timecourse_data_path"])
     tc_full_iso_nonzerovar_dict = {}
     tc_full_iso_nonzerovar_dict['tc'] = np.load(analysis_info["timecourse_data_path"])
-
+    if crossvalidate:
+        if "timecourse_test_data_path" in analysis_info:
+            tc_full_iso_nonzerovar_dict['tc_test'] = np.load(analysis_info["timecourse_test_data_path"])
+        else:
+            print("Please also provide 'timecourse_test_data_path' path for crossvalidation (filename must contain 'timecourse-test').")
+            raise IOError
 elif os.path.exists(opj(data_path, subj+"_timecourse_space-"+fitting_space+".npy")):
     print("Using time series from: "+opj(data_path, subj+"_timecourse_space-"+fitting_space+".npy"))
     tc_full_iso_nonzerovar_dict = {}
     tc_full_iso_nonzerovar_dict['tc'] = np.load(opj(data_path, subj+"_timecourse_space-"+fitting_space+".npy"))
+    if crossvalidate:
+        tc_full_iso_nonzerovar_dict['tc_test'] = np.load(opj(data_path, subj+"_timecourse-test_space-"+fitting_space+".npy"))
 
 else:
     if chunk_nr == 0:
         print("Preparing data for fitting (see utils.prepare_data)...")
         tc_full_iso_nonzerovar_dict = prepare_data(subj,
-                                                   task_names,
+                                                   prf_stim,
+                                                   test_prf_stim,
+                                                   
                                                    discard_volumes,
                                                    min_percent_var,
+                                                   
                                                    window_length,
-                                                   late_iso_dict,
+                                                   polyorder,
+                                                   highpass,
+                                                   add_mean,
+                                                   
                                                    data_path[:-5],
                                                    fitting_space,
                                                    data_scaling,
                                                    roi_idx,
-                                                   )
-    
-        save_path = opj(data_path, subj+"_timecourse_space-"+fitting_space)
-    
-        np.save(save_path, tc_full_iso_nonzerovar_dict['tc'])
+                                                   
+                                                   crossvalidate,
+                                                   fit_runs,
+                                                   fit_task)
+
+        if crossvalidate:
+            save_path = opj(data_path, subj+"_timecourse-test_space-"+fitting_space)
+            np.save(save_path, tc_full_iso_nonzerovar_dict['tc_test'])
 
         save_path = opj(data_path, subj+"_order_space-"+fitting_space)
-    
         np.save(save_path, tc_full_iso_nonzerovar_dict['order'])
 
         save_path = opj(data_path, subj+"_mask_space-"+fitting_space)
-    
         np.save(save_path, tc_full_iso_nonzerovar_dict['mask'])
+
+        save_path = opj(data_path, subj+"_timecourse_space-"+fitting_space)
+        np.save(save_path, tc_full_iso_nonzerovar_dict['tc'])
+
     else:
 
         while not os.path.exists(opj(data_path, subj+"_timecourse_space-"+fitting_space+".npy")):
@@ -177,10 +249,13 @@ else:
             print("Using time series from: "+opj(data_path, subj+"_timecourse_space-"+fitting_space+".npy"))
             tc_full_iso_nonzerovar_dict = {}
             tc_full_iso_nonzerovar_dict['tc'] = np.load(opj(data_path, subj+"_timecourse_space-"+fitting_space+".npy"))
-
+            if crossvalidate:
+                tc_full_iso_nonzerovar_dict['tc_test'] = np.load(opj(data_path, subj+"_timecourse-test_space-"+fitting_space+".npy"))
 
 
 tc_full_iso_nonzerovar_dict['tc'] = np.array_split(tc_full_iso_nonzerovar_dict['tc'], n_chunks)[chunk_nr]
+if crossvalidate:
+    tc_full_iso_nonzerovar_dict['tc_test'] = np.array_split(tc_full_iso_nonzerovar_dict['tc_test'], n_chunks)[chunk_nr]
 
 if "mkl_num_threads" in analysis_info:
     mkl.set_num_threads(1)
@@ -321,9 +396,6 @@ if param_constraints == True:
                                                 ub=+inf))
 
 
-
-
-
 # MODEL COMPARISON
 print("Started modeling at: "+datetime.now().strftime('%Y/%m/%d %H:%M:%S'))
 
@@ -332,9 +404,6 @@ gg = Iso2DGaussianGridder(stimulus=prf_stim,
                           hrf=hrf,
                           filter_predictions=True,
                           window_length=window_length,
-                          task_lengths=task_lengths,
-                          task_names=task_names,
-                          late_iso_dict=late_iso_dict,
                           normalize_RFs=normalize_RFs)
 
 
@@ -381,7 +450,14 @@ if "gauss_iterparams_path" in analysis_info:
         gf.iterative_fit(rsq_threshold=rsq_threshold, verbose=verbose,
                          starting_params=gf.iterative_search_params,
                          bounds=gauss_bounds,
-                         fit_hrf=fit_hrf)
+                         fit_hrf=fit_hrf,
+                             xtol=xtol,
+                             ftol=ftol)
+        
+        if crossvalidate:
+            gf.crossvalidate_fit(tc_full_iso_nonzerovar_dict['tc_test'],
+                                 test_stimulus=test_prf_stim)
+        
         np.save(save_path, gf.iterative_search_params)
 
         print("Gaussian iterfit completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Mean rsq>"+str(rsq_threshold)+": "+str(gf.iterative_search_params[gf.rsq_mask, -1].mean()))
@@ -394,8 +470,14 @@ else:
 
         gf.iterative_fit(rsq_threshold=rsq_threshold, verbose=verbose,
                          bounds=gauss_bounds,
-                         fit_hrf=fit_hrf)
-
+                         fit_hrf=fit_hrf,
+                             xtol=xtol,
+                             ftol=ftol)
+        
+        if crossvalidate:
+            gf.crossvalidate_fit(tc_full_iso_nonzerovar_dict['tc_test'],
+                                 test_stimulus=test_prf_stim)
+            
         print("Gaussian iterfit completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Mean rsq>"+str(rsq_threshold)+": "+str(gf.iterative_search_params[gf.rsq_mask, -1].mean()))
 
             
@@ -415,8 +497,12 @@ else:
             gf.iterative_fit(rsq_threshold=rsq_threshold, verbose=verbose,
                              starting_params=np.load(save_path+".npy"),
                              bounds=gauss_bounds,
-                             fit_hrf=fit_hrf)
-
+                             fit_hrf=fit_hrf,
+                             xtol=xtol,
+                             ftol=ftol)
+            if crossvalidate:
+                gf.crossvalidate_fit(tc_full_iso_nonzerovar_dict['tc_test'],
+                                 test_stimulus=test_prf_stim)
 
             print("Gaussian iterfit completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Mean rsq>"+str(rsq_threshold)\
     +": "+str(gf.iterative_search_params[gf.rsq_mask, -1].mean()))
@@ -441,9 +527,6 @@ if "CSS" in models_to_fit:
                                       hrf=hrf,
                                       filter_predictions=True,
                                       window_length=window_length,
-                                      task_lengths=task_lengths,
-                                      task_names=task_names,
-                                      late_iso_dict=late_iso_dict,
                                       normalize_RFs=normalize_RFs)
     gf_css = CSS_Iso2DGaussianFitter(
         data=tc_full_iso_nonzerovar_dict['tc'], gridder=gg_css, n_jobs=n_jobs,
@@ -460,7 +543,13 @@ if "CSS" in models_to_fit:
             gf_css.iterative_fit(rsq_threshold=rsq_threshold, verbose=verbose,
                              starting_params=gf_css.iterative_search_params,
                              bounds=css_bounds,
-                             fit_hrf=fit_hrf)
+                             fit_hrf=fit_hrf,
+                             xtol=xtol,
+                             ftol=ftol)
+            
+            if crossvalidate:
+                gf_css.crossvalidate_fit(tc_full_iso_nonzerovar_dict['tc_test'],
+                                 test_stimulus=test_prf_stim)
 
             np.save(save_path, gf_css.iterative_search_params)
     
@@ -475,7 +564,12 @@ if "CSS" in models_to_fit:
     
             gf_css.iterative_fit(rsq_threshold=rsq_threshold, verbose=verbose,
                                  bounds=css_bounds,
-                                 fit_hrf=fit_hrf)
+                                 fit_hrf=fit_hrf,
+                             xtol=xtol,
+                             ftol=ftol)
+            if crossvalidate:
+                gf_css.crossvalidate_fit(tc_full_iso_nonzerovar_dict['tc_test'],
+                                 test_stimulus=test_prf_stim)
     
             np.save(save_path, gf_css.iterative_search_params)
     
@@ -494,7 +588,13 @@ if "CSS" in models_to_fit:
                 gf_css.iterative_fit(rsq_threshold=rsq_threshold, verbose=verbose,
                                      starting_params=np.load(save_path+".npy"),
                                      bounds=css_bounds,
-                                     fit_hrf=fit_hrf)
+                                     fit_hrf=fit_hrf,
+                             xtol=xtol,
+                             ftol=ftol)
+                
+                if crossvalidate:
+                    gf_css.crossvalidate_fit(tc_full_iso_nonzerovar_dict['tc_test'],
+                                 test_stimulus=test_prf_stim)
         
                 np.save(save_path, gf_css.iterative_search_params)
     
@@ -512,9 +612,6 @@ if "DoG" in models_to_fit:
                                       hrf=hrf,
                                       filter_predictions=True,
                                       window_length=window_length,
-                                      task_lengths=task_lengths,
-                                      task_names=task_names,
-                                      late_iso_dict=late_iso_dict,
                                       normalize_RFs=normalize_RFs)
 
     gf_dog = DoG_Iso2DGaussianFitter(data=tc_full_iso_nonzerovar_dict['tc'],
@@ -533,7 +630,14 @@ if "DoG" in models_to_fit:
             gf_dog.iterative_fit(rsq_threshold=rsq_threshold, verbose=verbose,
                              starting_params=gf_dog.iterative_search_params,
                              bounds=dog_bounds,
-                             fit_hrf=fit_hrf)
+                             fit_hrf=fit_hrf,
+                             constraints=constraints_dog,
+                             xtol=xtol,
+                             ftol=ftol)
+            
+            if crossvalidate:
+                gf_dog.crossvalidate_fit(tc_full_iso_nonzerovar_dict['tc_test'],
+                                 test_stimulus=test_prf_stim)
 
             np.save(save_path, gf_dog.iterative_search_params)
 
@@ -548,7 +652,13 @@ if "DoG" in models_to_fit:
             gf_dog.iterative_fit(rsq_threshold=rsq_threshold, verbose=verbose,
                                          bounds=dog_bounds,
                                          fit_hrf=fit_hrf,
-                                         constraints=constraints_dog)
+                                         constraints=constraints_dog,
+                                         xtol=xtol,
+                                         ftol=ftol)
+            
+            if crossvalidate:
+                gf_dog.crossvalidate_fit(tc_full_iso_nonzerovar_dict['tc_test'],
+                                 test_stimulus=test_prf_stim)
     
             np.save(save_path, gf_dog.iterative_search_params)
     
@@ -571,8 +681,13 @@ if "DoG" in models_to_fit:
                                      starting_params=np.load(save_path+".npy"),
                                      bounds=dog_bounds,
                                      fit_hrf=fit_hrf,
-                                     constraints=constraints_dog)
-    
+                                     constraints=constraints_dog,
+                                     xtol=xtol,
+                                     ftol=ftol)
+                if crossvalidate:
+                    gf_dog.crossvalidate_fit(tc_full_iso_nonzerovar_dict['tc_test'],
+                                 test_stimulus=test_prf_stim)
+                    
                 np.save(save_path, gf_dog.iterative_search_params)
     
     
@@ -586,16 +701,12 @@ if "DoG" in models_to_fit:
 
 
 
-
 if "norm" in models_to_fit:
     # normalization iterative fit
     gg_norm = Norm_Iso2DGaussianGridder(stimulus=prf_stim,
                                         hrf=hrf,
                                         filter_predictions=True,
                                         window_length=window_length,
-                                        task_lengths=task_lengths,
-                                        task_names=task_names,
-                                        late_iso_dict=late_iso_dict,
                                         normalize_RFs=normalize_RFs)
 
     gf_norm = Norm_Iso2DGaussianFitter(data=tc_full_iso_nonzerovar_dict['tc'],
@@ -642,7 +753,14 @@ if "norm" in models_to_fit:
             gf_norm.iterative_fit(rsq_threshold=rsq_threshold, verbose=verbose,
                              starting_params=gf_norm.iterative_search_params,
                              bounds=norm_bounds,
-                             fit_hrf=fit_hrf)
+                             fit_hrf=fit_hrf,
+                             constraints=constraints_norm,
+                             xtol=xtol,
+                             ftol=ftol)
+            
+            if crossvalidate:
+                gf_norm.crossvalidate_fit(tc_full_iso_nonzerovar_dict['tc_test'],
+                                 test_stimulus=test_prf_stim)
 
             np.save(save_path, gf_norm.iterative_search_params)
 
@@ -656,8 +774,13 @@ if "norm" in models_to_fit:
             gf_norm.iterative_fit(rsq_threshold=rsq_threshold, verbose=verbose,
                                            bounds=norm_bounds,
                                            fit_hrf=fit_hrf,
-                                           constraints=constraints_norm)
-    
+                                           constraints=constraints_norm,
+                                           xtol=xtol,
+                                           ftol=ftol)
+            if crossvalidate:
+                gf_norm.crossvalidate_fit(tc_full_iso_nonzerovar_dict['tc_test'],
+                                 test_stimulus=test_prf_stim)
+                
             np.save(save_path, gf_norm.iterative_search_params)
     
             print("Norm iterfit completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Mean rsq>"+str(rsq_threshold)+": "+str(gf_norm.iterative_search_params[gf_norm.rsq_mask, -1].mean()))
@@ -678,7 +801,12 @@ if "norm" in models_to_fit:
                                       starting_params=np.load(save_path+".npy"),
                                               bounds=norm_bounds,
                                               fit_hrf=fit_hrf,
-                                              constraints=constraints_norm)
+                                              constraints=constraints_norm,
+                                              xtol=xtol,
+                                              ftol=ftol)
+                if crossvalidate:
+                    gf_norm.crossvalidate_fit(tc_full_iso_nonzerovar_dict['tc_test'],
+                                 test_stimulus=test_prf_stim)
     
                 np.save(save_path, gf_norm.iterative_search_params)
     
