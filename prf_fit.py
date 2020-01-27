@@ -83,9 +83,14 @@ dm_edges_clipping = analysis_info["dm_edges_clipping"]
 baseline_volumes_begin_end = analysis_info["baseline_volumes_begin_end"]
 min_percent_var = analysis_info["min_percent_var"]
 
+param_bounds = analysis_info["param_bounds"]
 pos_prfs_only = analysis_info["pos_prfs_only"]
 normalize_RFs = analysis_info["normalize_RFs"]
-param_constraints = analysis_info["param_constraints"]
+
+surround_sigma_larger_than_centre = analysis_info["surround_sigma_larger_than_centre"]
+positive_centre_only = analysis_info["positive_centre_only"]
+
+param_constraints = surround_sigma_larger_than_centre or surround_sigma_larger_than_centre
 
 n_chunks = analysis_info["n_chunks"]
 refit_mode = analysis_info["refit_mode"].lower()
@@ -106,6 +111,10 @@ if "data_scaling" in analysis_info:
 else:
     data_scaling = None
 
+if not param_bounds and norm_model_variant != "abcd":
+    print("Norm model variant "+norm_model_variant+" was selected, \
+          but param_bounds=False. param_bounds will be set to True.")
+    param_bounds = True
 
 analysis_time = datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
 analysis_info["analysis_time"] = analysis_time
@@ -277,82 +286,93 @@ eps = 1e-1
 ss = prf_stim.screen_size_degrees
 
 # model parameter bounds
-gauss_bounds = [(-2*ss, 2*ss),  # x
-                (-2*ss, 2*ss),  # y
-                (eps, 2*ss),  # prf size
-                (0, +inf),  # prf amplitude
-                (0, +inf)]  # bold baseline
+gauss_bounds, css_bounds, dog_bounds, norm_bounds = None, None, None, None
 
-css_bounds = [(-2*ss, 2*ss),  # x
-              (-2*ss, 2*ss),  # y
-              (eps, 2*ss),  # prf size
-              (0, +inf),  # prf amplitude
-              (0, +inf),  # bold baseline
-              (0.01, 3)]  # CSS exponent
-
-dog_bounds = [(-2*ss, 2*ss),  # x
-              (-2*ss, 2*ss),  # y
-              (eps, 2*ss),  # prf size
-              (0, +inf),  # prf amplitude
-              (0, +inf),  # bold baseline
-              (0, +inf),  # surround amplitude
-              (eps, 4*ss)]  # surround size
+if param_bounds:
+    gauss_bounds = [(-2*ss, 2*ss),  # x
+                    (-2*ss, 2*ss),  # y
+                    (eps, 2*ss),  # prf size
+                    (0, +inf),  # prf amplitude
+                    (0, +inf)]  # bold baseline
+    
+    css_bounds = [(-2*ss, 2*ss),  # x
+                  (-2*ss, 2*ss),  # y
+                  (eps, 2*ss),  # prf size
+                  (0, +inf),  # prf amplitude
+                  (0, +inf),  # bold baseline
+                  (0.01, 3)]  # CSS exponent
+    
+    dog_bounds = [(-2*ss, 2*ss),  # x
+                  (-2*ss, 2*ss),  # y
+                  (eps, 2*ss),  # prf size
+                  (0, +inf),  # prf amplitude
+                  (0, +inf),  # bold baseline
+                  (0, +inf),  # surround amplitude
+                  (eps, 4*ss)]  # surround size
+    
 
 # norm grid params
 if norm_model_variant == "abcd":
     surround_amplitude_grid=np.array([0,0.05,0.2,1], dtype='float32')
     surround_size_grid=np.array([3,6,10,20], dtype='float32')
     neural_baseline_grid=np.array([0,1,10,100], dtype='float32')
-    surround_baseline_grid=np.array([1.0,10.0,100.0,1000.0], dtype='float32')
+    surround_baseline_grid=np.array([0.1,1.0,10.0,100.0], dtype='float32')
+    
+    if param_bounds:
+        norm_bounds = [(-2*ss, 2*ss),  # x
+                   (-2*ss, 2*ss),  # y
+                   (eps, 2*ss),  # prf size
+                   (0, +inf),  # prf amplitude
+                   (0, +inf),  # bold baseline
+                   (-inf, +inf),  # surround amplitude
+                   (eps, 4*ss),  # surround size
+                   (0, +inf),  # neural baseline
+                   (1e-6, +inf)]  # surround baseline
 
-    norm_bounds = [(-2*ss, 2*ss),  # x
-               (-2*ss, 2*ss),  # y
-               (eps, 2*ss),  # prf size
-               (0, +inf),  # prf amplitude
-               (0, +inf),  # bold baseline
-               (0, +inf),  # surround amplitude
-               (eps, 4*ss),  # surround size
-               (0, +inf),  # neural baseline
-               (1e-6, +inf)]  # surround baseline
 
 elif norm_model_variant == "abc":
     surround_amplitude_grid=np.array([0,0.05,0.2,1,2,5,10], dtype='float32')
     surround_size_grid=np.array([2,3,4,6,10,15], dtype='float32')
     neural_baseline_grid=np.array([0,0.1,0.5,1,2,4,8,10], dtype='float32')
     surround_baseline_grid=np.array([1], dtype='float32')
-
-    norm_bounds = [(-2*ss, 2*ss),  # x
-               (-2*ss, 2*ss),  # y
-               (eps, 2*ss),  # prf size
-               (0, +inf),  # prf amplitude
-               (0, +inf),  # bold baseline
-               (-inf, +inf),  # surround amplitude allow negative stuff
-               (eps, 4*ss),  # surround size
-               (0, +inf),  # neural baseline
-               (1, 1)]  # surround baseline
+    if param_bounds:
+        norm_bounds = [(-2*ss, 2*ss),  # x
+                   (-2*ss, 2*ss),  # y
+                   (eps, 2*ss),  # prf size
+                   (0, +inf),  # prf amplitude
+                   (0, +inf),  # bold baseline
+                   (-inf, +inf),  # surround amplitude allow negative stuff
+                   (eps, 4*ss),  # surround size
+                   (0, +inf),  # neural baseline
+                   (1, 1)]  # surround baseline
 
 elif norm_model_variant == "ab":
     surround_amplitude_grid=np.array([1], dtype='float32')
     surround_size_grid=np.array([2,3,4,5,6,8,10,20], dtype='float32')
     neural_baseline_grid=np.array([0,0.1,0.5,1,2,4,8,10,20,100], dtype='float32')
     surround_baseline_grid=np.array([1], dtype='float32')
+    if param_bounds:
+        norm_bounds = [(-2*ss, 2*ss),  # x
+                   (-2*ss, 2*ss),  # y
+                   (eps, 2*ss),  # prf size
+                   (0, +inf),  # prf amplitude
+                   (0, +inf),  # bold baseline
+                   (1, 1),  # surround amplitude
+                   (eps, 4*ss),  # surround size
+                   (0, +inf),  # neural baseline
+                   (1, 1)]  # surround baseline
 
-    norm_bounds = [(-2*ss, 2*ss),  # x
-               (-2*ss, 2*ss),  # y
-               (eps, 2*ss),  # prf size
-               (0, +inf),  # prf amplitude
-               (0, +inf),  # bold baseline
-               (1, 1),  # surround amplitude
-               (eps, 4*ss),  # surround size
-               (0, +inf),  # neural baseline
-               (1, 1)]  # surround baseline
 
 
+#this ensures that all models use the same optimizer, even if only some
+#have constraints
+if param_constraints:
+    constraints_gauss, constraints_css, constraints_dog, constraints_norm = [],[],[],[]
+else:
+    constraints_gauss, constraints_css, constraints_dog, constraints_norm = None,None,None,None
 
-#more specific parameter constraints
-constraints_dog = []
-constraints_norm = []
-if param_constraints == True:
+#specific parameter constraints   
+if surround_sigma_larger_than_centre:
 
     #enforcing surround size larger than prf size in DoG model
     A_ssc_dog = np.array([[0,0,-1,0,0,0,1]])
@@ -360,38 +380,35 @@ if param_constraints == True:
     constraints_dog.append(LinearConstraint(A_ssc_dog,
                                                 lb=0,
                                                 ub=+inf))
+    
+    #enforcing surround size larger than prf size in norm
+    A_ssc_norm = np.array([[0,0,-1,0,0,0,1,0,0]])
 
-    if pos_prfs_only:
-        #enforcing positive central amplitude in DoG
-        def positive_centre_prf_dog(x):
-            if normalize_RFs:
-                return x[3]/(2*np.pi*x[2]**2)-x[5]/(2*np.pi*x[6]**2)
-            else:
-                return x[3] - x[5]
-
-        constraints_dog.append(NonlinearConstraint(positive_centre_prf_dog,
+    constraints_norm.append(LinearConstraint(A_ssc_norm,
                                                 lb=0,
                                                 ub=+inf))
 
-    #for now, fit new norm model variants without constraints
-    if norm_model_variant == "abcd":
-        #enforcing surround size larger than prf size in norm abcd
-        #enforcing positive central amplitude in norm abcd
 
-        A_ssc_norm = np.array([[0,0,-1,0,0,0,1,0,0]])
-    
-        constraints_norm.append(LinearConstraint(A_ssc_norm,
-                                                    lb=0,
-                                                    ub=+inf))
+if positive_centre_only:
+    #enforcing positive central amplitude in DoG
+    def positive_centre_prf_dog(x):
+        if normalize_RFs:
+            return x[3]/(2*np.pi*x[2]**2)-x[5]/(2*np.pi*x[6]**2)
+        else:
+            return x[3] - x[5]
 
-        if pos_prfs_only:
-            def positive_centre_prf_norm(x):
-                if normalize_RFs:
-                    return (x[3]/(2*np.pi*x[2]**2)+x[7])/(x[5]/(2*np.pi*x[6]**2)+x[8]) - x[7]/x[8]
-                else:
-                    return (x[3]+x[7])/(x[5]+x[8]) - x[7]/x[8]
+    constraints_dog.append(NonlinearConstraint(positive_centre_prf_dog,
+                                                lb=0,
+                                                ub=+inf))
+
+    #enforcing positive central amplitude in norm
+    def positive_centre_prf_norm(x):
+        if normalize_RFs:
+            return (x[3]/(2*np.pi*x[2]**2)+x[7])/(x[5]/(2*np.pi*x[6]**2)+x[8]) - x[7]/x[8]
+        else:
+            return (x[3]+x[7])/(x[5]+x[8]) - x[7]/x[8]
     
-            constraints_norm.append(NonlinearConstraint(positive_centre_prf_norm,
+    constraints_norm.append(NonlinearConstraint(positive_centre_prf_norm,
                                                 lb=0,
                                                 ub=+inf))
 
@@ -404,6 +421,9 @@ gg = Iso2DGaussianGridder(stimulus=prf_stim,
                           hrf=hrf,
                           filter_predictions=True,
                           window_length=window_length,
+                          polyorder=polyorder,
+                          highpass=highpass,
+                          add_mean=add_mean,
                           normalize_RFs=normalize_RFs)
 
 
@@ -451,6 +471,7 @@ if "gauss_iterparams_path" in analysis_info:
                          starting_params=gf.iterative_search_params,
                          bounds=gauss_bounds,
                          fit_hrf=fit_hrf,
+                         constraints=constraints_gauss,
                              xtol=xtol,
                              ftol=ftol)
         
@@ -471,6 +492,7 @@ else:
         gf.iterative_fit(rsq_threshold=rsq_threshold, verbose=verbose,
                          bounds=gauss_bounds,
                          fit_hrf=fit_hrf,
+                         constraints=constraints_gauss,
                              xtol=xtol,
                              ftol=ftol)
         
@@ -498,6 +520,7 @@ else:
                              starting_params=np.load(save_path+".npy"),
                              bounds=gauss_bounds,
                              fit_hrf=fit_hrf,
+                             constraints=constraints_gauss,
                              xtol=xtol,
                              ftol=ftol)
             if crossvalidate:
@@ -527,6 +550,9 @@ if "CSS" in models_to_fit:
                                       hrf=hrf,
                                       filter_predictions=True,
                                       window_length=window_length,
+                                      polyorder=polyorder,
+                                      highpass=highpass,
+                                      add_mean=add_mean,                                      
                                       normalize_RFs=normalize_RFs)
     gf_css = CSS_Iso2DGaussianFitter(
         data=tc_full_iso_nonzerovar_dict['tc'], gridder=gg_css, n_jobs=n_jobs,
@@ -544,6 +570,7 @@ if "CSS" in models_to_fit:
                              starting_params=gf_css.iterative_search_params,
                              bounds=css_bounds,
                              fit_hrf=fit_hrf,
+                             constraints=constraints_css,
                              xtol=xtol,
                              ftol=ftol)
             
@@ -565,6 +592,7 @@ if "CSS" in models_to_fit:
             gf_css.iterative_fit(rsq_threshold=rsq_threshold, verbose=verbose,
                                  bounds=css_bounds,
                                  fit_hrf=fit_hrf,
+                                 constraints=constraints_css,
                              xtol=xtol,
                              ftol=ftol)
             if crossvalidate:
@@ -589,6 +617,7 @@ if "CSS" in models_to_fit:
                                      starting_params=np.load(save_path+".npy"),
                                      bounds=css_bounds,
                                      fit_hrf=fit_hrf,
+                                     constraints=constraints_css,
                              xtol=xtol,
                              ftol=ftol)
                 
@@ -612,6 +641,9 @@ if "DoG" in models_to_fit:
                                       hrf=hrf,
                                       filter_predictions=True,
                                       window_length=window_length,
+                                      polyorder=polyorder,
+                                      highpass=highpass,
+                                      add_mean=add_mean,                                      
                                       normalize_RFs=normalize_RFs)
 
     gf_dog = DoG_Iso2DGaussianFitter(data=tc_full_iso_nonzerovar_dict['tc'],
@@ -707,6 +739,9 @@ if "norm" in models_to_fit:
                                         hrf=hrf,
                                         filter_predictions=True,
                                         window_length=window_length,
+                                        polyorder=polyorder,
+                                        highpass=highpass,
+                                        add_mean=add_mean,                                        
                                         normalize_RFs=normalize_RFs)
 
     gf_norm = Norm_Iso2DGaussianFitter(data=tc_full_iso_nonzerovar_dict['tc'],
