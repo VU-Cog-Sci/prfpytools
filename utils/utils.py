@@ -145,7 +145,7 @@ def prepare_data(subj,
                  fit_task):
 
     if fitting_space == 'fsaverage' or fitting_space == 'fsnative':
-        tc_dict = dd(lambda:dd(lambda:dd))
+        tc_dict = dd(lambda:dd(dict))
         tc_full_iso_dict = {}
         tc_full_iso_nonzerovar_dict = {}
         if crossvalidate:
@@ -276,7 +276,7 @@ def prepare_data(subj,
     else:
 
         #############preparing the data (VOLUME FITTING)
-        tc_dict=dd(lambda:dd)
+        tc_dict=dd(dict)
         tc_full_iso_nonzerovar_dict = {}
 
         #create a single brain mask in BOLD space
