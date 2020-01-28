@@ -145,9 +145,7 @@ def prepare_data(subj,
                  fit_task):
 
     if fitting_space == 'fsaverage' or fitting_space == 'fsnative':
-        tc_dict = {}
-        tc_dict['L'] = {}
-        tc_dict['R'] = {}
+        tc_dict = dd(lambda:dd(lambda:dd))
         tc_full_iso_dict = {}
         tc_full_iso_nonzerovar_dict = {}
         if crossvalidate:
@@ -156,7 +154,6 @@ def prepare_data(subj,
         for hemi in ['L', 'R']:
             for task_name in prf_stim.task_names:
                 tc_task = []
-                tc_dict[hemi][task_name] = {}
                 tc_paths = sorted(Path(opj(data_path,'fmriprep',subj)).glob(opj('**',subj+'_ses-*_task-'+task_name+'_run-*_space-'+fitting_space+'_hemi-'+hemi+'.func.gii')))
 
                 print("For task "+task_name+", hemisphere "+hemi+" of subject "+subj+", a total of "+str(len(tc_paths))+" runs were found.")
@@ -185,10 +182,8 @@ def prepare_data(subj,
                                                    axis=-1)
             
             if crossvalidate:
-                for task_name in test_prf_stim.task_names:    
-                        
+                for task_name in test_prf_stim.task_names:                          
                     tc_task = []
-                    tc_dict[hemi][task_name] = {}
                     tc_paths = sorted(Path(opj(data_path,'fmriprep',subj)).glob(opj('**',subj+'_ses-*_task-'+task_name+'_run-*_space-'+fitting_space+'_hemi-'+hemi+'.func.gii')))
     
                     print("For task "+task_name+", hemisphere "+hemi+" of subject "+subj+", a total of "+str(len(tc_paths))+" runs were found.")
@@ -281,7 +276,7 @@ def prepare_data(subj,
     else:
 
         #############preparing the data (VOLUME FITTING)
-        tc_dict={}
+        tc_dict=dd(lambda:dd)
         tc_full_iso_nonzerovar_dict = {}
 
         #create a single brain mask in BOLD space
@@ -300,7 +295,6 @@ def prepare_data(subj,
 
         for task_name in prf_stim.task_names:
             tc_task = []
-            tc_dict[task_name] = {}
             tc_paths = sorted(Path(opj(data_path,'fmriprep',subj)).glob(opj('**',subj+'_ses-*_task-'+task_name+'_run-*_space-'+fitting_space+'_desc-preproc_bold.nii.gz')))
 
             print("For task "+task_name+", of subject "+subj+", a total of "+str(len(tc_paths))+" runs were found.")
@@ -329,10 +323,8 @@ def prepare_data(subj,
                                                    axis=-1)
 
         if crossvalidate:
-            for task_name in test_prf_stim.task_names:
-                
+            for task_name in test_prf_stim.task_names:                
                 tc_task = []
-                tc_dict[task_name] = {}
                 tc_paths = sorted(Path(opj(data_path,'fmriprep',subj)).glob(opj('**',subj+'_ses-*_task-'+task_name+'_run-*_space-'+fitting_space+'_desc-preproc_bold.nii.gz')))
     
                 print("For task "+task_name+", of subject "+subj+", a total of "+str(len(tc_paths))+" runs were found.")
