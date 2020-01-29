@@ -159,6 +159,7 @@ def prepare_data(subj,
                 print("For task "+task_name+", hemisphere "+hemi+" of subject "+subj+", a total of "+str(len(tc_paths))+" runs were found.")
 
                 if not crossvalidate or fit_task is not None:
+                    #if CV over tasks, or if no CV, can use all runs
                     fit_runs = len(tc_paths)
 
                 for tc_path in tc_paths:
@@ -189,6 +190,7 @@ def prepare_data(subj,
                     print("For task "+task_name+", hemisphere "+hemi+" of subject "+subj+", a total of "+str(len(tc_paths))+" runs were found.")
     
                     if fit_task is not None:
+                        #if CV is over tasks, can use all runs for test data
                         fit_runs = 0
     
                     for tc_path in tc_paths:

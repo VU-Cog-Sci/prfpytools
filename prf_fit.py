@@ -465,7 +465,7 @@ if "gauss_iterparams_path" in analysis_info:
 
     if refit_mode in ["overwrite", "iterate"]:
 
-        print("Starting Gaussian iter fit at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S'))
+        print("Starting Gaussian iterfit at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S'))
 
         gf.iterative_fit(rsq_threshold=rsq_threshold, verbose=verbose,
                          starting_params=gf.iterative_search_params,
@@ -474,20 +474,23 @@ if "gauss_iterparams_path" in analysis_info:
                          constraints=constraints_gauss,
                              xtol=xtol,
                              ftol=ftol)
-        
+
+        print("Gaussian iterfit completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Mean rsq>"+str(rsq_threshold)+": "+str(gf.iterative_search_params[gf.rsq_mask, -1].mean()))
+      
         if crossvalidate:
             gf.crossvalidate_fit(tc_full_iso_nonzerovar_dict['tc_test'],
                                  test_stimulus=test_prf_stim)
+            print("Gaussian Crossvalidation completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Mean rsq>"+str(rsq_threshold)+": "+str(gf.iterative_search_params[gf.rsq_mask, -1].mean()))
+
         
         np.save(save_path, gf.iterative_search_params)
 
-        print("Gaussian iterfit completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Mean rsq>"+str(rsq_threshold)+": "+str(gf.iterative_search_params[gf.rsq_mask, -1].mean()))
 
 else:
 
     if not os.path.exists(save_path+".npy") or refit_mode == "overwrite":
 
-        print("Starting Gaussian iter fit at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S'))
+        print("Starting Gaussian iterfit at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S'))
 
         gf.iterative_fit(rsq_threshold=rsq_threshold, verbose=verbose,
                          bounds=gauss_bounds,
@@ -496,11 +499,14 @@ else:
                              xtol=xtol,
                              ftol=ftol)
         
+        print("Gaussian iterfit completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Mean rsq>"+str(rsq_threshold)+": "+str(gf.iterative_search_params[gf.rsq_mask, -1].mean()))
+        
         if crossvalidate:
             gf.crossvalidate_fit(tc_full_iso_nonzerovar_dict['tc_test'],
                                  test_stimulus=test_prf_stim)
+            print("Gaussian Crossvalidation completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Mean rsq>"+str(rsq_threshold)+": "+str(gf.iterative_search_params[gf.rsq_mask, -1].mean()))
+
             
-        print("Gaussian iterfit completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Mean rsq>"+str(rsq_threshold)+": "+str(gf.iterative_search_params[gf.rsq_mask, -1].mean()))
 
             
         np.save(save_path, gf.iterative_search_params)
@@ -514,7 +520,7 @@ else:
                                                         int(previous_analysis_time.split('-')[4]),
                                                         int(previous_analysis_time.split('-')[5]), 0):
 
-            print("Starting Gaussian iter fit at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S'))
+            print("Starting Gaussian iterfit at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S'))
     
             gf.iterative_fit(rsq_threshold=rsq_threshold, verbose=verbose,
                              starting_params=np.load(save_path+".npy"),
@@ -523,12 +529,15 @@ else:
                              constraints=constraints_gauss,
                              xtol=xtol,
                              ftol=ftol)
+            
+            print("Gaussian iterfit completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Mean rsq>"+str(rsq_threshold)+": "+str(gf.iterative_search_params[gf.rsq_mask, -1].mean()))
+
             if crossvalidate:
                 gf.crossvalidate_fit(tc_full_iso_nonzerovar_dict['tc_test'],
                                  test_stimulus=test_prf_stim)
 
-            print("Gaussian iterfit completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Mean rsq>"+str(rsq_threshold)\
-    +": "+str(gf.iterative_search_params[gf.rsq_mask, -1].mean()))
+                print("Gaussian Crossvalidation completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Mean rsq>"+str(rsq_threshold)\
+                      +": "+str(gf.iterative_search_params[gf.rsq_mask, -1].mean()))
     
     
             np.save(save_path, gf.iterative_search_params)
@@ -564,7 +573,7 @@ if "CSS" in models_to_fit:
         gf_css.iterative_search_params = np.array_split(np.load(analysis_info["css_iterparams_path"]), n_chunks)[chunk_nr]
         if refit_mode in ["overwrite", "iterate"]:
     
-            print("Starting CSS iter fit at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S'))
+            print("Starting CSS iterfit at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S'))
     
             gf_css.iterative_fit(rsq_threshold=rsq_threshold, verbose=verbose,
                              starting_params=gf_css.iterative_search_params,
@@ -573,21 +582,23 @@ if "CSS" in models_to_fit:
                              constraints=constraints_css,
                              xtol=xtol,
                              ftol=ftol)
+            print("CSS iterfit completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Mean rsq>"+str(rsq_threshold)+": "+str(gf_css.iterative_search_params[gf_css.rsq_mask, -1].mean()))
             
             if crossvalidate:
                 gf_css.crossvalidate_fit(tc_full_iso_nonzerovar_dict['tc_test'],
                                  test_stimulus=test_prf_stim)
+                print("CSS Crossvalidation completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Mean rsq>"+str(rsq_threshold)+": "+str(gf_css.iterative_search_params[gf_css.rsq_mask, -1].mean()))
+
 
             np.save(save_path, gf_css.iterative_search_params)
     
-            print("CSS iterfit completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Mean rsq>"+str(rsq_threshold)+": "+str(gf_css.iterative_search_params[gf_css.rsq_mask, -1].mean()))
 
 
     else:
 
 
         if not os.path.exists(save_path+".npy") or refit_mode == "overwrite":
-            print("Starting CSS iter fit at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S'))
+            print("Starting CSS iterfit at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S'))
     
             gf_css.iterative_fit(rsq_threshold=rsq_threshold, verbose=verbose,
                                  bounds=css_bounds,
@@ -595,13 +606,16 @@ if "CSS" in models_to_fit:
                                  constraints=constraints_css,
                              xtol=xtol,
                              ftol=ftol)
+            print("CSS iterfit completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Mean rsq>"+str(rsq_threshold)+": "+str(gf_css.iterative_search_params[gf_css.rsq_mask, -1].mean()))
+            
             if crossvalidate:
                 gf_css.crossvalidate_fit(tc_full_iso_nonzerovar_dict['tc_test'],
                                  test_stimulus=test_prf_stim)
+                print("CSS Crossvalidation completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Mean rsq>"+str(rsq_threshold)+": "+str(gf_css.iterative_search_params[gf_css.rsq_mask, -1].mean()))
+
     
             np.save(save_path, gf_css.iterative_search_params)
     
-            print("CSS iterfit completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Mean rsq>"+str(rsq_threshold)+": "+str(gf_css.iterative_search_params[gf_css.rsq_mask, -1].mean()))
         elif os.path.exists(save_path+".npy") and refit_mode == "iterate":
     
             if previous_analysis_refit_mode != "iterate" or (datetime.fromtimestamp(os.stat(save_path+".npy").st_mtime)) < datetime(\
@@ -611,7 +625,7 @@ if "CSS" in models_to_fit:
                                                         int(previous_analysis_time.split('-')[3]),
                                                         int(previous_analysis_time.split('-')[4]),
                                                         int(previous_analysis_time.split('-')[5]), 0):
-                print("Starting CSS iter fit at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S'))
+                print("Starting CSS iterfit at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S'))
         
                 gf_css.iterative_fit(rsq_threshold=rsq_threshold, verbose=verbose,
                                      starting_params=np.load(save_path+".npy"),
@@ -620,15 +634,17 @@ if "CSS" in models_to_fit:
                                      constraints=constraints_css,
                              xtol=xtol,
                              ftol=ftol)
-                
+                print("CSS iterfit completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Mean rsq>"+str(rsq_threshold)+": "\
+                          +str(gf_css.iterative_search_params[gf_css.rsq_mask, -1].mean())) 
+                    
                 if crossvalidate:
                     gf_css.crossvalidate_fit(tc_full_iso_nonzerovar_dict['tc_test'],
                                  test_stimulus=test_prf_stim)
+                    print("CSS Crossvalidation completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Mean rsq>"+str(rsq_threshold)+": "+str(gf_css.iterative_search_params[gf_css.rsq_mask, -1].mean()))
         
                 np.save(save_path, gf_css.iterative_search_params)
     
-                print("CSS iterfit completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Mean rsq>"+str(rsq_threshold)+": "\
-    +str(gf_css.iterative_search_params[gf_css.rsq_mask, -1].mean()))
+
     
         elif os.path.exists(save_path+".npy") and refit_mode == "skip":
             gf_css.iterative_search_params = np.load(save_path+".npy")
@@ -657,7 +673,7 @@ if "DoG" in models_to_fit:
         gf_dog.iterative_search_params = np.array_split(np.load(analysis_info["dog_iterparams_path"]), n_chunks)[chunk_nr]
         if refit_mode in ["overwrite", "iterate"]:
     
-            print("Starting DoG iter fit at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S'))
+            print("Starting DoG iterfit at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S'))
     
             gf_dog.iterative_fit(rsq_threshold=rsq_threshold, verbose=verbose,
                              starting_params=gf_dog.iterative_search_params,
@@ -666,20 +682,22 @@ if "DoG" in models_to_fit:
                              constraints=constraints_dog,
                              xtol=xtol,
                              ftol=ftol)
+            print("DoG iterfit completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Mean rsq>"+str(rsq_threshold)+": "+str(gf_dog.iterative_search_params[gf_dog.rsq_mask, -1].mean()))
             
             if crossvalidate:
                 gf_dog.crossvalidate_fit(tc_full_iso_nonzerovar_dict['tc_test'],
                                  test_stimulus=test_prf_stim)
+                print("DoG Crossvalidation completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Mean rsq>"+str(rsq_threshold)+": "+str(gf_dog.iterative_search_params[gf_dog.rsq_mask, -1].mean()))
+
 
             np.save(save_path, gf_dog.iterative_search_params)
 
-            print("DoG iterfit completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Mean rsq>"+str(rsq_threshold)+": "+str(gf_dog.iterative_search_params[gf_dog.rsq_mask, -1].mean()))
 
 
     else:
 
         if not os.path.exists(save_path+".npy") or refit_mode == "overwrite":
-            print("Starting DoG iter fit at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S'))
+            print("Starting DoG iterfit at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S'))
     
             gf_dog.iterative_fit(rsq_threshold=rsq_threshold, verbose=verbose,
                                          bounds=dog_bounds,
@@ -687,15 +705,17 @@ if "DoG" in models_to_fit:
                                          constraints=constraints_dog,
                                          xtol=xtol,
                                          ftol=ftol)
+            print("DoG iterfit completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Mean rsq>"+str(rsq_threshold)+": "+str(gf_dog.iterative_search_params[gf_dog.rsq_mask, -1].mean()))
             
             if crossvalidate:
                 gf_dog.crossvalidate_fit(tc_full_iso_nonzerovar_dict['tc_test'],
                                  test_stimulus=test_prf_stim)
+                print("DoG Crossvalidation completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Mean rsq>"+str(rsq_threshold)+": "+str(gf_dog.iterative_search_params[gf_dog.rsq_mask, -1].mean()))
+
     
             np.save(save_path, gf_dog.iterative_search_params)
     
     
-            print("DoG iterfit completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Mean rsq>"+str(rsq_threshold)+": "+str(gf_dog.iterative_search_params[gf_dog.rsq_mask, -1].mean()))
     
     
         elif os.path.exists(save_path+".npy") and refit_mode == "iterate":
@@ -707,7 +727,7 @@ if "DoG" in models_to_fit:
                                                         int(previous_analysis_time.split('-')[3]),
                                                         int(previous_analysis_time.split('-')[4]),
                                                         int(previous_analysis_time.split('-')[5]), 0):
-                print("Starting DoG iter fit at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S'))
+                print("Starting DoG iterfit at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S'))
         
                 gf_dog.iterative_fit(rsq_threshold=rsq_threshold, verbose=verbose,
                                      starting_params=np.load(save_path+".npy"),
@@ -716,15 +736,18 @@ if "DoG" in models_to_fit:
                                      constraints=constraints_dog,
                                      xtol=xtol,
                                      ftol=ftol)
+                print("DoG iterfit completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Mean rsq>"+str(rsq_threshold)+": "+str\
+                              (gf_dog.iterative_search_params[gf_dog.rsq_mask, -1].mean()))
+                
                 if crossvalidate:
                     gf_dog.crossvalidate_fit(tc_full_iso_nonzerovar_dict['tc_test'],
                                  test_stimulus=test_prf_stim)
-                    
+                    print("DoG Crossvalidation completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Mean rsq>"+str(rsq_threshold)+": "+str(gf_dog.iterative_search_params[gf_dog.rsq_mask, -1].mean()))
+                   
                 np.save(save_path, gf_dog.iterative_search_params)
     
     
-                print("DoG iterfit completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Mean rsq>"+str(rsq_threshold)+": "+str\
-    (gf_dog.iterative_search_params[gf_dog.rsq_mask, -1].mean()))
+
     
         elif os.path.exists(save_path+".npy") and refit_mode == "skip":
             gf_dog.iterative_search_params = np.load(save_path+".npy")
@@ -783,7 +806,7 @@ if "norm" in models_to_fit:
         gf_norm.iterative_search_params = np.array_split(np.load(analysis_info["norm_iterparams_path"]), n_chunks)[chunk_nr]
         if refit_mode in ["overwrite", "iterate"]:
     
-            print("Starting Norm iter fit at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S'))
+            print("Starting Norm iterfit at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S'))
     
             gf_norm.iterative_fit(rsq_threshold=rsq_threshold, verbose=verbose,
                              starting_params=gf_norm.iterative_search_params,
@@ -792,19 +815,20 @@ if "norm" in models_to_fit:
                              constraints=constraints_norm,
                              xtol=xtol,
                              ftol=ftol)
+            print("Norm iterfit completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Mean rsq>"+str(rsq_threshold)+": "+str(gf_norm.iterative_search_params[gf_norm.rsq_mask, -1].mean()))
             
             if crossvalidate:
                 gf_norm.crossvalidate_fit(tc_full_iso_nonzerovar_dict['tc_test'],
                                  test_stimulus=test_prf_stim)
+                print("Norm Crossvalidation completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Mean rsq>"+str(rsq_threshold)+": "+str(gf_norm.iterative_search_params[gf_norm.rsq_mask, -1].mean()))
 
             np.save(save_path, gf_norm.iterative_search_params)
 
-            print("Norm iterfit completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Mean rsq>"+str(rsq_threshold)+": "+str(gf_norm.iterative_search_params[gf_norm.rsq_mask, -1].mean()))
 
     else:
         if not os.path.exists(save_path+".npy") or refit_mode == "overwrite":
     
-            print("Starting norm iter fit at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S'))
+            print("Starting norm iterfit at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S'))
     
             gf_norm.iterative_fit(rsq_threshold=rsq_threshold, verbose=verbose,
                                            bounds=norm_bounds,
@@ -812,13 +836,15 @@ if "norm" in models_to_fit:
                                            constraints=constraints_norm,
                                            xtol=xtol,
                                            ftol=ftol)
+            print("Norm iterfit completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Mean rsq>"+str(rsq_threshold)+": "+str(gf_norm.iterative_search_params[gf_norm.rsq_mask, -1].mean()))
+
             if crossvalidate:
                 gf_norm.crossvalidate_fit(tc_full_iso_nonzerovar_dict['tc_test'],
                                  test_stimulus=test_prf_stim)
+                print("Norm Crossvalidation completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Mean rsq>"+str(rsq_threshold)+": "+str(gf_norm.iterative_search_params[gf_norm.rsq_mask, -1].mean()))
                 
             np.save(save_path, gf_norm.iterative_search_params)
     
-            print("Norm iterfit completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Mean rsq>"+str(rsq_threshold)+": "+str(gf_norm.iterative_search_params[gf_norm.rsq_mask, -1].mean()))
     
         elif os.path.exists(save_path+".npy") and refit_mode == "iterate":
     
@@ -830,7 +856,7 @@ if "norm" in models_to_fit:
                                                         int(previous_analysis_time.split('-')[4]),
                                                         int(previous_analysis_time.split('-')[5]), 0):
     
-                print("Starting norm iter fit at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S'))
+                print("Starting norm iterfit at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S'))
         
                 gf_norm.iterative_fit(rsq_threshold=rsq_threshold, verbose=verbose,
                                       starting_params=np.load(save_path+".npy"),
@@ -839,14 +865,17 @@ if "norm" in models_to_fit:
                                               constraints=constraints_norm,
                                               xtol=xtol,
                                               ftol=ftol)
+                print("Norm iterfit completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Mean rsq>"+str(rsq_threshold)+": \
+                          "+str(gf_norm.iterative_search_params[gf_norm.rsq_mask, -1].mean()))
                 if crossvalidate:
                     gf_norm.crossvalidate_fit(tc_full_iso_nonzerovar_dict['tc_test'],
                                  test_stimulus=test_prf_stim)
+                    print("Norm Crossvalidation completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Mean rsq>"+str(rsq_threshold)+": "+str(gf_norm.iterative_search_params[gf_norm.rsq_mask, -1].mean()))
+
     
                 np.save(save_path, gf_norm.iterative_search_params)
     
-                print("Norm iterfit completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Mean rsq>"+str(rsq_threshold)+": \
-    "+str(gf_norm.iterative_search_params[gf_norm.rsq_mask, -1].mean()))
+
     
         elif os.path.exists(save_path+".npy") and refit_mode == "skip":
             gf_norm.iterative_search_params = np.load(save_path+".npy")
