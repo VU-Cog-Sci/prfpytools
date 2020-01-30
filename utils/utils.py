@@ -145,11 +145,8 @@ def prepare_data(subj,
                  fit_task):
 
     if fitting_space == 'fsaverage' or fitting_space == 'fsnative':
+        
         tc_dict = dd(lambda:dd(dict))
-        tc_full_iso_dict = {}
-        tc_full_iso_nonzerovar_dict = {}
-        if crossvalidate:
-            tc_full_iso_dict_test = {}
         
         for hemi in ['L', 'R']:
             for task_name in prf_stim.task_names:
@@ -157,11 +154,16 @@ def prepare_data(subj,
                 tc_paths = sorted(Path(opj(data_path,'fmriprep',subj)).glob(opj('**',subj+'_ses-*_task-'+task_name+'_run-*_space-'+fitting_space+'_hemi-'+hemi+'.func.gii')))
 
                 print("For task "+task_name+", hemisphere "+hemi+" of subject "+subj+", a total of "+str(len(tc_paths))+" runs were found.")
+                
+                if fit_runs is not None and fit_runs>=len(tc_paths):
+                    print(f"{fit_runs} fit_runs requested but only {len(tc_paths)} runs were found.")
+                    raise ValueError
 
                 if not crossvalidate or fit_task is not None:
-                    #if CV over tasks, or if no CV, can use all runs
+                    #if CV over tasks, or if no CV, use all runs
                     fit_runs = len(tc_paths)
-
+                
+                    
                 for tc_path in tc_paths:
                     tc_run = nb.load(str(tc_path))
     
@@ -178,10 +180,10 @@ def prepare_data(subj,
                         tc_task[-1] = tc_task[-1][...,:-2]
 
                 
-                tc_dict[hemi][task_name]['timecourse'] = np.median([run for run in tc_task[:fit_runs]], axis=0)
+                tc_dict[hemi][task_name]['timecourse'] = np.median(tc_task[:fit_runs], axis=0)
                 tc_dict[hemi][task_name]['baseline'] = np.median(tc_dict[hemi][task_name]['timecourse'][...,prf_stim.late_iso_dict[task_name]],
                                                    axis=-1)
-            
+   
             if crossvalidate:
                 for task_name in test_prf_stim.task_names:                          
                     tc_task = []
@@ -193,7 +195,7 @@ def prepare_data(subj,
                         #if CV is over tasks, can use all runs for test data
                         fit_runs = 0
     
-                    for tc_path in tc_paths:
+                    for tc_path in tc_paths[fit_runs:]:
                         tc_run = nb.load(str(tc_path))
         
                         tc_task.append(sgfilter_predictions(np.array([arr.data for arr in tc_run.darrays]).T[...,discard_volumes:],
@@ -209,11 +211,11 @@ def prepare_data(subj,
                             tc_task[-1] = tc_task[-1][...,:-2]
     
                     
-                    tc_dict[hemi][task_name]['timecourse_test'] = np.median([run for run in tc_task[fit_runs:]], axis=0)
+                    tc_dict[hemi][task_name]['timecourse_test'] = np.median(tc_task, axis=0)
                     tc_dict[hemi][task_name]['baseline_test'] = np.median(tc_dict[hemi][task_name]['timecourse_test'][...,test_prf_stim.late_iso_dict[task_name]],
                                                        axis=-1)
 
-
+        
             #shift timeseries so they have the same average value in proper baseline periods across conditions
             iso_full = np.median([tc_dict[hemi][task_name]['baseline'] for task_name in prf_stim.task_names], axis=0)
     
@@ -221,7 +223,7 @@ def prepare_data(subj,
                 iso_diff = iso_full - tc_dict[hemi][task_name]['baseline']
                 tc_dict[hemi][task_name]['timecourse'] += iso_diff[...,np.newaxis]
                
-            tc_full_iso_dict[hemi]=np.concatenate(tuple([tc_dict[hemi][task_name]['timecourse'] for task_name in prf_stim.task_names]), axis=-1)
+            tc_dict[hemi]['full_iso']=np.concatenate(tuple([tc_dict[hemi][task_name]['timecourse'] for task_name in prf_stim.task_names]), axis=-1)
 
             if crossvalidate:
                 iso_full_test = np.median([tc_dict[hemi][task_name]['baseline_test'] for task_name in test_prf_stim.task_names], axis=0)
@@ -230,25 +232,26 @@ def prepare_data(subj,
                     iso_diff_test = iso_full_test - tc_dict[hemi][task_name]['baseline_test']
                     tc_dict[hemi][task_name]['timecourse_test'] += iso_diff_test[...,np.newaxis]
                    
-                tc_full_iso_dict_test[hemi]=np.concatenate(tuple([tc_dict[hemi][task_name]['timecourse_test'] for task_name in test_prf_stim.task_names]), axis=-1)
+                tc_dict[hemi]['full_iso_test']=np.concatenate(tuple([tc_dict[hemi][task_name]['timecourse_test'] for task_name in test_prf_stim.task_names]), axis=-1)
 
 
-        tc_full_iso = np.concatenate((tc_full_iso_dict['L'], tc_full_iso_dict['R']), axis=0)
+        tc_full_iso = np.concatenate((tc_dict['L']['full_iso'], tc_dict['R']['full_iso']), axis=0)
         tc_mean = tc_full_iso.mean(-1)
 
         if crossvalidate:
-            tc_full_iso_test = np.concatenate((tc_full_iso_dict_test['L'], tc_full_iso_dict_test['R']), axis=0)
+            tc_full_iso_test = np.concatenate((tc_dict['L']['full_iso_test'], tc_dict['R']['full_iso_test']), axis=0)
             tc_mean_test = tc_full_iso_test.mean(-1)
 
         #masking flat or nearly flat timecourses
-        nonlow_var = (np.abs(tc_full_iso - tc_mean[...,np.newaxis]).max(-1) > tc_mean*min_percent_var/100) * tc_mean>0 * tc_mean_test>0
+        nonlow_var = (np.abs(tc_full_iso - tc_mean[...,np.newaxis]).max(-1) > (tc_mean*min_percent_var/100)) * (tc_mean>0) * (tc_mean_test>0)
 
         if roi_idx is not None:
             mask = roi_mask(roi_idx, nonlow_var)
         else:
             mask = nonlow_var
-
-        tc_full_iso_nonzerovar_dict['mask'] = mask
+            
+        tc_dict_combined = dict()
+        tc_dict_combined['mask'] = mask
 
         #conversion to +- of % of mean
         if data_scaling in ["psc", "percent_signal_change"]:
@@ -267,13 +270,13 @@ def prepare_data(subj,
 
         order = np.random.permutation(tc_full_iso_nonzerovar.shape[0])
 
-        tc_full_iso_nonzerovar_dict['order'] = order
+        tc_dict_combined['order'] = order
 
-        tc_full_iso_nonzerovar_dict['tc'] = tc_full_iso_nonzerovar[order]
+        tc_dict_combined['tc'] = tc_full_iso_nonzerovar[order]
         if crossvalidate:
-            tc_full_iso_nonzerovar_dict['tc_test'] = tc_full_iso_nonzerovar_test[order]
-
-        return tc_full_iso_nonzerovar_dict
+            tc_dict_combined['tc_test'] = tc_full_iso_nonzerovar_test[order]
+            
+        return tc_dict_combined
 
     else:
 

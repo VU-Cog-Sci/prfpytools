@@ -60,6 +60,7 @@ n_batches = analysis_info["n_batches"]
 fit_hrf = analysis_info["fit_hrf"]
 
 crossvalidate = analysis_info["crossvalidate"]
+
 if crossvalidate and "fit_task" in analysis_info and "fit_runs" in analysis_info:
     print("Can only specify one between fit_task and fit_runs for crossvalidation.")
     raise IOError
