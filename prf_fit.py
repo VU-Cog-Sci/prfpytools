@@ -446,8 +446,9 @@ if "grid_data_path" not in analysis_info and "gauss_iterparams_path" not in anal
                 verbose=verbose,
                 n_batches=n_batches,
                 pos_prfs_only=pos_prfs_only)
-        print("Gaussian gridfit completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+\
-          ". voxels/vertices above "+str(rsq_threshold)+": "+str(np.sum(gf.gridsearch_params[:, -1]>rsq_threshold)))
+        print("Gaussian gridfit completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+
+          ". voxels/vertices above "+str(rsq_threshold)+": "+str(np.sum(gf.gridsearch_params[:, -1]>rsq_threshold))+" out of "+
+          str(gf.data.shape[0]))
         print("Mean rsq>"+str(rsq_threshold)+": "+str(gf.gridsearch_params[gf.gridsearch_params[:, -1]>rsq_threshold, -1].mean()))
 
         np.save(save_path, gf.gridsearch_params)
