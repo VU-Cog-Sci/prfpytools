@@ -91,7 +91,7 @@ normalize_RFs = analysis_info["normalize_RFs"]
 surround_sigma_larger_than_centre = analysis_info["surround_sigma_larger_than_centre"]
 positive_centre_only = analysis_info["positive_centre_only"]
 
-param_constraints = surround_sigma_larger_than_centre or surround_sigma_larger_than_centre
+param_constraints = surround_sigma_larger_than_centre or positive_centre_only
 
 n_chunks = analysis_info["n_chunks"]
 refit_mode = analysis_info["refit_mode"].lower()
@@ -260,6 +260,7 @@ else:
             tc_full_iso_nonzerovar_dict = {}
             tc_full_iso_nonzerovar_dict['tc'] = np.load(opj(data_path, subj+"_timecourse_space-"+fitting_space+".npy"))
             if crossvalidate:
+                print("Using test-time series from: "+opj(data_path, subj+"_timecourse-test_space-"+fitting_space+".npy"))
                 tc_full_iso_nonzerovar_dict['tc_test'] = np.load(opj(data_path, subj+"_timecourse-test_space-"+fitting_space+".npy"))
 
 
