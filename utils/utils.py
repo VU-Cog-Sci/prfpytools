@@ -164,7 +164,7 @@ def prepare_data(subj,
                     fit_runs = len(tc_paths)
                 
                     
-                for tc_path in tc_paths:
+                for tc_path in tc_paths[:fit_runs]:
                     tc_run = nb.load(str(tc_path))
     
                     tc_task.append(sgfilter_predictions(np.array([arr.data for arr in tc_run.darrays]).T[...,discard_volumes:],
@@ -180,7 +180,7 @@ def prepare_data(subj,
                         tc_task[-1] = tc_task[-1][...,:-2]
 
                 
-                tc_dict[hemi][task_name]['timecourse'] = np.median(tc_task[:fit_runs], axis=0)
+                tc_dict[hemi][task_name]['timecourse'] = np.median(tc_task, axis=0)
                 tc_dict[hemi][task_name]['baseline'] = np.median(tc_dict[hemi][task_name]['timecourse'][...,prf_stim.late_iso_dict[task_name]],
                                                    axis=-1)
    
@@ -282,7 +282,6 @@ def prepare_data(subj,
 
         #############preparing the data (VOLUME FITTING)
         tc_dict=dd(dict)
-        tc_full_iso_nonzerovar_dict = {}
 
         #create a single brain mask in BOLD space
         brain_masks = []
@@ -304,10 +303,15 @@ def prepare_data(subj,
 
             print("For task "+task_name+", of subject "+subj+", a total of "+str(len(tc_paths))+" runs were found.")
 
+            if fit_runs is not None and fit_runs>=len(tc_paths):
+                print(f"{fit_runs} fit_runs requested but only {len(tc_paths)} runs were found.")
+                raise ValueError
+
             if not crossvalidate or fit_task is not None:
+                #if CV over tasks, or if no CV, use all runs
                 fit_runs = len(tc_paths)
 
-            for tc_path in tc_paths:
+            for tc_path in tc_paths[:fit_runs]:
                 tc_run = nb.load(str(tc_path)).get_data()[...,discard_volumes:]
     
                 tc_task.append(sgfilter_predictions(np.reshape(tc_run,(-1, tc_run.shape[-1])),
@@ -323,7 +327,7 @@ def prepare_data(subj,
                     tc_task[-1] = tc_task[-1][...,:-2]
     
     
-            tc_dict[task_name]['timecourse'] = np.median([run for run in tc_task[:fit_runs]], axis=0)
+            tc_dict[task_name]['timecourse'] = np.median(tc_task, axis=0)
             tc_dict[task_name]['baseline'] = np.median(tc_dict[task_name]['timecourse'][...,prf_stim.late_iso_dict[task_name]],
                                                    axis=-1)
 
@@ -335,9 +339,10 @@ def prepare_data(subj,
                 print("For task "+task_name+", of subject "+subj+", a total of "+str(len(tc_paths))+" runs were found.")
 
                 if fit_task is not None:
+                    #if CV is over tasks, can use all runs for test data
                     fit_runs = 0
                     
-                for tc_path in tc_paths:
+                for tc_path in tc_paths[fit_runs:]:
                     tc_run = nb.load(str(tc_path)).get_data()[...,discard_volumes:]
         
                     tc_task.append(sgfilter_predictions(np.reshape(tc_run,(-1, tc_run.shape[-1])),
@@ -353,7 +358,7 @@ def prepare_data(subj,
                         tc_task[-1] = tc_task[-1][...,:-2]                
                     
                     
-                tc_dict[task_name]['timecourse_test'] = np.median([run for run in tc_task[fit_runs:]], axis=0)
+                tc_dict[task_name]['timecourse_test'] = np.median(tc_task, axis=0)
                 tc_dict[task_name]['baseline_test'] = np.median(tc_dict[task_name]['timecourse_test'][...,test_prf_stim.late_iso_dict[task_name]],
                                                axis=-1)
 
@@ -379,15 +384,17 @@ def prepare_data(subj,
 
         #mask flat or nearly flat timecourses
         nonlow_var = np.reshape(combined_brain_mask, tc_full_iso.shape[0]) * \
-            (np.abs(tc_full_iso - tc_mean[...,np.newaxis]).max(-1) > tc_mean*min_percent_var/100) \
-                * tc_mean>0 * tc_mean_test>0
+            (np.abs(tc_full_iso - tc_mean[...,np.newaxis]).max(-1) > (tc_mean*min_percent_var/100)) \
+                * (tc_mean>0) * (tc_mean_test>0)
 
         if roi_idx is not None:
             mask = roi_mask(roi_idx, nonlow_var)
         else:
             mask = nonlow_var
-
-        tc_full_iso_nonzerovar_dict['mask'] = np.reshape(mask, combined_brain_mask.shape)
+            
+        tc_dict_combined = dict()
+        
+        tc_dict_combined['mask'] = np.reshape(mask, combined_brain_mask.shape)
 
         #conversion to +- of % of mean
         if data_scaling in ["psc", "percent_signal_change"]:
@@ -406,13 +413,13 @@ def prepare_data(subj,
 
         order = np.random.permutation(tc_full_iso_nonzerovar.shape[0])
 
-        tc_full_iso_nonzerovar_dict['order'] = order
+        tc_dict_combined['order'] = order
 
-        tc_full_iso_nonzerovar_dict['tc'] = tc_full_iso_nonzerovar[order]
+        tc_dict_combined['tc'] = tc_full_iso_nonzerovar[order]
         if crossvalidate:
-            tc_full_iso_nonzerovar_dict['tc_test'] = tc_full_iso_nonzerovar_test[order]
+            tc_dict_combined['tc_test'] = tc_full_iso_nonzerovar_test[order]
 
-        return tc_full_iso_nonzerovar_dict
+        return tc_dict_combined
 
 
 def create_retinotopy_colormaps():
