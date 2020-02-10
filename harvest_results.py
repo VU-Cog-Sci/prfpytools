@@ -41,6 +41,7 @@ rsq_threshold = analysis_info["rsq_threshold"]
 models_to_fit = analysis_info["models_to_fit"]
 n_batches = analysis_info["n_batches"]
 fit_hrf = analysis_info["fit_hrf"]
+crossvalidate = analysis_info["crossvalidate"]
 
 dm_edges_clipping = analysis_info["dm_edges_clipping"]
 baseline_volumes_begin_end = analysis_info["baseline_volumes_begin_end"]
@@ -142,6 +143,9 @@ if len(sys.argv)>3:
     cp(mask_path, mask_path.replace('scratch-shared', 'home'))
     tc_path=opj(data_path,  subj+"_timecourse_space-"+fitting_space+".npy")
     cp(tc_path, tc_path.replace('scratch-shared', 'home'))
+    if crossvalidate:
+        tc_test_path=opj(data_path,  subj+"_timecourse-test_space-"+fitting_space+".npy")
+        cp(tc_test_path, tc_test_path.replace('scratch-shared', 'home'))
 
 print("harvest completed")
 
