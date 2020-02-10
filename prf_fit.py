@@ -347,23 +347,22 @@ elif norm_model_variant == "abc":
                    (eps, 4*ss),  # surround size
                    (0, +inf),  # neural baseline
                    (1, 1)]  # surround baseline
-
-elif norm_model_variant == "ab":
-    surround_amplitude_grid=np.array([1], dtype='float32')
-    surround_size_grid=np.array([2,3,4,5,6,8,10,20], dtype='float32')
-    neural_baseline_grid=np.array([0,0.1,0.5,1,2,4,8,10,20,100], dtype='float32')
-    surround_baseline_grid=np.array([1], dtype='float32')
+        
+elif norm_model_variant == "acd":
+    surround_amplitude_grid=np.array([0,0.05,0.2,1,2,5,10], dtype='float32')
+    surround_size_grid=np.array([2,3,4,6,10,15], dtype='float32')
+    neural_baseline_grid=np.array([1], dtype='float32')
+    surround_baseline_grid=np.array([0.1,1.0,10.0,100.0], dtype='float32')
     if param_bounds:
         norm_bounds = [(-2*ss, 2*ss),  # x
                    (-2*ss, 2*ss),  # y
                    (eps, 2*ss),  # prf size
                    (0, +inf),  # prf amplitude
                    (0, +inf),  # bold baseline
-                   (1, 1),  # surround amplitude
+                   (-inf, +inf),  # surround amplitude allow negative stuff
                    (eps, 4*ss),  # surround size
-                   (0, +inf),  # neural baseline
-                   (1, 1)]  # surround baseline
-
+                   (1, 1),  # neural baseline
+                   (1e-6, +inf)]  # surround baseline
 
 
 #this ensures that all models use the same optimizer, even if only some

@@ -34,6 +34,7 @@ def create_dm_from_screenshots(screenshot_path,
             offset = int((img.shape[1]-img.shape[0])/2)
             img = img[:, offset:(offset+img.shape[0])]
 
+
         # downsample
         downsampling_constant = int(img.shape[1]/n_pix)
         downsampled_img = img[::downsampling_constant, ::downsampling_constant]
@@ -550,7 +551,7 @@ def fwhmax_fwatmin(model, params, normalize_RFs=False, return_profiles=False):
         return result
 
 
-def combine_results(subj, fitting_space, results_folder, suffix_list, normalize_RFs=False):
+def combine_results(subj, fitting_space, results_folder, raw_timecourse_path, suffix_list, normalize_RFs=False):
     mask = np.load(opj(results_folder, subj+'_mask_space-'+fitting_space+'.npy'))
     for i, suffix in enumerate(suffix_list):
         if i == 0:
@@ -631,23 +632,27 @@ def combine_results(subj, fitting_space, results_folder, suffix_list, normalize_
             except Exception as e:
                 print(e)
                 pass
-
-    tc_stats = dict()
-    tc_raw = np.load(opj(results_folder, subj+'_timecourse_space-'+fitting_space+'.npy'))
-
+    
+    raw_tc_stats = dict()
+    tc_raw = np.load(raw_timecourse_path)
+    
+    tc_mean = tc_raw.mean(-1)
     tc_mean_full = np.zeros(mask.shape)
-    tc_mean_full[mask] = tc_raw.mean(-1)
-    tc_stats['Mean'] = tc_mean_full
-
+    tc_mean_full[mask] = tc_mean
+    raw_tc_stats['Mean'] = tc_mean_full
+    
+    tc_var = tc_raw.var(-1)
     tc_var_full = np.zeros(mask.shape)
-    tc_var_full[mask] = tc_raw.var(-1)
-    tc_stats['Variance'] = tc_var_full
-
-    tc_stats['TSNR'] = tc_mean_full/np.sqrt(tc_var_full)
+    tc_var_full[mask] = tc_var
+    raw_tc_stats['Variance'] = tc_var_full
+    
+    tc_tsnr_full = np.zeros(mask.shape)
+    tc_tsnr_full[mask] = tc_mean/np.sqrt(tc_var)
+    raw_tc_stats['TSNR'] = tc_tsnr_full
 
     return {'Gauss grid':gauss_grid, 'Norm grid':norm_grid, 'Gauss':gauss,
             'CSS':css, 'DoG':dog, 'Norm':norm,
-            'mask':mask, 'normalize_RFs':normalize_RFs, 'Timecourse Stats':tc_stats}
+            'mask':mask, 'normalize_RFs':normalize_RFs, 'Timecourse Stats':raw_tc_stats}
 
 def process_results(results_dict, return_norm_profiles):
     for k, v in results_dict.items():
@@ -666,8 +671,8 @@ def process_results(results_dict, return_norm_profiles):
 
                     processed_results['RSq'][k2][mask] = v2[:,-1]
                     processed_results['Eccentricity'][k2][mask] = np.sqrt(v2[:,0]**2+v2[:,1]**2)
-                    #note that this takes into account the swapped axes in prfpy (which was fixed on )
-                    processed_results['Polar Angle'][k2][mask] = np.arctan2(-v2[:,0], v2[:,1])
+                    #note that this will be flipped LR for old prfpy results
+                    processed_results['Polar Angle'][k2][mask] = np.arctan2(v2[:,1], v2[:,0])
                     processed_results['Amplitude'][k2][mask] = v2[:,3]
 
                     if k2 == 'CSS':
@@ -684,9 +689,9 @@ def process_results(results_dict, return_norm_profiles):
 
                         if return_norm_profiles:
                             processed_results['pRF Profiles'][k2] = np.zeros((mask.shape[0],1000))
-                            (processed_results['Size (fwhmax)'][k2][mask],
+                            ((processed_results['Size (fwhmax)'][k2][mask],
                             processed_results['Surround Size (fwatmin)'][k2][mask]),
-                            processed_results['pRF Profiles'][k2][mask] = fwhmax_fwatmin(k2, v2, normalize_RFs, True)
+                            processed_results['pRF Profiles'][k2][mask]) = fwhmax_fwatmin(k2, v2, normalize_RFs, True)
                         else:
                             (processed_results['Size (fwhmax)'][k2][mask],
                             processed_results['Surround Size (fwatmin)'][k2][mask]) = fwhmax_fwatmin(k2, v2, normalize_RFs, False)
