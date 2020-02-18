@@ -8,11 +8,13 @@ import nibabel as nb
 from collections import defaultdict as dd
 from pathlib import Path
 import matplotlib.image as mpimg
+import time
 
 opj = os.path.join
 
 from prfpy.timecourse import sgfilter_predictions
 from prfpy.stimulus import PRFStimulus2D
+from nibabel.freesurfer.io import read_morph_data, write_morph_data
 
 
 def create_dm_from_screenshots(screenshot_path,
@@ -140,6 +142,7 @@ def prepare_data(subj,
                  fitting_space,
                  data_scaling,
                  roi_idx,
+                 save_raw_timecourse,
                  
                  crossvalidate,
                  fit_runs,
@@ -268,7 +271,12 @@ def prepare_data(subj,
             tc_full_iso_nonzerovar = tc_full_iso[mask]
             if crossvalidate:
                 tc_full_iso_nonzerovar_test = tc_full_iso_test[mask]
-
+        
+        if save_raw_timecourse:
+            np.save(opj(data_path,'prfpy',subj+"_timecourse-raw_space-"+fitting_space+".npy"),tc_full_iso[mask])
+            if crossvalidate:
+                np.save(opj(data_path,'prfpy',subj+"_timecourse-test-raw_space-"+fitting_space+".npy"),tc_full_iso_test[mask])
+                
         order = np.random.permutation(tc_full_iso_nonzerovar.shape[0])
 
         tc_dict_combined['order'] = order
@@ -412,6 +420,11 @@ def prepare_data(subj,
             if crossvalidate:
                 tc_full_iso_nonzerovar_test = tc_full_iso_test[mask]
 
+        if save_raw_timecourse:
+            np.save(opj(data_path,'prfpy',subj+"_timecourse-raw_space-"+fitting_space+".npy"),tc_full_iso[mask])
+            if crossvalidate:
+                np.save(opj(data_path,'prfpy',subj+"_timecourse-test-raw_space-"+fitting_space+".npy"),tc_full_iso_test[mask])
+                
         order = np.random.permutation(tc_full_iso_nonzerovar.shape[0])
 
         tc_dict_combined['order'] = order
@@ -492,6 +505,8 @@ def roi_mask(roi, array):
     masked_array = array * array_2
     return masked_array
 
+
+
 def fwhmax_fwatmin(model, params, normalize_RFs=False, return_profiles=False):
     model = model.lower()
     x=np.linspace(-50,50,1000).astype('float32')
@@ -551,7 +566,8 @@ def fwhmax_fwatmin(model, params, normalize_RFs=False, return_profiles=False):
         return result
 
 
-def combine_results(subj, fitting_space, results_folder, raw_timecourse_path, suffix_list, normalize_RFs=False):
+def combine_results(subj, fitting_space, results_folder, suffix_list, 
+                    raw_timecourse_path=None, normalize_RFs=False, ref_img_path=None):
     mask = np.load(opj(results_folder, subj+'_mask_space-'+fitting_space+'.npy'))
     for i, suffix in enumerate(suffix_list):
         if i == 0:
@@ -632,27 +648,30 @@ def combine_results(subj, fitting_space, results_folder, raw_timecourse_path, su
             except Exception as e:
                 print(e)
                 pass
-    
     raw_tc_stats = dict()
-    tc_raw = np.load(raw_timecourse_path)
+    if raw_timecourse_path is not None:
+        
+        tc_raw = np.load(raw_timecourse_path)
+        
+        tc_mean = tc_raw.mean(-1)
+        tc_mean_full = np.zeros(mask.shape)
+        tc_mean_full[mask] = tc_mean
+        raw_tc_stats['Mean'] = tc_mean_full
+        
+        tc_var = tc_raw.var(-1)
+        tc_var_full = np.zeros(mask.shape)
+        tc_var_full[mask] = tc_var
+        raw_tc_stats['Variance'] = tc_var_full
+        
+        tc_tsnr_full = np.zeros(mask.shape)
+        tc_tsnr_full[mask] = tc_mean/np.sqrt(tc_var)
+        raw_tc_stats['TSNR'] = tc_tsnr_full
     
-    tc_mean = tc_raw.mean(-1)
-    tc_mean_full = np.zeros(mask.shape)
-    tc_mean_full[mask] = tc_mean
-    raw_tc_stats['Mean'] = tc_mean_full
-    
-    tc_var = tc_raw.var(-1)
-    tc_var_full = np.zeros(mask.shape)
-    tc_var_full[mask] = tc_var
-    raw_tc_stats['Variance'] = tc_var_full
-    
-    tc_tsnr_full = np.zeros(mask.shape)
-    tc_tsnr_full[mask] = tc_mean/np.sqrt(tc_var)
-    raw_tc_stats['TSNR'] = tc_tsnr_full
-
     return {'Gauss grid':gauss_grid, 'Norm grid':norm_grid, 'Gauss':gauss,
             'CSS':css, 'DoG':dog, 'Norm':norm,
-            'mask':mask, 'normalize_RFs':normalize_RFs, 'Timecourse Stats':raw_tc_stats}
+            'mask':mask, 'normalize_RFs':normalize_RFs, 
+            'Timecourse Stats':raw_tc_stats, 'ref_img_path':ref_img_path}
+
 
 def process_results(results_dict, return_norm_profiles):
     for k, v in results_dict.items():
@@ -671,7 +690,6 @@ def process_results(results_dict, return_norm_profiles):
 
                     processed_results['RSq'][k2][mask] = v2[:,-1]
                     processed_results['Eccentricity'][k2][mask] = np.sqrt(v2[:,0]**2+v2[:,1]**2)
-                    #note that this will be flipped LR for old prfpy results
                     processed_results['Polar Angle'][k2][mask] = np.arctan2(v2[:,1], v2[:,0])
                     processed_results['Amplitude'][k2][mask] = v2[:,3]
 
@@ -687,7 +705,7 @@ def process_results(results_dict, return_norm_profiles):
                         processed_results['Norm Param. D'][k2][mask] = v2[:,8]
                         processed_results['Ratio (B/D)'][k2][mask] = v2[:,7]/v2[:,8]
 
-                        if return_norm_profiles:
+                        if return_norm_profiles and len(mask.shape)<2:
                             processed_results['pRF Profiles'][k2] = np.zeros((mask.shape[0],1000))
                             ((processed_results['Size (fwhmax)'][k2][mask],
                             processed_results['Surround Size (fwatmin)'][k2][mask]),
@@ -698,8 +716,11 @@ def process_results(results_dict, return_norm_profiles):
 
                     else:
                         processed_results['Size (fwhmax)'][k2][mask] = fwhmax_fwatmin(k2, v2, normalize_RFs)
+                elif 'Stats' in k2:
+                    v[k2] = v['Results'][k2]
+                    
 
-            v['Processed results'] = {ke : dict(va) for ke, va in processed_results.items()}
+            v['Processed Results'] = {ke : dict(va) for ke, va in processed_results.items()}
 
 
 def get_subjects(main_dict,subject_list = []):
@@ -710,3 +731,313 @@ def get_subjects(main_dict,subject_list = []):
             if k not in subject_list:
                 subject_list.append(k)
     return subject_list
+
+
+class visualize_results(object):
+    def __init__(self):
+        self.main_dict = dd(lambda:dd(lambda:dd(dict)))
+        
+    def transfer_parse_labels(self, fs_dir):
+        self.idx_rois = dd(dict)
+        for subj in self.subjects:
+            if self.transfer_rois:
+                src_subject='fsaverage'
+            else:
+                src_subject=subj
+                    
+            self.fs_dir = fs_dir
+        
+            wang_rois = ["V1v", "V1d", "V2v", "V2d", "V3v", "V3d", "hV4", "VO1", "VO2", "PHC1", "PHC2",
+                "TO2", "TO1", "LO2", "LO1", "V3B", "V3A", "IPS0", "IPS1", "IPS2", "IPS3", "IPS4", 
+                "IPS5", "SPL1", "FEF"]
+            for roi in wang_rois:
+                try:
+                    self.idx_rois[subj][roi], _ = cortex.freesurfer.get_label(subject=subj,
+                                                          label='wang2015atlas.'+roi,
+                                                          fs_dir=self.fs_dir,
+                                                          src_subject=src_subject)
+                except Exception as e:
+                    print(e)
+        
+            self.idx_rois[subj]['visual_system'] = np.concatenate(tuple([self.idx_rois[subj][roi] for roi in self.idx_rois[subj]]), axis=0)
+            self.idx_rois[subj]['V1']=np.concatenate((self.idx_rois[subj]['V1v'],self.idx_rois[subj]['V1d']))
+            self.idx_rois[subj]['V2']=np.concatenate((self.idx_rois[subj]['V2v'],self.idx_rois[subj]['V2d']))
+            self.idx_rois[subj]['V3']=np.concatenate((self.idx_rois[subj]['V3v'],self.idx_rois[subj]['V3d']))
+        
+            #parse custom ROIs if they have been created
+            for roi in ['custom.V1','custom.V2','custom.V3']:
+                try:
+                    self.idx_rois[subj][roi], _ = cortex.freesurfer.get_label(subject=subj,
+                                                          label=roi,
+                                                          fs_dir=self.fs_dir,
+                                                          src_subject=subj)
+                except Exception as e:
+                    print(e)
+                    pass
+                
+            #For ROI-based fitting
+            if self.output_custom_V1V2V3:
+                V1V2V3 = np.concatenate((self.idx_rois['custom.V1'],self.idx_rois['custom.V2'],self.idx_rois['custom.V3']))
+                np.save('/Users/marcoaqil/PRFMapping/PRFMapping-Deriv-hires/prfpy/'+subj+'_roi-V1V2V3.npy', V1V2V3)
+        
+    def pycortex_plots(self):        
+          
+        for space, space_res in self.main_dict.items():
+            if 'fs' in space:
+                plotted_rois = dd(lambda:False)
+                plotted_stats = dd(lambda:False)
+                for analysis, analysis_res in space_res.items():       
+                    for subj, subj_res in analysis_res.items():
+                        
+                        if subj not in cortex.db.subjects:
+                            cortex.freesurfer.import_subj(subj, freesurfer_subject_dir=self.fs_dir, 
+                                  whitematter_surf='smoothwm')
+                        
+                        p_r = subj_res['Processed Results']
+    
+                        tc_stats = subj_res['Timecourse Stats']
+                        mask = subj_res['Results']['mask']
+                        models = p_r['RSq'].keys()
+                        
+                        #######Raw bold timecourse vein threshold
+                        if subj == 'sub-006':
+                            tc_min = 45000
+                        elif subj == 'sub-007':
+                            tc_min = 35000
+                        elif subj == 'sub-001':
+                            tc_min = 35000
+                            
+                        ######limits for eccentricity
+                        ecc_min=0.3
+                        ecc_max=3.0
+                        ######max prf size
+                        w_max = 90
+                        
+                        #housekeeping
+                        rsq = np.vstack(tuple([elem for _,elem in p_r['RSq'].items()])).T
+                        ecc = np.vstack(tuple([elem for _,elem in p_r['Eccentricity'].items()])).T
+                        polar = np.vstack(tuple([elem for _,elem in p_r['Polar Angle'].items()])).T
+                        amp = np.vstack(tuple([elem for _,elem in p_r['Amplitude'].items()])).T
+                        fw_hmax = np.vstack(tuple([elem for _,elem in p_r['Size (fwhmax)'].items()])).T
+            
+                        #alpha dictionary
+                        p_r['Alpha'] = {}          
+                        p_r['Alpha']['all'] = rsq.max(-1) * (ecc.max(-1)<ecc_max) * (ecc.min(-1)>ecc_min) * (amp.min(-1)>0) * (tc_stats['Mean']>tc_min) * (fw_hmax.min(-1)<w_max)
+                        
+                        for model in models:
+                            p_r['Alpha'][model] = p_r['RSq'][model] * (p_r['Eccentricity'][model]>ecc_min) * (p_r['Eccentricity'][model]<ecc_max) *(p_r['Amplitude'][model]>0) * (tc_stats['Mean']>tc_min) * (p_r['Size (fwhmax)'][model]<w_max)
+                       
+                        if self.only_roi is not None:
+                            for key in p_r['Alpha']:
+                                p_r['Alpha'][key] = roi_mask(self.idx_rois[subj][self.only_roi], p_r['Alpha'][key])
+                                         
+                        ##START PYCORTEX VISUALIZATIONS
+                        #data quality/stats cortex visualization 
+                        if space == 'fsnative' and self.plot_stats_cortex and not plotted_stats[subj] :
+                            mean_ts_vert = cortex.Vertex2D(tc_stats['Mean'], mask*(tc_stats['Mean']>tc_min), subject=subj, cmap='Jet_2D_alpha')
+                            var_ts_vert = cortex.Vertex2D(tc_stats['Variance'], mask*(tc_stats['Mean']>tc_min), subject=subj, cmap='Jet_2D_alpha')
+                            tsnr_vert = cortex.Vertex2D(tc_stats['TSNR'], mask*(tc_stats['Mean']>tc_min), subject=subj, cmap='Jet_2D_alpha')
+            
+                            data_stats ={'mean':mean_ts_vert.raw, 'var':var_ts_vert.raw, 'tsnr':tsnr_vert.raw}
+            
+                            self.js_handle_stats = cortex.webgl.show(data_stats, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)
+            
+                            plotted_stats[subj] = True
+                        
+                        if self.plot_rois_cortex and not plotted_rois[subj]:
+                            
+                            ds_rois = {}
+                            data = np.zeros_like(mask)
+            
+                            for i, roi in enumerate(self.idx_rois[subj]):
+            
+                                roi_data = np.zeros_like(mask)
+                                roi_data[self.idx_rois[subj][roi]] = 1
+                                data[self.idx_rois[subj][roi]] = i+1
+                                ds_rois[roi] = cortex.Vertex2D(roi_data, roi_data.astype('bool'), subj, cmap='RdBu_r_alpha').raw
+            
+                                #need a correctly flattened brain to do this
+                                #cortex.add_roi(ds_rois[roi], name=roi, open_inkscape=False, add_path=True)
+            
+                            ds_rois['Wang2015Atlas'] = cortex.Vertex2D(data, data.astype('bool'), subj, cmap='Retinotopy_HSV_alpha').raw
+                            self.js_handle_rois = cortex.webgl.show(ds_rois, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)
+            
+                            plotted_rois[subj] = True
+                                                    
+                        #output freesurefer-format polar angle maps to draw custom ROIs in freeview    
+                        if self.output_freesurfer_polar_maps:
+                                          
+                            lh_c = read_morph_data(opj(self.fs_dir, subj+'/surf/lh.curv'))
+            
+                            polar_freeview = np.median(polar, axis=-1)
+            
+                            alpha_freeview = rsq.max(-1) * (amp.min(-1)>0) * (tc_stats['Mean']>tc_min) #* (ecc.max(-1)<ecc_max) * (ecc.min(-1)>ecc_min)
+            
+                            polar_freeview[alpha_freeview<0.2] = -10
+            
+                            write_morph_data(opj(self.fs_dir, subj+'/surf/lh.polar')
+                                                                   ,polar_freeview[:lh_c.shape[0]])
+                            write_morph_data(opj(self.fs_dir, subj+'/surf/rh.polar')
+                                                                   ,polar_freeview[lh_c.shape[0]:])
+                            
+            
+                        if self.plot_rsq_cortex:              
+                            ds_rsq = {}
+                            if 'CSS' and 'Gauss' in models:
+                                ds_rsq['CSS - Gauss'] = cortex.Vertex2D(p_r['RSq']['CSS']-p_r['RSq']['Gauss'], p_r['Alpha']['all'], subject=subj,
+                                                                          vmin=0, vmax=0.1, vmin2=0.3, vmax2=0.6, cmap='Jet_2D_alpha').raw                
+                            if 'DoG' and 'Gauss' in models:
+                                ds_rsq['DoG - Gauss'] = cortex.Vertex2D(p_r['RSq']['DoG']-p_r['RSq']['Gauss'], p_r['Alpha']['all'], subject=subj,
+                                                                      vmin=-0.02, vmax=0.02, vmin2=0.3, vmax2=0.6, cmap='Jet_2D_alpha').raw
+                            if 'Norm' and 'Gauss' in models:
+                                ds_rsq['Norm - Gauss'] = cortex.Vertex2D(p_r['RSq']['Norm']-p_r['RSq']['Gauss'], p_r['Alpha']['all'], subject=subj,
+                                                                      vmin=0, vmax=0.1, vmin2=0.3, vmax2=0.6, cmap='Jet_2D_alpha').raw
+                            if 'Norm' and 'DoG' in models:
+                                ds_rsq['Norm - DoG'] = cortex.Vertex2D(p_r['RSq']['Norm']-p_r['RSq']['DoG'], p_r['Alpha']['all'], subject=subj,
+                                                                      vmin=0, vmax=0.1, vmin2=0.3, vmax2=0.6, cmap='Jet_2D_alpha').raw
+                            if 'Norm' and 'CSS' in models:
+                                ds_rsq['Norm - CSS'] = cortex.Vertex2D(p_r['RSq']['Norm']-p_r['RSq']['CSS'], p_r['Alpha']['all'], subject=subj, 
+                                                                      vmin=-0.02, vmax=0.02, vmin2=0.3, vmax2=0.6, cmap='Jet_2D_alpha').raw
+                                
+                            if 'Processed Results' in self.main_dict['T1w'][analysis][subj]:
+                                ds_rsq_comp={}
+                                volume_rsq = self.main_dict['T1w'][analysis][subj]['Processed Results']['RSq']['Gauss']
+                                ref_img = nb.load(self.main_dict['T1w'][analysis][subj]['Results']['ref_img_path'])
+
+                                xfm_trans = cortex.xfm.Transform(np.identity(4), ref_img)
+                                xfm_trans.save(subj, 'func_space_transform')
+                                
+                                ds_rsq_comp['Gauss CV rsq (volume fit)'] = cortex.Volume2D(volume_rsq.T, volume_rsq.T, subj, 'func_space_transform',
+                                                                          vmin=0.2, vmax=0.6, vmin2=0.05, vmax2=0.2, cmap='Jet_2D_alpha').raw
+                                ds_rsq_comp['Gauss CV rsq (surface fit)'] = cortex.Vertex2D(p_r['RSq']['Gauss'], p_r['RSq']['Gauss'], subject=subj,
+                                                                          vmin=0.2, vmax=0.6, vmin2=0.05, vmax2=0.2, cmap='Jet_2D_alpha').raw
+                                self.js_handle_rsq_comp = cortex.webgl.show(ds_rsq_comp, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)
+
+                            self.js_handle_rsq = cortex.webgl.show(ds_rsq, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True) 
+                            
+                        if self.plot_ecc_cortex:
+                            ds_ecc = {}
+                            for model in models:
+                                ds_ecc[model] = cortex.Vertex2D(p_r['Eccentricity'][model], p_r['Alpha'][model], subject=subj, 
+                                                                vmin=ecc_min, vmax=ecc_max, vmin2=0.2, vmax2=0.6, cmap='Jet_r_2D_alpha').raw
+            
+                            self.js_handle_ecc = cortex.webgl.show(ds_ecc, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)
+            
+                        if self.plot_polar_cortex:
+                            ds_polar = {}
+                            for model in models:
+                                ds_polar[model] = cortex.Vertex2D(p_r['Polar Angle'][model], p_r['Alpha'][model], subject=subj, 
+                                                                  vmin2=0.2, vmax2=0.6, cmap='Retinotopy_HSV_2x_alpha').raw
+                
+                            self.js_handle_polar = cortex.webgl.show(ds_polar, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)
+            
+                        if self.plot_size_cortex:
+                            ds_size = {}
+                            for model in models:
+                                ds_size[model] = cortex.Vertex2D(p_r['Size (fwhmax)'][model], p_r['Alpha'][model], subject=subj, 
+                                                                 vmin=0, vmax=6, vmin2=0.2, vmax2=0.6, cmap='Jet_2D_alpha').raw
+                  
+                            self.js_handle_size = cortex.webgl.show(ds_size, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)
+            
+            
+                        if self.plot_amp_cortex:
+                            ds_amp = {}
+                            for model in models:
+                                ds_amp[model] = cortex.Vertex2D(p_r['Amplitude'][model], p_r['Alpha'][model], subject=subj, 
+                                                                vmin=-1, vmax=1, vmin2=0.2, vmax2=0.6, cmap='Jet_2D_alpha').raw
+            
+                            self.js_handle_amp = cortex.webgl.show(ds_amp, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)
+                            
+                        if self.plot_css_exp_cortex and 'CSS' in models:
+                            ds_css_exp = {}
+                            ds_css_exp['CSS Exponent'] = cortex.Vertex2D(p_r['CSS Exponent']['CSS'], p_r['Alpha']['CSS'], subject=subj, 
+                                                                         vmin=0, vmax=0.75, vmin2=0.2, vmax2=0.6, cmap='Jet_2D_alpha').raw
+            
+                            self.js_handle_css_exp = cortex.webgl.show(ds_css_exp, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)
+                            
+                        if self.plot_surround_size_cortex:
+                            ds_surround_size = {}
+                            if 'DoG' in models:
+                                ds_surround_size['DoG'] = cortex.Vertex2D(p_r['Surround Size (fwatmin)']['DoG'], p_r['Alpha']['DoG'], subject=subj, 
+                                                                         vmin=0, vmax=50, vmin2=0.2, vmax2=0.6, cmap='Jet_2D_alpha').raw
+                            if 'Norm' in models:
+                                ds_surround_size['Norm'] = cortex.Vertex2D(p_r['Surround Size (fwatmin)']['Norm'], p_r['Alpha']['Norm'], subject=subj, 
+                                                                         vmin=0, vmax=50, vmin2=0.2, vmax2=0.6, cmap='Jet_2D_alpha').raw                    
+            
+                            self.js_handle_surround_size = cortex.webgl.show(ds_surround_size, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)    
+                            
+                        if self.plot_norm_baselines_cortex and 'Norm' in models:
+                            ds_norm_baselines = {}
+                            ds_norm_baselines['Norm Param. B'] = cortex.Vertex2D(p_r['Norm Param. B']['Norm'], p_r['Alpha']['Norm'], subject=subj, 
+                                                                         vmin=0, vmax=50, vmin2=0.2, vmax2=0.6, cmap='Jet_2D_alpha').raw                    
+                            ds_norm_baselines['Norm Param. D'] = cortex.Vertex2D(p_r['Norm Param. D']['Norm'], p_r['Alpha']['Norm'], subject=subj, 
+                                                                         vmin=0, vmax=50, vmin2=0.2, vmax2=0.6, cmap='Jet_2D_alpha').raw
+                            ds_norm_baselines['Ratio (B/D)'] = cortex.Vertex2D(p_r['Ratio (B/D)']['Norm'], p_r['Alpha']['Norm'], subject=subj, 
+                                                                         vmin=0, vmax=50, vmin2=0.2, vmax2=0.6, cmap='Jet_2D_alpha').raw
+                            
+                            self.js_handle_norm_baselines = cortex.webgl.show(ds_norm_baselines, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)    
+                              
+    
+        
+    def save_pycortex_views(self, js_handle, base_str):
+        views = dict(dorsal=dict(radius=191, altitude=73, azimuth=178, pivot=0),
+                     medial=dict(radius=10, altitude=101, azimuth=359, pivot=167),
+                     lateral=dict(radius=277, altitude=90, azimuth=177, pivot=123),
+                     ventral=dict(radius=221, altitude=131, azimuth=175, pivot=0)
+                    )
+        
+        surfaces = dict(inflated=dict(unfold=1))#,
+                       # fiducial=dict(unfold=0.0))
+        
+        # select path for the generated images on disk
+        image_path = '/Users/marcoaqil/PRFMapping/Figures/'
+        
+        # pattern of the saved images names
+        file_pattern = "{base}_{view}_{surface}.png"
+        
+        # utility functions to set the different views
+        prefix = dict(altitude='camera.', azimuth='camera.',
+                      pivot='surface.{subject}.', radius='camera.', target='camera.',
+                      unfold='surface.{subject}.')
+        _tolists = lambda p: {prefix[k]+k:[v] for k,v in p.items()}
+        _combine = lambda a,b: ( lambda c: [c, c.update(b)][0] )(dict(a))
+        
+        
+        # Save images by iterating over the different views and surfaces
+        for view,vparams in views.items():
+            for surf,sparams in surfaces.items():
+                # Combine basic, view, and surface parameters
+                params = _combine(vparams, sparams)
+                # Set the view
+                print(params)
+                time.sleep(5)
+                js_handle._set_view(**_tolists(params))
+                time.sleep(5)
+                # Save image
+                filename = file_pattern.format(base=base_str, view=view, surface=surf)
+                output_path = os.path.join(image_path, filename)
+                js_handle.getImage(output_path, size =(3000, 2000))
+        
+                # the block below trims the edges of the image:
+                # wait for image to be written
+                while not os.path.exists(output_path):
+                    pass
+                time.sleep(0.5)
+                try:
+                    import subprocess
+                    subprocess.call(["convert", "-trim", output_path, output_path])
+                except:
+                    pass
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
