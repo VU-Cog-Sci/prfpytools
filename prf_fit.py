@@ -45,6 +45,7 @@ TR = analysis_info["TR"]
 task_names = analysis_info["task_names"]
 data_path = analysis_info["data_path"]
 fitting_space = analysis_info["fitting_space"]
+save_raw_timecourse = analysis_info["save_raw_timecourse"]
 
 window_length = analysis_info["window_length"]
 polyorder = analysis_info["polyorder"]
@@ -233,6 +234,7 @@ else:
                                                    fitting_space,
                                                    data_scaling,
                                                    roi_idx,
+                                                   save_raw_timecourse,
                                                    
                                                    crossvalidate,
                                                    fit_runs,

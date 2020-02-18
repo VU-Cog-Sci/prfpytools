@@ -139,13 +139,21 @@ cp(analysis_settings, analysis_settings.replace('scratch-shared', 'home').replac
 
 if len(sys.argv)>3:
     print("Grabbing timecourse and mask for this analysis...")
+    #mask is saved in original order so only need to copypaste
     mask_path=opj(data_path,  subj+"_mask_space-"+fitting_space+".npy")
     cp(mask_path, mask_path.replace('scratch-shared', 'home'))
+    ###fix this: these are saved in randomized order, so must take into account. like for models above
     tc_path=opj(data_path,  subj+"_timecourse_space-"+fitting_space+".npy")
-    cp(tc_path, tc_path.replace('scratch-shared', 'home'))
+    tc = np.load(tc_path)
+    tc_ordered = np.zeros_like(tc)
+    tc_ordered[order] = np.copy(tc)
+    np.save(tc_path.replace('scratch-shared', 'home'), tc_ordered)
     if crossvalidate:
         tc_test_path=opj(data_path,  subj+"_timecourse-test_space-"+fitting_space+".npy")
-        cp(tc_test_path, tc_test_path.replace('scratch-shared', 'home'))
+        tc_test = np.load(tc_test_path)
+        tc_test_ordered = np.zeros_like(tc_test)
+        tc_test_ordered[order] = np.copy(tc_test)
+        np.save(tc_test_path.replace('scratch-shared', 'home'), tc_test_ordered)
 
 print("harvest completed")
 
