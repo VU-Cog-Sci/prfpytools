@@ -59,6 +59,8 @@ rsq_threshold = analysis_info["rsq_threshold"]
 models_to_fit = analysis_info["models_to_fit"]
 n_batches = analysis_info["n_batches"]
 fit_hrf = analysis_info["fit_hrf"]
+fix_bold_baseline = analysis_info["fix_bold_baseline"]
+
 
 crossvalidate = analysis_info["crossvalidate"]
 
@@ -313,7 +315,7 @@ if param_bounds:
                   (0, +inf),  # bold baseline
                   (0, +inf),  # surround amplitude
                   (eps, 4*ss)]  # surround size
-    
+
 
 # norm grid params
 if norm_model_variant == "abcd":
@@ -328,7 +330,7 @@ if norm_model_variant == "abcd":
                    (eps, 2*ss),  # prf size
                    (0, +inf),  # prf amplitude
                    (0, +inf),  # bold baseline
-                   (-inf, +inf),  # surround amplitude
+                   (0, +inf),  # surround amplitude
                    (eps, 4*ss),  # surround size
                    (0, +inf),  # neural baseline
                    (1e-6, +inf)]  # surround baseline
@@ -345,7 +347,7 @@ elif norm_model_variant == "abc":
                    (eps, 2*ss),  # prf size
                    (0, +inf),  # prf amplitude
                    (0, +inf),  # bold baseline
-                   (-inf, +inf),  # surround amplitude allow negative stuff
+                   (0, +inf),  # surround amplitude 
                    (eps, 4*ss),  # surround size
                    (0, +inf),  # neural baseline
                    (1, 1)]  # surround baseline
@@ -361,11 +363,17 @@ elif norm_model_variant == "acd":
                    (eps, 2*ss),  # prf size
                    (0, +inf),  # prf amplitude
                    (0, +inf),  # bold baseline
-                   (-inf, +inf),  # surround amplitude allow negative stuff
+                   (0, +inf),  # surround amplitude 
                    (eps, 4*ss),  # surround size
                    (1, 1),  # neural baseline
                    (1e-6, +inf)]  # surround baseline
 
+
+if param_bounds and fix_bold_baseline:
+    gauss_bounds[4] = (100,100)
+    css_bounds[4] = (100,100)
+    dog_bounds[4] = (100,100)
+    norm_bounds[4] = (100,100)
 
 #this ensures that all models use the same optimizer, even if only some
 #have constraints
