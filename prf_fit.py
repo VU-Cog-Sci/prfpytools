@@ -373,7 +373,7 @@ if param_bounds and fix_bold_baseline:
     gauss_bounds[4] = (100,100)
     css_bounds[4] = (100,100)
     dog_bounds[4] = (100,100)
-    norm_bounds[4] = (100,100)
+    norm_bounds[4] = (0,0)
 
 #this ensures that all models use the same optimizer, even if only some
 #have constraints

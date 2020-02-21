@@ -781,7 +781,7 @@ class visualize_results(object):
                 
             #For ROI-based fitting
             if self.output_custom_V1V2V3:
-                V1V2V3 = np.concatenate((self.idx_rois['custom.V1'],self.idx_rois['custom.V2'],self.idx_rois['custom.V3']))
+                V1V2V3 = np.concatenate((self.idx_rois[subj]['custom.V1'],self.idx_rois[subj]['custom.V2'],self.idx_rois[subj]['custom.V3']))
                 np.save('/Users/marcoaqil/PRFMapping/PRFMapping-Deriv-hires/prfpy/'+subj+'_roi-V1V2V3.npy', V1V2V3)
         
     def pycortex_plots(self):        
