@@ -60,6 +60,8 @@ models_to_fit = analysis_info["models_to_fit"]
 n_batches = analysis_info["n_batches"]
 fit_hrf = analysis_info["fit_hrf"]
 fix_bold_baseline = analysis_info["fix_bold_baseline"]
+if fix_bold_baseline:
+    norm_bold_baseline = analysis_info["norm_bold_baseline"]
 
 
 crossvalidate = analysis_info["crossvalidate"]
@@ -373,7 +375,7 @@ if param_bounds and fix_bold_baseline:
     gauss_bounds[4] = (100,100)
     css_bounds[4] = (100,100)
     dog_bounds[4] = (100,100)
-    norm_bounds[4] = (0,0)
+    norm_bounds[4] = (norm_bold_baseline,norm_bold_baseline)
 
 #this ensures that all models use the same optimizer, even if only some
 #have constraints
