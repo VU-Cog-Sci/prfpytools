@@ -800,7 +800,7 @@ class visualize_results(object):
                         
                         p_r = subj_res['Processed Results']
                         models = p_r['RSq'].keys()
-    
+                        
                         tc_stats = subj_res['Timecourse Stats']
                         mask = subj_res['Results']['mask']
                         
