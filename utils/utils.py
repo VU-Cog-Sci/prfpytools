@@ -154,7 +154,6 @@ def prepare_data(subj,
     if fitting_space == 'fsaverage' or fitting_space == 'fsnative':
         
         tc_dict = dd(lambda:dd(dict))
-        
         for hemi in ['L', 'R']:
             for task_name in prf_stim.task_names:
                 tc_task = []
@@ -224,29 +223,31 @@ def prepare_data(subj,
 
         
             #shift timeseries so they have the same average value in proper baseline periods across conditions
-            iso_full = np.median([tc_dict[hemi][task_name]['baseline'] for task_name in prf_stim.task_names], axis=0)
+            tc_dict[hemi]['median_baseline'] = np.median([tc_dict[hemi][task_name]['baseline'] for task_name in prf_stim.task_names], axis=0)
     
             for task_name in prf_stim.task_names:
-                iso_diff = iso_full - tc_dict[hemi][task_name]['baseline']
+                iso_diff = tc_dict[hemi]['median_baseline'] - tc_dict[hemi][task_name]['baseline']
                 tc_dict[hemi][task_name]['timecourse'] += iso_diff[...,np.newaxis]
                
             tc_dict[hemi]['full_iso']=np.concatenate(tuple([tc_dict[hemi][task_name]['timecourse'] for task_name in prf_stim.task_names]), axis=-1)
 
             if crossvalidate:
-                iso_full_test = np.median([tc_dict[hemi][task_name]['baseline_test'] for task_name in test_prf_stim.task_names], axis=0)
+                tc_dict[hemi]['median_baseline_test'] = np.median([tc_dict[hemi][task_name]['baseline_test'] for task_name in test_prf_stim.task_names], axis=0)
         
                 for task_name in test_prf_stim.task_names:
-                    iso_diff_test = iso_full_test - tc_dict[hemi][task_name]['baseline_test']
+                    iso_diff_test = tc_dict[hemi]['median_baseline_test'] - tc_dict[hemi][task_name]['baseline_test']
                     tc_dict[hemi][task_name]['timecourse_test'] += iso_diff_test[...,np.newaxis]
                    
                 tc_dict[hemi]['full_iso_test']=np.concatenate(tuple([tc_dict[hemi][task_name]['timecourse_test'] for task_name in test_prf_stim.task_names]), axis=-1)
 
 
         tc_full_iso = np.concatenate((tc_dict['L']['full_iso'], tc_dict['R']['full_iso']), axis=0)
+        iso_full = np.concatenate((tc_dict['L']['median_baseline'], tc_dict['R']['median_baseline']), axis=0)
         tc_mean = tc_full_iso.mean(-1)
 
         if crossvalidate:
             tc_full_iso_test = np.concatenate((tc_dict['L']['full_iso_test'], tc_dict['R']['full_iso_test']), axis=0)
+            iso_full_test = np.concatenate((tc_dict['L']['median_baseline_test'], tc_dict['R']['median_baseline_test']), axis=0)
             tc_mean_test = tc_full_iso_test.mean(-1)
 
         #masking flat or nearly flat timecourses
