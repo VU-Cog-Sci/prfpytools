@@ -172,15 +172,12 @@ def prepare_data(subj,
                     
                 for tc_path in tc_paths[:fit_runs]:
                     tc_run = nb.load(str(tc_path))
-    
+                    #no need to pass further args, only filtering 1 condition
                     tc_task.append(sgfilter_predictions(np.array([arr.data for arr in tc_run.darrays]).T[...,discard_volumes:],
                                                      window_length=window_length,
                                                      polyorder=polyorder,
                                                      highpass=highpass,
-                                                     add_mean=add_mean,
-                                                     task_lengths=prf_stim.task_lengths,
-                                                     task_names=prf_stim.task_names,
-                                                     late_iso_dict=prf_stim.late_iso_dict))
+                                                     add_mean=add_mean))
     
                     #when scanning sub-001 i mistakenly set the length of the 4F scan to 147, while it should have been 145
                     #therefore, there are two extra images at the end to discard in that time series.
@@ -206,15 +203,12 @@ def prepare_data(subj,
     
                     for tc_path in tc_paths[fit_runs:]:
                         tc_run = nb.load(str(tc_path))
-        
+                        #no need to pass further args, only filtering 1 condition
                         tc_task.append(sgfilter_predictions(np.array([arr.data for arr in tc_run.darrays]).T[...,discard_volumes:],
                                                          window_length=window_length,
                                                          polyorder=polyorder,
                                                          highpass=highpass,
-                                                         add_mean=add_mean,
-                                                         task_lengths=test_prf_stim.task_lengths,
-                                                         task_names=test_prf_stim.task_names,
-                                                         late_iso_dict=test_prf_stim.late_iso_dict))
+                                                         add_mean=add_mean))
         
                         #when scanning sub-001 i mistakenly set the length of the 4F scan to 147, while it should have been 145
                         #therefore, there are two extra images at the end to discard in that time series.
@@ -337,10 +331,7 @@ def prepare_data(subj,
                                                      window_length=window_length,
                                                      polyorder=polyorder,
                                                      highpass=highpass,
-                                                     add_mean=add_mean,
-                                                     task_lengths=prf_stim.task_lengths,
-                                                     task_names=prf_stim.task_names,
-                                                     late_iso_dict=prf_stim.late_iso_dict))
+                                                     add_mean=add_mean))
     
                 #when scanning sub-001 i mistakenly set the length of the 4F scan to 147, while it should have been 145
                 #therefore, there are two extra images at the end to discard in that time series.
@@ -371,10 +362,7 @@ def prepare_data(subj,
                                                          window_length=window_length,
                                                          polyorder=polyorder,
                                                          highpass=highpass,
-                                                         add_mean=add_mean,
-                                                         task_lengths=test_prf_stim.task_lengths,
-                                                         task_names=test_prf_stim.task_names,
-                                                         late_iso_dict=test_prf_stim.late_iso_dict))
+                                                         add_mean=add_mean))
     
                     #when scanning sub-001 i mistakenly set the length of the 4F scan to 147, while it should have been 145
                     #therefore, there are two extra images at the end to discard in that time series.
