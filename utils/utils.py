@@ -177,7 +177,10 @@ def prepare_data(subj,
                                                      window_length=window_length,
                                                      polyorder=polyorder,
                                                      highpass=highpass,
-                                                     add_mean=add_mean))
+                                                     add_mean=add_mean,
+                                                     task_lengths=prf_stim.task_lengths,
+                                                     task_names=prf_stim.task_names,
+                                                     late_iso_dict=prf_stim.late_iso_dict))
     
                     #when scanning sub-001 i mistakenly set the length of the 4F scan to 147, while it should have been 145
                     #therefore, there are two extra images at the end to discard in that time series.
@@ -208,7 +211,10 @@ def prepare_data(subj,
                                                          window_length=window_length,
                                                          polyorder=polyorder,
                                                          highpass=highpass,
-                                                         add_mean=add_mean))
+                                                         add_mean=add_mean,
+                                                         task_lengths=test_prf_stim.task_lengths,
+                                                         task_names=test_prf_stim.task_names,
+                                                         late_iso_dict=test_prf_stim.late_iso_dict))
         
                         #when scanning sub-001 i mistakenly set the length of the 4F scan to 147, while it should have been 145
                         #therefore, there are two extra images at the end to discard in that time series.
@@ -331,7 +337,10 @@ def prepare_data(subj,
                                                      window_length=window_length,
                                                      polyorder=polyorder,
                                                      highpass=highpass,
-                                                     add_mean=add_mean))
+                                                     add_mean=add_mean,
+                                                     task_lengths=prf_stim.task_lengths,
+                                                     task_names=prf_stim.task_names,
+                                                     late_iso_dict=prf_stim.late_iso_dict))
     
                 #when scanning sub-001 i mistakenly set the length of the 4F scan to 147, while it should have been 145
                 #therefore, there are two extra images at the end to discard in that time series.
@@ -362,7 +371,10 @@ def prepare_data(subj,
                                                          window_length=window_length,
                                                          polyorder=polyorder,
                                                          highpass=highpass,
-                                                         add_mean=add_mean))
+                                                         add_mean=add_mean,
+                                                         task_lengths=test_prf_stim.task_lengths,
+                                                         task_names=test_prf_stim.task_names,
+                                                         late_iso_dict=test_prf_stim.late_iso_dict))
     
                     #when scanning sub-001 i mistakenly set the length of the 4F scan to 147, while it should have been 145
                     #therefore, there are two extra images at the end to discard in that time series.
@@ -681,7 +693,7 @@ def process_results(results_dict, return_norm_profiles):
     for k, v in results_dict.items():
         if 'sub-' not in k:
             process_results(v, return_norm_profiles)
-        elif 'Processed Results' not in v:
+        elif 'Results' in v and 'Processed Results' not in v:
             normalize_RFs = v['Results']['normalize_RFs']
             mask = v['Results']['mask']
 
@@ -828,7 +840,7 @@ class visualize_results(object):
             
                         #alpha dictionary
                         p_r['Alpha'] = {}          
-                        p_r['Alpha']['all'] = rsq.max(-1) * (ecc.max(-1)<ecc_max) * (ecc.min(-1)>ecc_min) * (amp.min(-1)>0) * (tc_stats['Mean']>tc_min) * (fw_hmax.min(-1)<w_max)
+                        p_r['Alpha']['all'] = rsq.max(-1) * (tc_stats['Mean']>tc_min) #* (amp.min(-1)>0) * (fw_hmax.max(-1)<w_max)* (ecc.max(-1)<ecc_max) * (ecc.min(-1)>ecc_min)
                         
                         for model in models:
                             p_r['Alpha'][model] = p_r['RSq'][model] * (p_r['Eccentricity'][model]>ecc_min) * (p_r['Eccentricity'][model]<ecc_max) *(p_r['Amplitude'][model]>0) * (tc_stats['Mean']>tc_min) * (p_r['Size (fwhmax)'][model]<w_max)
