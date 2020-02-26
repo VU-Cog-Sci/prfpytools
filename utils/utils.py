@@ -828,7 +828,7 @@ class visualize_results(object):
             
                         #alpha dictionary
                         p_r['Alpha'] = {}          
-                        p_r['Alpha']['all'] = rsq.max(-1) * (tc_stats['Mean']>tc_min) #* (amp.min(-1)>0) * (fw_hmax.max(-1)<w_max)* (ecc.max(-1)<ecc_max) * (ecc.min(-1)>ecc_min)
+                        p_r['Alpha']['all'] = rsq.max(-1) * (tc_stats['Mean']>tc_min) * (amp.min(-1)>0) * (fw_hmax.max(-1)<w_max)* (ecc.max(-1)<ecc_max) * (ecc.min(-1)>ecc_min)
                         
                         for model in models:
                             p_r['Alpha'][model] = p_r['RSq'][model] * (p_r['Eccentricity'][model]>ecc_min) * (p_r['Eccentricity'][model]<ecc_max) *(p_r['Amplitude'][model]>0) * (tc_stats['Mean']>tc_min) * (p_r['Size (fwhmax)'][model]<w_max)

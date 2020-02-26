@@ -379,10 +379,10 @@ if param_bounds and fix_bold_baseline:
 
 
 if param_bounds and fit_hrf:
-    gauss_bounds.append((0,5)).append((0,5))
-    css_bounds.append((0,5)).append((0,5))
-    dog_bounds.append((0,5)).append((0,5))
-    norm_bounds.append((0,5)).append((0,5))
+    gauss_bounds += [(0,5),(0,5)]
+    css_bounds += [(0,5),(0,5)]
+    dog_bounds += [(0,5),(0,5)]
+    norm_bounds += [(0,5),(0,5)]
     
 #this ensures that all models use the same optimizer, even if only some
 #have constraints
