@@ -251,7 +251,9 @@ def prepare_data(subj,
             tc_mean_test = tc_full_iso_test.mean(-1)
 
         #masking flat or nearly flat timecourses
-        nonlow_var = (np.abs(tc_full_iso - tc_mean[...,np.newaxis]).max(-1) > (tc_mean*min_percent_var/100)) * (tc_mean>0) * (tc_mean_test>0)
+        nonlow_var = (np.abs(tc_full_iso - tc_mean[...,np.newaxis]).max(-1) > (tc_mean*min_percent_var/100)) \
+             * (np.abs(tc_full_iso_test - tc_mean_test[...,np.newaxis]).max(-1) > (tc_mean_test*min_percent_var/100)) \
+             * (tc_mean>0) * (tc_mean_test>0)
 
         if roi_idx is not None:
             mask = roi_mask(roi_idx, nonlow_var)
@@ -828,7 +830,7 @@ class visualize_results(object):
             
                         #alpha dictionary
                         p_r['Alpha'] = {}          
-                        p_r['Alpha']['all'] = rsq.max(-1) * (tc_stats['Mean']>tc_min) * (amp.min(-1)>0) * (fw_hmax.max(-1)<w_max)* (ecc.max(-1)<ecc_max) * (ecc.min(-1)>ecc_min)
+                        p_r['Alpha']['all'] = rsq.max(-1) * (tc_stats['Mean']>tc_min) * (amp.min(-1)>0) * (fw_hmax.max(-1)<w_max)* (ecc.min(-1)<ecc_max) * (ecc.max(-1)>ecc_min)
                         
                         for model in models:
                             p_r['Alpha'][model] = p_r['RSq'][model] * (p_r['Eccentricity'][model]>ecc_min) * (p_r['Eccentricity'][model]<ecc_max) *(p_r['Amplitude'][model]>0) * (tc_stats['Mean']>tc_min) * (p_r['Size (fwhmax)'][model]<w_max)
