@@ -93,10 +93,10 @@ param_bounds = analysis_info["param_bounds"]
 pos_prfs_only = analysis_info["pos_prfs_only"]
 normalize_RFs = analysis_info["normalize_RFs"]
 
+
+param_constraints = analysis_info["param_constraints"]
 surround_sigma_larger_than_centre = analysis_info["surround_sigma_larger_than_centre"]
 positive_centre_only = analysis_info["positive_centre_only"]
-
-param_constraints = surround_sigma_larger_than_centre or positive_centre_only
 
 n_chunks = analysis_info["n_chunks"]
 refit_mode = analysis_info["refit_mode"].lower()
@@ -378,59 +378,60 @@ if param_bounds and fix_bold_baseline:
     norm_bounds[4] = (norm_bold_baseline,norm_bold_baseline)
 
 
+#second bound set to zero to avoid potential negative hrf-response given by the disp. derivative
 if param_bounds and fit_hrf:
-    gauss_bounds += [(0,5),(0,5)]
-    css_bounds += [(0,5),(0,5)]
-    dog_bounds += [(0,5),(0,5)]
-    norm_bounds += [(0,5),(0,5)]
+    gauss_bounds += [(0,10),(0,0)]
+    css_bounds += [(0,10),(0,0)]
+    dog_bounds += [(0,10),(0,0)]
+    norm_bounds += [(0,10),(0,0)]
     
 #this ensures that all models use the same optimizer, even if only some
 #have constraints
-if param_constraints:
-    constraints_gauss, constraints_css, constraints_dog, constraints_norm = [],[],[],[]
-else:
+if not param_constraints:
     constraints_gauss, constraints_css, constraints_dog, constraints_norm = None,None,None,None
+else:
+    constraints_gauss, constraints_css, constraints_dog, constraints_norm = [],[],[],[]
 
-#specific parameter constraints   
-if surround_sigma_larger_than_centre:
-
-    #enforcing surround size larger than prf size in DoG model
-    A_ssc_dog = np.array([[0,0,-1,0,0,0,1]])
-
-    constraints_dog.append(LinearConstraint(A_ssc_dog,
-                                                lb=0,
-                                                ub=+inf))
+    #specific parameter constraints   
+    if surround_sigma_larger_than_centre:
     
-    #enforcing surround size larger than prf size in norm
-    A_ssc_norm = np.array([[0,0,-1,0,0,0,1,0,0]])
-
-    constraints_norm.append(LinearConstraint(A_ssc_norm,
-                                                lb=0,
-                                                ub=+inf))
-
-
-if positive_centre_only:
-    #enforcing positive central amplitude in DoG
-    def positive_centre_prf_dog(x):
-        if normalize_RFs:
-            return x[3]/(2*np.pi*x[2]**2)-x[5]/(2*np.pi*x[6]**2)
-        else:
-            return x[3] - x[5]
-
-    constraints_dog.append(NonlinearConstraint(positive_centre_prf_dog,
-                                                lb=0,
-                                                ub=+inf))
-
-    #enforcing positive central amplitude in norm
-    def positive_centre_prf_norm(x):
-        if normalize_RFs:
-            return (x[3]/(2*np.pi*x[2]**2)+x[7])/(x[5]/(2*np.pi*x[6]**2)+x[8]) - x[7]/x[8]
-        else:
-            return (x[3]+x[7])/(x[5]+x[8]) - x[7]/x[8]
+        #enforcing surround size larger than prf size in DoG model
+        A_ssc_dog = np.array([[0,0,-1,0,0,0,1]])
     
-    constraints_norm.append(NonlinearConstraint(positive_centre_prf_norm,
-                                                lb=0,
-                                                ub=+inf))
+        constraints_dog.append(LinearConstraint(A_ssc_dog,
+                                                    lb=0,
+                                                    ub=+inf))
+        
+        #enforcing surround size larger than prf size in norm
+        A_ssc_norm = np.array([[0,0,-1,0,0,0,1,0,0]])
+    
+        constraints_norm.append(LinearConstraint(A_ssc_norm,
+                                                    lb=0,
+                                                    ub=+inf))
+    
+    
+    if positive_centre_only:
+        #enforcing positive central amplitude in DoG
+        def positive_centre_prf_dog(x):
+            if normalize_RFs:
+                return x[3]/(2*np.pi*x[2]**2)-x[5]/(2*np.pi*x[6]**2)
+            else:
+                return x[3] - x[5]
+    
+        constraints_dog.append(NonlinearConstraint(positive_centre_prf_dog,
+                                                    lb=0,
+                                                    ub=+inf))
+    
+        #enforcing positive central amplitude in norm
+        def positive_centre_prf_norm(x):
+            if normalize_RFs:
+                return (x[3]/(2*np.pi*x[2]**2)+x[7])/(x[5]/(2*np.pi*x[6]**2)+x[8]) - x[7]/x[8]
+            else:
+                return (x[3]+x[7])/(x[5]+x[8]) - x[7]/x[8]
+        
+        constraints_norm.append(NonlinearConstraint(positive_centre_prf_norm,
+                                                    lb=0,
+                                                    ub=+inf))
 
 
 # MODEL COMPARISON
