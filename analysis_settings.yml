@@ -13,8 +13,8 @@ n_chunks: 100
 
 screenshot_paths:
 #                  - "/Users/marcoaqil/PRFMapping/PRFMapping-Raw/sub-001/ses-1/rawdata/sub-001_ses-1_Logs/sub-001_ses-1_task-1R_run-1_Logs/Screenshots"
-#                  - "/Users/marcoaqil/PRFMapping/PRFMapping-Raw/sub-001/ses-1/rawdata/sub-001_ses-1_Logs/sub-001_ses-1_task-1S_run-1_Logs/Screenshots"
-                  - "/Users/marcoaqil/PRFMapping/PRFMapping-Raw/sub-001/ses-1/rawdata/sub-001_ses-1_Logs/sub-001_ses-1_task-2R_run-1_Logs/Screenshots"
+                  - "/Users/marcoaqil/PRFMapping/PRFMapping-Raw/sub-001/ses-1/rawdata/sub-001_ses-1_Logs/sub-001_ses-1_task-1S_run-1_Logs/Screenshots"
+#                  - "/Users/marcoaqil/PRFMapping/PRFMapping-Raw/sub-001/ses-1/rawdata/sub-001_ses-1_Logs/sub-001_ses-1_task-2R_run-1_Logs/Screenshots"
 #                  - "/Users/marcoaqil/PRFMapping/PRFMapping-Raw/sub-001/ses-1/rawdata/sub-001_ses-1_Logs/sub-001_ses-1_task-4F_run-1_Logs/Screenshots"
 #                  - "/Users/marcoaqil/PRFMapping/PRFMapping-Raw/sub-001/ses-1/rawdata/sub-001_ses-1_Logs/sub-001_ses-1_task-4R_run-1_Logs/Screenshots"
 
@@ -23,11 +23,11 @@ screen_distance_cm: 210
 TR: 1.5
 
 task_names:
-           - "1R"
+#           - "1R"
            - "1S"
-           - "2R"
-           - "4F"
-           - "4R"
+#           - "2R"
+#           - "4F"
+#           - "4R"
            
 data_path: "/Users/marcoaqil/PRFMapping/PRFMapping-Deriv-noflairtse-manual-hires"
 
