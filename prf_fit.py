@@ -430,14 +430,20 @@ else:
     if surround_sigma_larger_than_centre:
     
         #enforcing surround size larger than prf size in DoG model
-        A_ssc_dog = np.array([[0,0,-1,0,0,0,1]])
+        if fit_hrf:
+            A_ssc_dog = np.array([[0,0,-1,0,0,0,1,0,0]])
+        else:
+            A_ssc_dog = np.array([[0,0,-1,0,0,0,1]])
     
         constraints_dog.append(LinearConstraint(A_ssc_dog,
                                                     lb=0,
                                                     ub=+inf))
         
         #enforcing surround size larger than prf size in norm
-        A_ssc_norm = np.array([[0,0,-1,0,0,0,1,0,0]])
+        if fit_hrf:
+            A_ssc_norm = np.array([[0,0,-1,0,0,0,1,0,0,0,0]])
+        else:
+            A_ssc_norm = np.array([[0,0,-1,0,0,0,1,0,0]])
     
         constraints_norm.append(LinearConstraint(A_ssc_norm,
                                                     lb=0,
