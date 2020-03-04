@@ -1442,9 +1442,9 @@ class visualize_results(object):
                             pl.ylabel(roi.replace('custom.','')+' Mean RSq')
                             alpha_roi = roi_mask(self.idx_rois[subj][roi], subj_res['Processed Results']['Alpha']['all'])>rsq_thresh
                             
-                            for model in [k for k in subj_res['Processed Results']['RSq'].keys() if 'ABCD' in analysis or 'Norm' in k]:                                
+                            for model in [k for k in subj_res['Processed Results']['RSq'].keys()]:                                
             
-                                bar_height = np.mean(subj_res['Processed Results']['RSq'][model][alpha_roi])
+                                bar_height = np.median(subj_res['Processed Results']['RSq'][model][alpha_roi])
                                 bar_err = sem(subj_res['Processed Results']['RSq'][model][alpha_roi])
                                 pl.bar(bar_position, bar_height, width=0.1, yerr=bar_err, color=model_colors[model],edgecolor='black')
                                 x_ticks.append(bar_position)
