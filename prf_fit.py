@@ -47,6 +47,10 @@ data_path = analysis_info["data_path"]
 fitting_space = analysis_info["fitting_space"]
 save_raw_timecourse = analysis_info["save_raw_timecourse"]
 
+filter_predictions = analysis_info["filter_predictions"]
+filter_type = analysis_info["filter_type"]
+
+modes_to_remove = analysis_info["modes_to_remove"]
 window_length = analysis_info["window_length"]
 polyorder = analysis_info["polyorder"]
 highpass = analysis_info["highpass"]
@@ -230,6 +234,11 @@ else:
                                                    
                                                    discard_volumes,
                                                    min_percent_var,
+                                                   fix_bold_baseline,
+                                                   
+                                                   filter_type,
+                                                   
+                                                   modes_to_remove,
                                                    
                                                    window_length,
                                                    polyorder,
@@ -480,7 +489,9 @@ print("Started modeling at: "+datetime.now().strftime('%Y/%m/%d %H:%M:%S'))
 # Gaussian model
 gg = Iso2DGaussianGridder(stimulus=prf_stim,
                           hrf=hrf,
-                          filter_predictions=True,
+                          filter_predictions=filter_predictions,
+                          filter_type=filter_type,
+                          modes_to_remove=modes_to_remove,
                           window_length=window_length,
                           polyorder=polyorder,
                           highpass=highpass,
@@ -635,7 +646,9 @@ else:
 if "CSS" in models_to_fit:
     gg_css = CSS_Iso2DGaussianGridder(stimulus=prf_stim,
                                       hrf=hrf,
-                                      filter_predictions=True,
+                                      filter_predictions=filter_predictions,
+                                      filter_type=filter_type,
+                                      modes_to_remove=modes_to_remove,
                                       window_length=window_length,
                                       polyorder=polyorder,
                                       highpass=highpass,
@@ -755,7 +768,9 @@ if "DoG" in models_to_fit:
     # difference of gaussians iterative fit
     gg_dog = DoG_Iso2DGaussianGridder(stimulus=prf_stim,
                                       hrf=hrf,
-                                      filter_predictions=True,
+                                      filter_predictions=filter_predictions,
+                                      filter_type=filter_type,
+                                      modes_to_remove=modes_to_remove,
                                       window_length=window_length,
                                       polyorder=polyorder,
                                       highpass=highpass,
@@ -881,7 +896,9 @@ if "norm" in models_to_fit:
     # normalization iterative fit
     gg_norm = Norm_Iso2DGaussianGridder(stimulus=prf_stim,
                                         hrf=hrf,
-                                        filter_predictions=True,
+                                        filter_predictions=filter_predictions,
+                                        filter_type=filter_type,
+                                        modes_to_remove=modes_to_remove,
                                         window_length=window_length,
                                         polyorder=polyorder,
                                         highpass=highpass,

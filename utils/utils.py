@@ -13,7 +13,7 @@ from scipy.stats import sem, ks_2samp
 
 opj = os.path.join
 
-from prfpy.timecourse import sgfilter_predictions
+from prfpy.timecourse import filter_predictions
 from prfpy.stimulus import PRFStimulus2D
 from statsmodels.stats import weightstats
 from sklearn.linear_model import LinearRegression
@@ -135,6 +135,11 @@ def prepare_data(subj,
                  
                  discard_volumes,
                  min_percent_var,
+                 fix_bold_baseline,
+                 
+                 filter_type,
+                 
+                 modes_to_remove,
                  
                  window_length,
                  polyorder,
@@ -173,7 +178,9 @@ def prepare_data(subj,
                 for tc_path in tc_paths[:fit_runs]:
                     tc_run = nb.load(str(tc_path))
                     #no need to pass further args, only filtering 1 condition
-                    tc_task.append(sgfilter_predictions(np.array([arr.data for arr in tc_run.darrays]).T[...,discard_volumes:],
+                    tc_task.append(filter_predictions(np.array([arr.data for arr in tc_run.darrays]).T[...,discard_volumes:],
+                                                     filter_type=filter_type,
+                                                     modes_to_remove=modes_to_remove,
                                                      window_length=window_length,
                                                      polyorder=polyorder,
                                                      highpass=highpass,
@@ -204,7 +211,9 @@ def prepare_data(subj,
                     for tc_path in tc_paths[fit_runs:]:
                         tc_run = nb.load(str(tc_path))
                         #no need to pass further args, only filtering 1 condition
-                        tc_task.append(sgfilter_predictions(np.array([arr.data for arr in tc_run.darrays]).T[...,discard_volumes:],
+                        tc_task.append(filter_predictions(np.array([arr.data for arr in tc_run.darrays]).T[...,discard_volumes:],
+                                                         filter_type=filter_type,
+                                                         modes_to_remove=modes_to_remove,                                                         
                                                          window_length=window_length,
                                                          polyorder=polyorder,
                                                          highpass=highpass,
@@ -265,9 +274,9 @@ def prepare_data(subj,
 
         #conversion to +- of % of mean
         if data_scaling in ["psc", "percent_signal_change"]:
-            tc_full_iso_nonzerovar = 100*(tc_full_iso[mask] / iso_full[mask,np.newaxis])
+            tc_full_iso_nonzerovar = 100*(tc_full_iso[mask] / tc_mean[mask,np.newaxis])
             if crossvalidate:
-                tc_full_iso_nonzerovar_test = 100*(tc_full_iso_test[mask] / iso_full_test[mask,np.newaxis])
+                tc_full_iso_nonzerovar_test = 100*(tc_full_iso_test[mask] / tc_mean_test[mask,np.newaxis])
         elif data_scaling == None:
             tc_full_iso_nonzerovar = tc_full_iso[mask]
             if crossvalidate:
@@ -277,6 +286,12 @@ def prepare_data(subj,
             tc_full_iso_nonzerovar = tc_full_iso[mask]
             if crossvalidate:
                 tc_full_iso_nonzerovar_test = tc_full_iso_test[mask]
+                
+        if fix_bold_baseline:
+            tc_full_iso_nonzerovar += (tc_full_iso_nonzerovar.mean(-1)-iso_full)[...,np.newaxis]
+            if crossvalidate:
+                tc_full_iso_nonzerovar_test += (tc_full_iso_nonzerovar_test.mean(-1)-iso_full_test)[...,np.newaxis]
+                           
         
         if save_raw_timecourse:
             np.save(opj(data_path,'prfpy',subj+"_timecourse-raw_space-"+fitting_space+".npy"),tc_full_iso[mask])
@@ -295,7 +310,7 @@ def prepare_data(subj,
 
     else:
 
-        #############preparing the data (VOLUME FITTING)
+        #############preparing the data (VOLUME FITTING) (NOT UP TO DATE)
         tc_dict=dd(dict)
 
         #create a single brain mask in BOLD space
@@ -816,8 +831,8 @@ class visualize_results(object):
                             tc_min = 35000
                             
                         ######limits for eccentricity
-                        ecc_min=0.3
-                        ecc_max=3.0
+                        ecc_min=1.5
+                        ecc_max=5.0
                         ######max prf size
                         w_max = 90
                         
@@ -1444,7 +1459,7 @@ class visualize_results(object):
                             
                             for model in [k for k in subj_res['Processed Results']['RSq'].keys()]:                                
             
-                                bar_height = np.mean(subj_res['Processed Results']['RSq'][model][alpha_roi]-subj_res['Processed Results']['RSq']['Gauss'][alpha_roi])
+                                bar_height = np.median(100*subj_res['Processed Results']['RSq'][model][alpha_roi]-subj_res['Processed Results']['RSq']['Gauss'][alpha_roi])
                                 bar_err = sem(subj_res['Processed Results']['RSq'][model][alpha_roi])
                                 pl.bar(bar_position, bar_height, width=0.1, yerr=bar_err, color=model_colors[model],edgecolor='black')
                                 x_ticks.append(bar_position)
