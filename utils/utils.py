@@ -275,10 +275,10 @@ def prepare_data(subj,
         #conversion to +- of % of mean
         if data_scaling in ["psc", "percent_signal_change"]:
             tc_full_iso_nonzerovar = 100*(tc_full_iso[mask] / tc_mean[mask,np.newaxis])
-            iso_full = 100*(iso_full/tc_mean[...,np.newaxis])
+            iso_full = 100*(iso_full/tc_mean)
             if crossvalidate:
                 tc_full_iso_nonzerovar_test = 100*(tc_full_iso_test[mask] / tc_mean_test[mask,np.newaxis])
-                iso_full_test = 100*(iso_full_test/tc_mean_test[...,np.newaxis])
+                iso_full_test = 100*(iso_full_test/tc_mean_test)
         elif data_scaling == None:
             tc_full_iso_nonzerovar = tc_full_iso[mask]
             if crossvalidate:
