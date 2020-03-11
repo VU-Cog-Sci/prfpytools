@@ -288,9 +288,9 @@ def prepare_data(subj,
                 tc_full_iso_nonzerovar_test = tc_full_iso_test[mask]
                 
         if fix_bold_baseline:
-            tc_full_iso_nonzerovar += (tc_full_iso_nonzerovar.mean(-1)-iso_full)[...,np.newaxis]
+            tc_full_iso_nonzerovar += (tc_full_iso_nonzerovar.mean(-1)-iso_full[mask])[...,np.newaxis]
             if crossvalidate:
-                tc_full_iso_nonzerovar_test += (tc_full_iso_nonzerovar_test.mean(-1)-iso_full_test)[...,np.newaxis]
+                tc_full_iso_nonzerovar_test += (tc_full_iso_nonzerovar_test.mean(-1)-iso_full_test[mask])[...,np.newaxis]
                            
         
         if save_raw_timecourse:
