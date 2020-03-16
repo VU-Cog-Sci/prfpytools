@@ -1021,7 +1021,7 @@ class visualize_results(object):
                                                                          vmin=0, vmax=50, vmin2=0.2, vmax2=0.6, cmap='Jet_2D_alpha').raw
                             
                             self.js_handle_norm_baselines = cortex.webgl.show(ds_norm_baselines, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)    
-                              
+        print('-----')                              
     
         
     def save_pycortex_views(self, js_handle, base_str):
@@ -1454,7 +1454,7 @@ class visualize_results(object):
                         
 
                         for roi in rois:
-                            bar_position=last_bar_position[roi]
+                            bar_position=last_bar_position[roi]+0.1
                             pl.figure(roi+'RSq', figsize=(8, 6), frameon=False)
                             pl.ylabel(roi.replace('custom.','')+' Mean RSq')
                             alpha_roi = roi_mask(self.idx_rois[subj][roi], subj_res['Processed Results']['Alpha']['all'])>rsq_thresh
@@ -1467,7 +1467,7 @@ class visualize_results(object):
                                 pl.bar(bar_position, bar_height, width=0.1, yerr=bar_err, color=model_colors[model],edgecolor='black')
                                 x_ticks.append(bar_position)
                                 if 'ABCD' in analysis:
-                                    x_labels.append(model)
+                                    x_labels.append(analysis.replace('_100','').replace('ABCD_','')+'\n'+model)
                                 else:
                                     x_labels.append(analysis.replace('_100','')+'\n'+model)
                                 bar_position += 0.1
@@ -1478,15 +1478,15 @@ class visualize_results(object):
                                 
                                 print(analysis+' '+roi)
                                 print(f"{roi} voxels above threshold: {np.sum(alpha_roi)}")
-                                print(f"Norm-CSS  in {roi}: {ks_2samp(subj_res['Processed Results']['RSq']['Norm'][alpha_roi][surround_voxels],subj_res['Processed Results']['RSq']['CSS'][alpha_roi][surround_voxels])}")
-                                print(f"Norm-DoG  in {roi}: {ks_2samp(subj_res['Processed Results']['RSq']['Norm'][alpha_roi][nonlinear_voxels],subj_res['Processed Results']['RSq']['DoG'][alpha_roi][nonlinear_voxels])}")
+                                print(f"Norm-CSS in {roi} surround voxels: {ks_2samp(subj_res['Processed Results']['RSq']['Norm'][alpha_roi][surround_voxels],subj_res['Processed Results']['RSq']['CSS'][alpha_roi][surround_voxels])}")
+                                print(f"Norm-DoG in {roi} nonlinear voxels: {ks_2samp(subj_res['Processed Results']['RSq']['Norm'][alpha_roi][nonlinear_voxels],subj_res['Processed Results']['RSq']['DoG'][alpha_roi][nonlinear_voxels])}")
                                 
                                 print(f"Norm-CSS in {roi} surround voxels: {np.mean(subj_res['Processed Results']['RSq']['Norm'][alpha_roi][surround_voxels]-subj_res['Processed Results']['RSq']['CSS'][alpha_roi][surround_voxels])}")
                                 print(f"Norm-DoG in {roi} nonlinear voxels: {np.mean(subj_res['Processed Results']['RSq']['Norm'][alpha_roi][nonlinear_voxels]-subj_res['Processed Results']['RSq']['DoG'][alpha_roi][nonlinear_voxels])}")    
                             last_bar_position[roi] = bar_position
                             pl.xticks(x_ticks,x_labels)
-
-
+                        print('\n')
+                            
                                
 
             
