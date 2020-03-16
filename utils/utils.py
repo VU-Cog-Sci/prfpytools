@@ -226,7 +226,7 @@ def prepare_data(subj,
                             tc_task[-1] = tc_task[-1][...,:-2]
     
                     
-                    tc_dict[hemi][task_name]['timecourse_test'] = np.median(tc_task, axis=0)
+                    tc_dict[hemi][task_name]['timecourse_test'] = np.mean(tc_task, axis=0)
                     tc_dict[hemi][task_name]['baseline_test'] = np.median(tc_dict[hemi][task_name]['timecourse_test'][...,test_prf_stim.late_iso_dict[task_name]],
                                                        axis=-1)
 
@@ -833,8 +833,8 @@ class visualize_results(object):
                             tc_min = 35000
                             
                         ######limits for eccentricity
-                        ecc_min=1.5
-                        ecc_max=5.0
+                        ecc_min=0.125
+                        ecc_max=5.4
                         ######max prf size
                         w_max = 90
                         
@@ -847,7 +847,7 @@ class visualize_results(object):
             
                         #alpha dictionary
                         p_r['Alpha'] = {}          
-                        p_r['Alpha']['all'] = rsq.max(-1) * (tc_stats['Mean']>tc_min) * (ecc.min(-1)<ecc_max) * (ecc.max(-1)>ecc_min)
+                        p_r['Alpha']['all'] = rsq.max(-1) * (tc_stats['Mean']>tc_min) * (ecc.max(-1)<ecc_max) * (ecc.min(-1)>ecc_min) * (rsq.min(-1)>0)
                         
                         for model in models:
                             p_r['Alpha'][model] = p_r['RSq'][model] * (p_r['Eccentricity'][model]>ecc_min) * (p_r['Eccentricity'][model]<ecc_max) *(p_r['Amplitude'][model]>0) * (tc_stats['Mean']>tc_min) * (p_r['Size (fwhmax)'][model]<w_max)
@@ -1458,10 +1458,11 @@ class visualize_results(object):
                             pl.figure(roi+'RSq', figsize=(8, 6), frameon=False)
                             pl.ylabel(roi.replace('custom.','')+' Mean RSq')
                             alpha_roi = roi_mask(self.idx_rois[subj][roi], subj_res['Processed Results']['Alpha']['all'])>rsq_thresh
+                            model_list = [k for k in subj_res['Processed Results']['RSq'].keys()]
                             
-                            for model in [k for k in subj_res['Processed Results']['RSq'].keys()]:                                
+                            for model in model_list:                                
             
-                                bar_height = np.median(100*subj_res['Processed Results']['RSq'][model][alpha_roi]-subj_res['Processed Results']['RSq']['Gauss'][alpha_roi])
+                                bar_height = np.mean(subj_res['Processed Results']['RSq'][model][alpha_roi])
                                 bar_err = sem(subj_res['Processed Results']['RSq'][model][alpha_roi])
                                 pl.bar(bar_position, bar_height, width=0.1, yerr=bar_err, color=model_colors[model],edgecolor='black')
                                 x_ticks.append(bar_position)
@@ -1470,6 +1471,18 @@ class visualize_results(object):
                                 else:
                                     x_labels.append(analysis.replace('_100','')+'\n'+model)
                                 bar_position += 0.1
+                                
+                            if 'CSS' in model_list and 'DoG' in model_list:
+                                surround_voxels = subj_res['Processed Results']['RSq']['DoG'][alpha_roi]>subj_res['Processed Results']['RSq']['Gauss'][alpha_roi]
+                                nonlinear_voxels = subj_res['Processed Results']['RSq']['CSS'][alpha_roi]>subj_res['Processed Results']['RSq']['Gauss'][alpha_roi]
+                                
+                                print(analysis+' '+roi)
+                                print(f"{roi} voxels above threshold: {np.sum(alpha_roi)}")
+                                print(f"Norm-CSS  in {roi}: {ks_2samp(subj_res['Processed Results']['RSq']['Norm'][alpha_roi][surround_voxels],subj_res['Processed Results']['RSq']['CSS'][alpha_roi][surround_voxels])}")
+                                print(f"Norm-DoG  in {roi}: {ks_2samp(subj_res['Processed Results']['RSq']['Norm'][alpha_roi][nonlinear_voxels],subj_res['Processed Results']['RSq']['DoG'][alpha_roi][nonlinear_voxels])}")
+                                
+                                print(f"Norm-CSS in {roi} surround voxels: {np.mean(subj_res['Processed Results']['RSq']['Norm'][alpha_roi][surround_voxels]-subj_res['Processed Results']['RSq']['CSS'][alpha_roi][surround_voxels])}")
+                                print(f"Norm-DoG in {roi} nonlinear voxels: {np.mean(subj_res['Processed Results']['RSq']['Norm'][alpha_roi][nonlinear_voxels]-subj_res['Processed Results']['RSq']['DoG'][alpha_roi][nonlinear_voxels])}")    
                             last_bar_position[roi] = bar_position
                             pl.xticks(x_ticks,x_labels)
 
