@@ -86,6 +86,7 @@ else:
     fit_task = None
     fit_runs = None        
 
+single_hrf = analysis_info["single_hrf"]
 return_noise_ceiling_fraction = analysis_info["return_noise_ceiling_fraction"]
     
 xtol = analysis_info["xtol"]
@@ -428,6 +429,21 @@ if param_bounds and fit_hrf:
     dog_bounds += [(0,10),(0,0)]
     norm_bounds += [(0,10),(0,0)]
     
+if param_bounds and not fit_hrf and single_hrf and refit_mode == 'iterate':
+    #ugly AF. using max() just because it should all be zeros aside from the median values
+    gauss_hrf = np.load(opj(data_path, subj+"_iterparams-gauss_space-"+fitting_space+str(chunk_nr)))[:,-3].max()
+    gauss_bounds += [(gauss_hrf,gauss_hrf),(0,0)]
+
+    if "CSS" in models_to_fit:
+        css_hrf = np.load(opj(data_path, subj+"_iterparams-css_space-"+fitting_space+str(chunk_nr)))[:,-3].max()
+        css_bounds += [(css_hrf,css_hrf),(0,0)]
+    if "DoG" in models_to_fit:
+        dog_hrf = np.load(opj(data_path, subj+"_iterparams-dog_space-"+fitting_space+str(chunk_nr)))[:,-3].max()
+        dog_bounds += [(dog_hrf,dog_hrf),(0,0)]
+    if "Norm" in models_to_fit:
+        norm_hrf = np.load(opj(data_path, subj+"_iterparams-norm_space-"+fitting_space+str(chunk_nr)))[:,-3].max()  
+        norm_bounds += [(norm_hrf,norm_hrf),(0,0)]    
+    
 #this ensures that all models use the same optimizer, even if only some
 #have constraints
 if not param_constraints:
@@ -552,7 +568,8 @@ if "gauss_iterparams_path" in analysis_info:
       
         if crossvalidate:
             gf.crossvalidate_fit(tc_full_iso_nonzerovar_dict['tc_test'],
-                                 test_stimulus=test_prf_stim)
+                                 test_stimulus=test_prf_stim,
+                                 single_hrf=single_hrf)
             print("Gaussian Crossvalidation completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Median rsq>"+str(rsq_threshold)+": "+str(np.median(gf.iterative_search_params[gf.rsq_mask, -1])))
             
             if hasattr(gf, 'noise_ceiling'):
@@ -583,7 +600,8 @@ else:
       
         if crossvalidate:
             gf.crossvalidate_fit(tc_full_iso_nonzerovar_dict['tc_test'],
-                                 test_stimulus=test_prf_stim)
+                                 test_stimulus=test_prf_stim,
+                                 single_hrf=single_hrf)
             print("Gaussian Crossvalidation completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Median rsq>"+str(rsq_threshold)+": "+str(np.median(gf.iterative_search_params[gf.rsq_mask, -1])))
 
             if hasattr(gf, 'noise_ceiling'):
@@ -620,7 +638,8 @@ else:
       
             if crossvalidate:
                 gf.crossvalidate_fit(tc_full_iso_nonzerovar_dict['tc_test'],
-                                 test_stimulus=test_prf_stim)
+                                 test_stimulus=test_prf_stim,
+                                 single_hrf=single_hrf)
 
                 print("Gaussian Crossvalidation completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Median rsq>"+str(rsq_threshold)+": "+str(np.median(gf.iterative_search_params[gf.rsq_mask, -1])))
 
@@ -677,7 +696,8 @@ if "CSS" in models_to_fit:
             
             if crossvalidate:
                 gf_css.crossvalidate_fit(tc_full_iso_nonzerovar_dict['tc_test'],
-                                 test_stimulus=test_prf_stim)
+                                 test_stimulus=test_prf_stim,
+                                 single_hrf=single_hrf)
                 print("CSS Crossvalidation completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Median rsq>"+str(rsq_threshold)+": "+str(np.median(gf_css.iterative_search_params[gf_css.rsq_mask, -1])))
 
                 if hasattr(gf_css, 'noise_ceiling'):
@@ -708,7 +728,8 @@ if "CSS" in models_to_fit:
             
             if crossvalidate:
                 gf_css.crossvalidate_fit(tc_full_iso_nonzerovar_dict['tc_test'],
-                                 test_stimulus=test_prf_stim)
+                                 test_stimulus=test_prf_stim,
+                                 single_hrf=single_hrf)
                 print("CSS Crossvalidation completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Median rsq>"+str(rsq_threshold)+": "+str(np.median(gf_css.iterative_search_params[gf_css.rsq_mask, -1])))
 
                 if hasattr(gf_css, 'noise_ceiling'):
@@ -743,7 +764,8 @@ if "CSS" in models_to_fit:
                 
                 if crossvalidate:
                     gf_css.crossvalidate_fit(tc_full_iso_nonzerovar_dict['tc_test'],
-                                 test_stimulus=test_prf_stim)
+                                 test_stimulus=test_prf_stim,
+                                 single_hrf=single_hrf)
                     print("CSS Crossvalidation completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Median rsq>"+str(rsq_threshold)+": "+str(np.median(gf_css.iterative_search_params[gf_css.rsq_mask, -1])))
 
                     if hasattr(gf_css, 'noise_ceiling'):
@@ -801,7 +823,8 @@ if "DoG" in models_to_fit:
             
             if crossvalidate:
                 gf_dog.crossvalidate_fit(tc_full_iso_nonzerovar_dict['tc_test'],
-                                 test_stimulus=test_prf_stim)
+                                 test_stimulus=test_prf_stim,
+                                 single_hrf=single_hrf)
                 print("DoG Crossvalidation completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Median rsq>"+str(rsq_threshold)+": "+str(np.median(gf_dog.iterative_search_params[gf_dog.rsq_mask, -1])))
 
                 if hasattr(gf_dog, 'noise_ceiling'):
@@ -831,7 +854,8 @@ if "DoG" in models_to_fit:
             
             if crossvalidate:
                 gf_dog.crossvalidate_fit(tc_full_iso_nonzerovar_dict['tc_test'],
-                                 test_stimulus=test_prf_stim)
+                                 test_stimulus=test_prf_stim,
+                                 single_hrf=single_hrf)
                 print("DoG Crossvalidation completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Median rsq>"+str(rsq_threshold)+": "+str(np.median(gf_dog.iterative_search_params[gf_dog.rsq_mask, -1])))
                 
                 if hasattr(gf_dog, 'noise_ceiling'):
@@ -869,7 +893,8 @@ if "DoG" in models_to_fit:
                 
                 if crossvalidate:
                     gf_dog.crossvalidate_fit(tc_full_iso_nonzerovar_dict['tc_test'],
-                                 test_stimulus=test_prf_stim)
+                                 test_stimulus=test_prf_stim,
+                                 single_hrf=single_hrf)
                     print("DoG Crossvalidation completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Median rsq>"+str(rsq_threshold)+": "+str(np.median(gf_dog.iterative_search_params[gf_dog.rsq_mask, -1])))
 
                     if hasattr(gf_dog, 'noise_ceiling'):
@@ -957,7 +982,8 @@ if "norm" in models_to_fit:
             
             if crossvalidate:
                 gf_norm.crossvalidate_fit(tc_full_iso_nonzerovar_dict['tc_test'],
-                                 test_stimulus=test_prf_stim)
+                                 test_stimulus=test_prf_stim,
+                                 single_hrf=single_hrf)
                 print("Norm Crossvalidation completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Median rsq>"+str(rsq_threshold)+": "+str(np.median(gf_norm.iterative_search_params[gf_norm.rsq_mask, -1])))
 
                 if hasattr(gf_norm, 'noise_ceiling'):
@@ -986,7 +1012,8 @@ if "norm" in models_to_fit:
             
             if crossvalidate:
                 gf_norm.crossvalidate_fit(tc_full_iso_nonzerovar_dict['tc_test'],
-                                 test_stimulus=test_prf_stim)
+                                 test_stimulus=test_prf_stim,
+                                 single_hrf=single_hrf)
                 print("Norm Crossvalidation completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Median rsq>"+str(rsq_threshold)+": "+str(np.median(gf_norm.iterative_search_params[gf_norm.rsq_mask, -1])))
 
                 if hasattr(gf_norm, 'noise_ceiling'):
@@ -1023,7 +1050,8 @@ if "norm" in models_to_fit:
             
                 if crossvalidate:
                     gf_norm.crossvalidate_fit(tc_full_iso_nonzerovar_dict['tc_test'],
-                                 test_stimulus=test_prf_stim)
+                                 test_stimulus=test_prf_stim,
+                                 single_hrf=single_hrf)
                     print("Norm Crossvalidation completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Median rsq>"+str(rsq_threshold)+": "+str(np.median(gf_norm.iterative_search_params[gf_norm.rsq_mask, -1])))
             
                     if hasattr(gf_norm, 'noise_ceiling'):
