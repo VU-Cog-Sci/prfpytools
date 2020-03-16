@@ -193,7 +193,7 @@ def prepare_data(subj,
                         tc_task[-1] = tc_task[-1][...,:-2]
 
                 
-                tc_dict[hemi][task_name]['timecourse'] = np.median(tc_task, axis=0)
+                tc_dict[hemi][task_name]['timecourse'] = np.mean(tc_task, axis=0)
                 tc_dict[hemi][task_name]['baseline'] = np.median(tc_dict[hemi][task_name]['timecourse'][...,prf_stim.late_iso_dict[task_name]],
                                                    axis=-1)
    
