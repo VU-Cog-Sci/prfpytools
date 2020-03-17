@@ -440,7 +440,7 @@ if param_bounds and not fit_hrf and single_hrf and refit_mode == 'iterate':
     if "DoG" in models_to_fit:
         dog_hrf = np.load(opj(data_path, subj+"_iterparams-dog_space-"+fitting_space+str(chunk_nr)+".npy"))[:,-3].max()
         dog_bounds += [(dog_hrf,dog_hrf),(0,0)]
-    if "Norm" in models_to_fit:
+    if "norm" in models_to_fit:
         norm_hrf = np.load(opj(data_path, subj+"_iterparams-norm_space-"+fitting_space+str(chunk_nr)+".npy"))[:,-3].max()  
         norm_bounds += [(norm_hrf,norm_hrf),(0,0)]    
     
