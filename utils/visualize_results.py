@@ -20,6 +20,7 @@ opj = os.path.join
 from statsmodels.stats import weightstats
 from sklearn.linear_model import LinearRegression
 from nibabel.freesurfer.io import read_morph_data, write_morph_data
+from utils.utils import roi_mask
 
 class visualize_results(object):
     def __init__(self):
@@ -99,7 +100,7 @@ class visualize_results(object):
                             
                         ######limits for eccentricity
                         ecc_min=0.125
-                        ecc_max=5.4
+                        ecc_max=5.0
                         ######max prf size
                         w_max = 90
                         
@@ -112,7 +113,7 @@ class visualize_results(object):
             
                         #alpha dictionary
                         p_r['Alpha'] = {}          
-                        p_r['Alpha']['all'] = rsq.max(-1) * (tc_stats['Mean']>tc_min) * (ecc.max(-1)<ecc_max) * (ecc.min(-1)>ecc_min) * (rsq.min(-1)>0)
+                        p_r['Alpha']['all'] = rsq.max(-1) * (tc_stats['Mean']>tc_min) * (ecc.min(-1)<ecc_max) * (ecc.max(-1)>ecc_min) * (rsq.min(-1)>0)
                         
                         for model in models:
                             p_r['Alpha'][model] = p_r['RSq'][model] * (p_r['Eccentricity'][model]>ecc_min) * (p_r['Eccentricity'][model]<ecc_max) *(p_r['Amplitude'][model]>0) * (tc_stats['Mean']>tc_min) * (p_r['Size (fwhmax)'][model]<w_max)
@@ -339,12 +340,16 @@ class visualize_results(object):
                 except:
                     pass
         
-    def ecc_size_roi_plots(self, rois, rsq_thresh, save_figures):
+    def ecc_size_roi_plots(self, rois, rsq_thresh, save_figures, analysis_name = None):
         
         pl.rcParams.update({'font.size': 16})
         for space, space_res in self.main_dict.items():
             if 'fs' in space:
-                for analysis, analysis_res in space_res.items():       
+                if analysis_name == None:
+                    analyses = space_res.items()
+                else:
+                    analyses = [item for item in space_res.items() if item[0] in analysis_name] 
+                for analysis, analysis_res in analyses:       
                     for subj, subj_res in analysis_res.items():
                         print(space+" "+analysis+" "+subj)
             
@@ -742,7 +747,7 @@ class visualize_results(object):
                                 nonlinear_voxels = subj_res['Processed Results']['RSq']['CSS'][alpha_roi]>subj_res['Processed Results']['RSq']['Gauss'][alpha_roi]
                                 
                                 print(analysis+' '+roi)
-                                print(f"{roi} voxels above threshold: {np.sum(alpha_roi)}")
+                                print(f"{roi} voxels above {rsq_thresh} threshold within stimulus eccentricity: {np.sum(alpha_roi)} out of {len(self.idx_rois[subj][roi])}")
                                 print(f"Norm-CSS in {roi} surround voxels: {ks_2samp(subj_res['Processed Results']['RSq']['Norm'][alpha_roi][surround_voxels],subj_res['Processed Results']['RSq']['CSS'][alpha_roi][surround_voxels])}")
                                 print(f"Norm-DoG in {roi} nonlinear voxels: {ks_2samp(subj_res['Processed Results']['RSq']['Norm'][alpha_roi][nonlinear_voxels],subj_res['Processed Results']['RSq']['DoG'][alpha_roi][nonlinear_voxels])}")
                                 print(f"Norm-CSS in {roi} surround voxels: {ttest_1samp(subj_res['Processed Results']['RSq']['Norm'][alpha_roi][surround_voxels]-subj_res['Processed Results']['RSq']['CSS'][alpha_roi][surround_voxels],0)}")
