@@ -9,7 +9,7 @@ from collections import defaultdict as dd
 from pathlib import Path
 import matplotlib.image as mpimg
 import time
-from scipy.stats import sem, ks_2samp
+from scipy.stats import sem, ks_2samp, ttest_1samp
 
 opj = os.path.join
 
@@ -1480,11 +1480,14 @@ class visualize_results(object):
                                 print(f"{roi} voxels above threshold: {np.sum(alpha_roi)}")
                                 print(f"Norm-CSS in {roi} surround voxels: {ks_2samp(subj_res['Processed Results']['RSq']['Norm'][alpha_roi][surround_voxels],subj_res['Processed Results']['RSq']['CSS'][alpha_roi][surround_voxels])}")
                                 print(f"Norm-DoG in {roi} nonlinear voxels: {ks_2samp(subj_res['Processed Results']['RSq']['Norm'][alpha_roi][nonlinear_voxels],subj_res['Processed Results']['RSq']['DoG'][alpha_roi][nonlinear_voxels])}")
-                                
+                                print(f"Norm-CSS in {roi} surround voxels: {ttest_1samp(subj_res['Processed Results']['RSq']['Norm'][alpha_roi][surround_voxels]-subj_res['Processed Results']['RSq']['CSS'][alpha_roi][surround_voxels],0)}")
+                                print(f"Norm-DoG in {roi} nonlinear voxels: {ttest_1samp(subj_res['Processed Results']['RSq']['Norm'][alpha_roi][nonlinear_voxels]-subj_res['Processed Results']['RSq']['DoG'][alpha_roi][nonlinear_voxels],0)}")
+                                             
                                 print(f"Norm-CSS in {roi} surround voxels: {np.mean(subj_res['Processed Results']['RSq']['Norm'][alpha_roi][surround_voxels]-subj_res['Processed Results']['RSq']['CSS'][alpha_roi][surround_voxels])}")
                                 print(f"Norm-DoG in {roi} nonlinear voxels: {np.mean(subj_res['Processed Results']['RSq']['Norm'][alpha_roi][nonlinear_voxels]-subj_res['Processed Results']['RSq']['DoG'][alpha_roi][nonlinear_voxels])}")    
                             last_bar_position[roi] = bar_position
                             pl.xticks(x_ticks,x_labels)
+                            print('---------------')
                         print('\n')
                             
                                
