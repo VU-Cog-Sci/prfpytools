@@ -50,7 +50,9 @@ save_raw_timecourse = analysis_info["save_raw_timecourse"]
 filter_predictions = analysis_info["filter_predictions"]
 filter_type = analysis_info["filter_type"]
 
-modes_to_remove = analysis_info["modes_to_remove"]
+first_modes_to_remove = analysis_info["first_modes_to_remove"]
+last_modes_to_remove = analysis_info["last_modes_to_remove"]
+
 window_length = analysis_info["window_length"]
 polyorder = analysis_info["polyorder"]
 highpass = analysis_info["highpass"]
@@ -239,7 +241,8 @@ else:
                                                    
                                                    filter_type,
                                                    
-                                                   modes_to_remove,
+                                                   first_modes_to_remove,
+                                                   last_modes_to_remove,
                                                    
                                                    window_length,
                                                    polyorder,
@@ -507,7 +510,8 @@ gg = Iso2DGaussianGridder(stimulus=prf_stim,
                           hrf=hrf,
                           filter_predictions=filter_predictions,
                           filter_type=filter_type,
-                          modes_to_remove=modes_to_remove,
+                          first_modes_to_remove=first_modes_to_remove,
+                          last_modes_to_remove=last_modes_to_remove,
                           window_length=window_length,
                           polyorder=polyorder,
                           highpass=highpass,
@@ -667,7 +671,8 @@ if "CSS" in models_to_fit:
                                       hrf=hrf,
                                       filter_predictions=filter_predictions,
                                       filter_type=filter_type,
-                                      modes_to_remove=modes_to_remove,
+                                      first_modes_to_remove=first_modes_to_remove,
+                                      last_modes_to_remove=last_modes_to_remove,
                                       window_length=window_length,
                                       polyorder=polyorder,
                                       highpass=highpass,
@@ -792,7 +797,8 @@ if "DoG" in models_to_fit:
                                       hrf=hrf,
                                       filter_predictions=filter_predictions,
                                       filter_type=filter_type,
-                                      modes_to_remove=modes_to_remove,
+                                      first_modes_to_remove=first_modes_to_remove,
+                                      last_modes_to_remove=last_modes_to_remove,
                                       window_length=window_length,
                                       polyorder=polyorder,
                                       highpass=highpass,
@@ -923,7 +929,8 @@ if "norm" in models_to_fit:
                                         hrf=hrf,
                                         filter_predictions=filter_predictions,
                                         filter_type=filter_type,
-                                        modes_to_remove=modes_to_remove,
+                                        first_modes_to_remove=first_modes_to_remove,
+                                        last_modes_to_remove=last_modes_to_remove,
                                         window_length=window_length,
                                         polyorder=polyorder,
                                         highpass=highpass,
