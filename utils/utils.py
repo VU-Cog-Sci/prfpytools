@@ -89,29 +89,29 @@ def create_full_stim(screenshot_paths,
     
     dm_full = np.concatenate(tuple(dm_list), axis=-1)
 
-    # # late-empty DM periods (for calculation of BOLD baseline)
-    # shifted_dm = np.zeros_like(dm_full)
+    # late-empty DM periods (for calculation of BOLD baseline)
+    shifted_dm = np.zeros_like(dm_full)
     
-    # # number of TRs in which activity may linger (hrf)
-    # shifted_dm[..., 7:] = dm_full[..., :-7]
+    # number of TRs in which activity may linger (hrf)
+    shifted_dm[..., 7:] = dm_full[..., :-7]
     
-    # late_iso_dict = {}
-    # late_iso_dict['periods'] = np.where((np.sum(dm_full, axis=(0, 1)) == 0) & (
-    #     np.sum(shifted_dm, axis=(0, 1)) == 0))[0]
-    
-    # start=0
-    # for i, task_name in enumerate(task_names):
-    #     stop=start+task_lengths[i]
-    #     if task_name not in screenshot_paths[i]:
-    #         print("WARNING: check that screenshot paths and task names are in the same order")
-    #     late_iso_dict[task_name] = late_iso_dict['periods'][np.where((late_iso_dict['periods']>=start) & (late_iso_dict['periods']<stop))]
-            
-    #     start+=task_lengths[i]
-
     late_iso_dict = {}
+    late_iso_dict['periods'] = np.where((np.sum(dm_full, axis=(0, 1)) == 0) & (
+        np.sum(shifted_dm, axis=(0, 1)) == 0))[0]
+    
+    start=0
     for i, task_name in enumerate(task_names):
-        #to estimate baseline across conditions
-        late_iso_dict[task_name] = np.concatenate((np.arange(baseline_volumes_begin_end[0]),np.arange(task_lengths[i]-baseline_volumes_begin_end[1], task_lengths[i])))
+        stop=start+task_lengths[i]
+        if task_name not in screenshot_paths[i]:
+            print("WARNING: check that screenshot paths and task names are in the same order")
+        late_iso_dict[task_name] = late_iso_dict['periods'][np.where((late_iso_dict['periods']>=start) & (late_iso_dict['periods']<stop))]
+            
+        start+=task_lengths[i]
+
+    # late_iso_dict = {}
+    # for i, task_name in enumerate(task_names):
+    #     #to estimate baseline across conditions
+    #     late_iso_dict[task_name] = np.concatenate((np.arange(baseline_volumes_begin_end[0]),np.arange(task_lengths[i]-baseline_volumes_begin_end[1], task_lengths[i])))
 
     prf_stim = PRFStimulus2D(screen_size_cm=screen_size_cm,
                              screen_distance_cm=screen_distance_cm,
