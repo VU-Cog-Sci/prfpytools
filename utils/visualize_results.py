@@ -13,7 +13,7 @@ import nibabel as nb
 from collections import defaultdict as dd
 
 import time
-from scipy.stats import sem, ks_2samp, ttest_1samp
+from scipy.stats import sem, ks_2samp, ttest_1samp, wilcoxon
 
 opj = os.path.join
 
@@ -340,15 +340,15 @@ class visualize_results(object):
                 except:
                     pass
         
-    def ecc_size_roi_plots(self, rois, rsq_thresh, save_figures, analysis_name = None):
+    def ecc_size_roi_plots(self, rois, rsq_thresh, save_figures, analysis_names = None):
         
         pl.rcParams.update({'font.size': 16})
         for space, space_res in self.main_dict.items():
             if 'fs' in space:
-                if analysis_name == None:
+                if analysis_names == None:
                     analyses = space_res.items()
                 else:
-                    analyses = [item for item in space_res.items() if item[0] in analysis_name] 
+                    analyses = [item for item in space_res.items() if item[0] in analysis_names] 
                 for analysis, analysis_res in analyses:       
                     for subj, subj_res in analysis_res.items():
                         print(space+" "+analysis+" "+subj)
@@ -706,7 +706,7 @@ class visualize_results(object):
                                                param.replace("/","").replace('.','').replace(' ','_')+'.png', dpi=200, bbox_inches='tight')
                                     
                                     
-    def rsq_roi_plots(self, rois, rsq_thresh, save_figures):
+    def rsq_roi_plots(self, rois, rsq_thresh, save_figures, analysis_names=None):
         bar_position = 0
         last_bar_position = dd(lambda:0)
         x_ticks=[]
@@ -714,7 +714,11 @@ class visualize_results(object):
         pl.rcParams.update({'font.size': 16})
         for space, space_res in self.main_dict.items():
             if 'fs' in space:
-                for analysis, analysis_res in space_res.items():       
+                if analysis_names == None:
+                    analyses = space_res.items()
+                else:
+                    analyses = [item for item in space_res.items() if item[0] in analysis_names] 
+                for analysis, analysis_res in analyses:        
                     for subj, subj_res in analysis_res.items():
                         print(space+" "+analysis+" "+subj)
             
@@ -741,22 +745,62 @@ class visualize_results(object):
                                 else:
                                     x_labels.append(analysis.replace('_100','')+'\n'+model)
                                 bar_position += 0.1
-                                
+   
+
+                            last_bar_position[roi] = bar_position
+                            pl.xticks(x_ticks,x_labels)
+
+                             
                             if 'CSS' in model_list and 'DoG' in model_list:
                                 surround_voxels = subj_res['Processed Results']['RSq']['DoG'][alpha_roi]>subj_res['Processed Results']['RSq']['Gauss'][alpha_roi]
                                 nonlinear_voxels = subj_res['Processed Results']['RSq']['CSS'][alpha_roi]>subj_res['Processed Results']['RSq']['Gauss'][alpha_roi]
                                 
                                 print(analysis+' '+roi)
                                 print(f"{roi} voxels above {rsq_thresh} threshold within stimulus eccentricity: {np.sum(alpha_roi)} out of {len(self.idx_rois[subj][roi])}")
+                                
                                 print(f"Norm-CSS in {roi} surround voxels: {ks_2samp(subj_res['Processed Results']['RSq']['Norm'][alpha_roi][surround_voxels],subj_res['Processed Results']['RSq']['CSS'][alpha_roi][surround_voxels])}")
                                 print(f"Norm-DoG in {roi} nonlinear voxels: {ks_2samp(subj_res['Processed Results']['RSq']['Norm'][alpha_roi][nonlinear_voxels],subj_res['Processed Results']['RSq']['DoG'][alpha_roi][nonlinear_voxels])}")
-                                print(f"Norm-CSS in {roi} surround voxels: {ttest_1samp(subj_res['Processed Results']['RSq']['Norm'][alpha_roi][surround_voxels]-subj_res['Processed Results']['RSq']['CSS'][alpha_roi][surround_voxels],0)}")
-                                print(f"Norm-DoG in {roi} nonlinear voxels: {ttest_1samp(subj_res['Processed Results']['RSq']['Norm'][alpha_roi][nonlinear_voxels]-subj_res['Processed Results']['RSq']['DoG'][alpha_roi][nonlinear_voxels],0)}")
-                                             
-                                print(f"Norm-CSS in {roi} surround voxels: {np.mean(subj_res['Processed Results']['RSq']['Norm'][alpha_roi][surround_voxels]-subj_res['Processed Results']['RSq']['CSS'][alpha_roi][surround_voxels])}")
-                                print(f"Norm-DoG in {roi} nonlinear voxels: {np.mean(subj_res['Processed Results']['RSq']['Norm'][alpha_roi][nonlinear_voxels]-subj_res['Processed Results']['RSq']['DoG'][alpha_roi][nonlinear_voxels])}")    
-                            last_bar_position[roi] = bar_position
-                            pl.xticks(x_ticks,x_labels)
+                                
+                                norm_css_surrvox = subj_res['Processed Results']['RSq']['Norm'][alpha_roi][surround_voxels]-subj_res['Processed Results']['RSq']['CSS'][alpha_roi][surround_voxels]
+                                norm_dog_nonlvox = subj_res['Processed Results']['RSq']['Norm'][alpha_roi][nonlinear_voxels]-subj_res['Processed Results']['RSq']['DoG'][alpha_roi][nonlinear_voxels]
+                                norm_css_nonlvox = subj_res['Processed Results']['RSq']['Norm'][alpha_roi][nonlinear_voxels]-subj_res['Processed Results']['RSq']['CSS'][alpha_roi][nonlinear_voxels]
+                                norm_dog_surrvox = subj_res['Processed Results']['RSq']['Norm'][alpha_roi][surround_voxels]-subj_res['Processed Results']['RSq']['DoG'][alpha_roi][surround_voxels]
+                                
+                                print(f"Norm-CSS in {roi} surround voxels: {ttest_1samp(norm_css_surrvox,0)}")
+                                print(f"Norm-DoG in {roi} nonlinear voxels: {ttest_1samp(norm_dog_nonlvox,0)}")
+                                
+                                print(f"Norm-CSS in {roi} surround voxels: {wilcoxon(norm_css_surrvox)}")
+                                print(f"Norm-DoG in {roi} nonlinear voxels: {wilcoxon(norm_dog_nonlvox)}")
+                                                                              
+                                print(f"Norm-CSS in {roi} surround voxels: {np.mean(norm_css_surrvox)}")
+                                print(f"Norm-DoG in {roi} nonlinear voxels: {np.mean(norm_dog_nonlvox)}")
+                                if len(analysis_names)<5:
+                                    fig, axs = pl.subplots(2, 2, sharey=True, sharex=True)
+                                    fig.suptitle(roi.replace('custom.',''))
+                                    axs[0,0].set_xlabel('Norm-CSS')
+                                    axs[0,0].set_ylabel('Number of vertices')
+                                    axs[0,1].set_xlabel('Norm-CSS') 
+                                    axs[0,0].set_title('Surround vertices')
+                                    axs[0,1].set_title('Nonlinear vertices')
+                                    
+                                    h1 = axs[0,0].hist(norm_css_surrvox,bins=100)
+                                    h2 = axs[0,1].hist(norm_css_nonlvox,bins=100)
+                                    
+
+                                    axs[1,0].set_xlabel('Norm-DoG')
+                                    #axs[0,0].set_ylabel('Number of vertices')
+                                    axs[1,1].set_xlabel('Norm-DoG') 
+                                    
+                                    h3 = axs[1,0].hist(norm_dog_surrvox,bins=100)
+                                    h4 = axs[1,1].hist(norm_dog_nonlvox,bins=100)
+                                    
+                                    height = 1+int(np.max([h1[0].max(),h2[0].max(), h3[0].max(), h4[0].max()]))
+                                    
+                                    axs[0,0].plot(np.zeros(height), np.arange(height), c='black', linestyle='--')   
+                                    axs[0,1].plot(np.zeros(height), np.arange(height), c='black', linestyle='--')                               
+                                    axs[1,0].plot(np.zeros(height), np.arange(height), c='black', linestyle='--')   
+                                    axs[1,1].plot(np.zeros(height), np.arange(height), c='black', linestyle='--')                                
+
                             print('---------------')
                         print('\n')
                             
