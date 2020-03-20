@@ -788,7 +788,7 @@ class visualize_results(object):
                                     
 
                                     axs[1,0].set_xlabel('Norm-DoG')
-                                    #axs[0,0].set_ylabel('Number of vertices')
+                                    axs[1,0].set_ylabel('Number of vertices')
                                     axs[1,1].set_xlabel('Norm-DoG') 
                                     
                                     h3 = axs[1,0].hist(norm_dog_surrvox,bins=100)

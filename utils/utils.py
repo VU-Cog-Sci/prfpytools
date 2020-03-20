@@ -93,7 +93,7 @@ def create_full_stim(screenshot_paths,
     shifted_dm = np.zeros_like(dm_full)
     
     # number of TRs in which activity may linger (hrf)
-    shifted_dm[..., 7:] = dm_full[..., :-7]
+    shifted_dm[..., 9:] = dm_full[..., :-9]
     
     late_iso_dict = {}
     late_iso_dict['periods'] = np.where((np.sum(dm_full, axis=(0, 1)) == 0) & (
@@ -192,7 +192,7 @@ def prepare_data(subj,
 
                 
                 tc_dict[hemi][task_name]['timecourse'] = np.mean(tc_task, axis=0)
-                tc_dict[hemi][task_name]['baseline'] = np.mean(tc_dict[hemi][task_name]['timecourse'][...,prf_stim.late_iso_dict[task_name]],
+                tc_dict[hemi][task_name]['baseline'] = np.median(tc_dict[hemi][task_name]['timecourse'][...,prf_stim.late_iso_dict[task_name]],
                                                    axis=-1)
    
             if crossvalidate:
@@ -226,12 +226,12 @@ def prepare_data(subj,
     
                     
                     tc_dict[hemi][task_name]['timecourse_test'] = np.mean(tc_task, axis=0)
-                    tc_dict[hemi][task_name]['baseline_test'] = np.mean(tc_dict[hemi][task_name]['timecourse_test'][...,test_prf_stim.late_iso_dict[task_name]],
+                    tc_dict[hemi][task_name]['baseline_test'] = np.median(tc_dict[hemi][task_name]['timecourse_test'][...,test_prf_stim.late_iso_dict[task_name]],
                                                        axis=-1)
 
         
             #shift timeseries so they have the same average value in proper baseline periods across conditions
-            tc_dict[hemi]['median_baseline'] = np.mean([tc_dict[hemi][task_name]['baseline'] for task_name in prf_stim.task_names], axis=0)
+            tc_dict[hemi]['median_baseline'] = np.median([tc_dict[hemi][task_name]['baseline'] for task_name in prf_stim.task_names], axis=0)
     
             for task_name in prf_stim.task_names:
                 iso_diff = tc_dict[hemi]['median_baseline'] - tc_dict[hemi][task_name]['baseline']
@@ -240,7 +240,7 @@ def prepare_data(subj,
             tc_dict[hemi]['full_iso']=np.concatenate(tuple([tc_dict[hemi][task_name]['timecourse'] for task_name in prf_stim.task_names]), axis=-1)
 
             if crossvalidate:
-                tc_dict[hemi]['median_baseline_test'] = np.mean([tc_dict[hemi][task_name]['baseline_test'] for task_name in test_prf_stim.task_names], axis=0)
+                tc_dict[hemi]['median_baseline_test'] = np.median([tc_dict[hemi][task_name]['baseline_test'] for task_name in test_prf_stim.task_names], axis=0)
         
                 for task_name in test_prf_stim.task_names:
                     iso_diff_test = tc_dict[hemi]['median_baseline_test'] - tc_dict[hemi][task_name]['baseline_test']
