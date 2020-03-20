@@ -93,7 +93,7 @@ def create_full_stim(screenshot_paths,
     shifted_dm = np.zeros_like(dm_full)
     
     # number of TRs in which activity may linger (hrf)
-    shifted_dm[..., 9:] = dm_full[..., :-9]
+    shifted_dm[..., 5:] = dm_full[..., :-5]
     
     late_iso_dict = {}
     late_iso_dict['periods'] = np.where((np.sum(dm_full, axis=(0, 1)) == 0) & (
