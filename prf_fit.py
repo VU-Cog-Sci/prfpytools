@@ -51,7 +51,7 @@ filter_predictions = analysis_info["filter_predictions"]
 filter_type = analysis_info["filter_type"]
 
 first_modes_to_remove = analysis_info["first_modes_to_remove"]
-last_modes_to_remove = analysis_info["last_modes_to_remove"]
+last_modes_to_remove_percent = analysis_info["last_modes_to_remove_percent"]
 
 window_length = analysis_info["window_length"]
 polyorder = analysis_info["polyorder"]
@@ -242,7 +242,7 @@ else:
                                                    filter_type,
                                                    
                                                    first_modes_to_remove,
-                                                   last_modes_to_remove,
+                                                   last_modes_to_remove_percent,
                                                    
                                                    window_length,
                                                    polyorder,
@@ -511,7 +511,7 @@ gg = Iso2DGaussianGridder(stimulus=prf_stim,
                           filter_predictions=filter_predictions,
                           filter_type=filter_type,
                           first_modes_to_remove=first_modes_to_remove,
-                          last_modes_to_remove=last_modes_to_remove,
+                          last_modes_to_remove_percent=last_modes_to_remove_percent,
                           window_length=window_length,
                           polyorder=polyorder,
                           highpass=highpass,
@@ -672,7 +672,7 @@ if "CSS" in models_to_fit:
                                       filter_predictions=filter_predictions,
                                       filter_type=filter_type,
                                       first_modes_to_remove=first_modes_to_remove,
-                                      last_modes_to_remove=last_modes_to_remove,
+                                      last_modes_to_remove_percent=last_modes_to_remove_percent,
                                       window_length=window_length,
                                       polyorder=polyorder,
                                       highpass=highpass,
@@ -798,7 +798,7 @@ if "DoG" in models_to_fit:
                                       filter_predictions=filter_predictions,
                                       filter_type=filter_type,
                                       first_modes_to_remove=first_modes_to_remove,
-                                      last_modes_to_remove=last_modes_to_remove,
+                                      last_modes_to_remove_percent=last_modes_to_remove_percent,
                                       window_length=window_length,
                                       polyorder=polyorder,
                                       highpass=highpass,
@@ -930,7 +930,7 @@ if "norm" in models_to_fit:
                                         filter_predictions=filter_predictions,
                                         filter_type=filter_type,
                                         first_modes_to_remove=first_modes_to_remove,
-                                        last_modes_to_remove=last_modes_to_remove,
+                                        last_modes_to_remove_percent=last_modes_to_remove_percent,
                                         window_length=window_length,
                                         polyorder=polyorder,
                                         highpass=highpass,
