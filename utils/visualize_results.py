@@ -712,6 +712,7 @@ class visualize_results(object):
         x_ticks=[]
         x_labels=[]
         pl.rcParams.update({'font.size': 16})
+        pl.rc('figure', facecolor='w')
         for space, space_res in self.main_dict.items():
             if 'fs' in space:
                 if analysis_names == None:
