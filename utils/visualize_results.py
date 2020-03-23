@@ -741,8 +741,8 @@ class visualize_results(object):
                             
                             for model in model_list:                                
                                 model_rsq = subj_res['Processed Results']['RSq'][model][alpha_roi]
-                                if noise_ceiling is not None:
-                                    model_rsq /= noise_ceiling[alpha_roi]
+                                # if noise_ceiling is not None:
+                                #     model_rsq /= noise_ceiling[alpha_roi]
                                     
                                 bar_height = np.mean(model_rsq)
                                 bar_err = sem(model_rsq)
@@ -753,7 +753,14 @@ class visualize_results(object):
                                 else:
                                     x_labels.append(analysis.replace('_100','')+'\n'+model)
                                 bar_position += 0.1
-   
+                                
+                            if noise_ceiling is not None:
+                                bar_height=np.mean(noise_ceiling[alpha_roi])
+                                bar_err = sem(noise_ceiling[alpha_roi])
+                                pl.bar(bar_position, bar_height, width=0.1, yerr=bar_err, color='grey',edgecolor='black')
+                                x_ticks.append(bar_position)
+                                x_labels.append('NC')
+                                bar_position += 0.1
 
                             last_bar_position[roi] = bar_position
                             pl.xticks(x_ticks,x_labels)
@@ -774,11 +781,11 @@ class visualize_results(object):
                                 norm_css_nonlvox = subj_res['Processed Results']['RSq']['Norm'][alpha_roi][nonlinear_voxels]-subj_res['Processed Results']['RSq']['CSS'][alpha_roi][nonlinear_voxels]
                                 norm_dog_surrvox = subj_res['Processed Results']['RSq']['Norm'][alpha_roi][surround_voxels]-subj_res['Processed Results']['RSq']['DoG'][alpha_roi][surround_voxels]
                                 
-                                if noise_ceiling is not None:
-                                    norm_css_surrvox /= noise_ceiling[alpha_roi][surround_voxels]
-                                    norm_dog_nonlvox /= noise_ceiling[alpha_roi][nonlinear_voxels]
-                                    norm_css_nonlvox /= noise_ceiling[alpha_roi][nonlinear_voxels]
-                                    norm_dog_surrvox /= noise_ceiling[alpha_roi][surround_voxels]
+                                # if noise_ceiling is not None:
+                                #     norm_css_surrvox /= noise_ceiling[alpha_roi][surround_voxels]
+                                #     norm_dog_nonlvox /= noise_ceiling[alpha_roi][nonlinear_voxels]
+                                #     norm_css_nonlvox /= noise_ceiling[alpha_roi][nonlinear_voxels]
+                                #     norm_dog_surrvox /= noise_ceiling[alpha_roi][surround_voxels]
                                     
                                 print(f"Norm-CSS in {roi} surround voxels: {ttest_1samp(norm_css_surrvox,0)}")
                                 print(f"Norm-DoG in {roi} nonlinear voxels: {ttest_1samp(norm_dog_nonlvox,0)}")
