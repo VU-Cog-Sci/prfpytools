@@ -163,16 +163,16 @@ def prepare_data(subj,
 
                 print("For task "+task_name+", hemisphere "+hemi+" of subject "+subj+", a total of "+str(len(tc_paths))+" runs were found.")
                 
-                if fit_runs is not None and fit_runs>=len(tc_paths):
+                if fit_runs is not None and (len(fit_runs)>=len(tc_paths) or np.any(np.array(fit_runs)>=len(tc_paths))):
                     print(f"{fit_runs} fit_runs requested but only {len(tc_paths)} runs were found.")
                     raise ValueError
 
                 if not crossvalidate or fit_task is not None:
                     #if CV over tasks, or if no CV, use all runs
-                    fit_runs = len(tc_paths)
+                    fit_runs = np.arange(len(tc_paths))
                 
                     
-                for tc_path in tc_paths[:fit_runs]:
+                for tc_path in [tc_paths[run] for run in fit_runs]:
                     tc_run = nb.load(str(tc_path))
                     #no need to pass further args, only filtering 1 condition
                     tc_task.append(filter_predictions(np.array([arr.data for arr in tc_run.darrays]).T[...,discard_volumes:],
@@ -203,10 +203,12 @@ def prepare_data(subj,
                     print("For task "+task_name+", hemisphere "+hemi+" of subject "+subj+", a total of "+str(len(tc_paths))+" runs were found.")
     
                     if fit_task is not None:
-                        #if CV is over tasks, can use all runs for test data
-                        fit_runs = 0
+                        #if CV is over tasks, can use all runs for test data as well
+                        cv_runs = np.arange(len(tc_paths))
+                    else:
+                        cv_runs = [run for run in np.arange(len(tc_paths)) if run not in fit_runs]
     
-                    for tc_path in tc_paths[fit_runs:]:
+                    for tc_path in [tc_paths[run] for run in cv_runs]:
                         tc_run = nb.load(str(tc_path))
                         #no need to pass further args, only filtering 1 condition
                         tc_task.append(filter_predictions(np.array([arr.data for arr in tc_run.darrays]).T[...,discard_volumes:],

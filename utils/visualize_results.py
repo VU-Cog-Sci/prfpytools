@@ -629,12 +629,16 @@ class visualize_results(object):
                                 pl.savefig('/Users/marcoaqil/PRFMapping/Figures/'+subj+'_'+
                                            roi.replace('custom.','')+'_css-exp.png', dpi=200, bbox_inches='tight')            
             
-    def ecc_norm_baselines_roi_plots(self, rois, rsq_thresh, save_figures):
+    def ecc_norm_baselines_roi_plots(self, rois, rsq_thresh, save_figures, analysis_names=None):
         
         pl.rcParams.update({'font.size': 16})
         for space, space_res in self.main_dict.items():
             if 'fs' in space:
-                for analysis, analysis_res in space_res.items():       
+                if analysis_names == None:
+                    analyses = space_res.items()
+                else:
+                    analyses = [item for item in space_res.items() if item[0] in analysis_names] 
+                for analysis, analysis_res in analyses:         
                     for subj, subj_res in analysis_res.items():
                         print(space+" "+analysis+" "+subj)
             
@@ -696,7 +700,7 @@ class visualize_results(object):
                                        [ss.mean for ss in norm_baselines_stats[roi][param]],
                                        yerr=np.array([np.abs(ss.zconfint_mean(alpha=0.05)-ss.mean) for ss in norm_baselines_stats[roi][param]]).T,
                                        xerr=np.array([np.abs(ss.zconfint_mean(alpha=0.05)-ss.mean) for ss in ecc_stats[roi][param]]).T,
-                                       fmt=symbol[analysis], mfc=roi_colors[roi], mec='black', label=analysis.replace('_100','')+' '+roi.replace('custom.',''), ecolor=roi_colors[roi])
+                                       fmt='s', mfc=roi_colors[roi], mec='black', label=analysis.replace('_100','')+' '+roi.replace('custom.',''), ecolor=roi_colors[roi])
             
                                 pl.xlabel('Eccentricity (degrees)')
                                 pl.ylabel(param)
@@ -706,7 +710,7 @@ class visualize_results(object):
                                                param.replace("/","").replace('.','').replace(' ','_')+'.png', dpi=200, bbox_inches='tight')
                                     
                                     
-    def rsq_roi_plots(self, rois, rsq_thresh, save_figures, analysis_names=None):
+    def rsq_roi_plots(self, rois, rsq_thresh, save_figures, analysis_names=None, noise_ceiling=None):
         bar_position = 0
         last_bar_position = dd(lambda:0)
         x_ticks=[]
@@ -736,9 +740,12 @@ class visualize_results(object):
                             model_list = [k for k in subj_res['Processed Results']['RSq'].keys()]
                             
                             for model in model_list:                                
-            
-                                bar_height = np.mean(subj_res['Processed Results']['RSq'][model][alpha_roi])
-                                bar_err = sem(subj_res['Processed Results']['RSq'][model][alpha_roi])
+                                model_rsq = subj_res['Processed Results']['RSq'][model][alpha_roi]
+                                if noise_ceiling is not None:
+                                    model_rsq /= noise_ceiling[alpha_roi]
+                                    
+                                bar_height = np.mean(model_rsq)
+                                bar_err = sem(model_rsq)
                                 pl.bar(bar_position, bar_height, width=0.1, yerr=bar_err, color=model_colors[model],edgecolor='black')
                                 x_ticks.append(bar_position)
                                 if 'ABCD' in analysis:
@@ -767,6 +774,12 @@ class visualize_results(object):
                                 norm_css_nonlvox = subj_res['Processed Results']['RSq']['Norm'][alpha_roi][nonlinear_voxels]-subj_res['Processed Results']['RSq']['CSS'][alpha_roi][nonlinear_voxels]
                                 norm_dog_surrvox = subj_res['Processed Results']['RSq']['Norm'][alpha_roi][surround_voxels]-subj_res['Processed Results']['RSq']['DoG'][alpha_roi][surround_voxels]
                                 
+                                if noise_ceiling is not None:
+                                    norm_css_surrvox /= noise_ceiling[alpha_roi][surround_voxels]
+                                    norm_dog_nonlvox /= noise_ceiling[alpha_roi][nonlinear_voxels]
+                                    norm_css_nonlvox /= noise_ceiling[alpha_roi][nonlinear_voxels]
+                                    norm_dog_surrvox /= noise_ceiling[alpha_roi][surround_voxels]
+                                    
                                 print(f"Norm-CSS in {roi} surround voxels: {ttest_1samp(norm_css_surrvox,0)}")
                                 print(f"Norm-DoG in {roi} nonlinear voxels: {ttest_1samp(norm_dog_nonlvox,0)}")
                                 
