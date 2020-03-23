@@ -261,10 +261,14 @@ def prepare_data(subj,
             tc_mean_test = tc_full_iso_test.mean(-1)
 
         #masking flat or nearly flat timecourses
-        nonlow_var = (np.abs(tc_full_iso - tc_mean[...,np.newaxis]).max(-1) > (tc_mean*min_percent_var/100)) \
-             * (np.abs(tc_full_iso_test - tc_mean_test[...,np.newaxis]).max(-1) > (tc_mean_test*min_percent_var/100)) \
-             * (tc_mean>0) * (tc_mean_test>0)
-
+        if crossvalidate:
+            nonlow_var = (np.abs(tc_full_iso - tc_mean[...,np.newaxis]).max(-1) > (tc_mean*min_percent_var/100)) \
+                 * (np.abs(tc_full_iso_test - tc_mean_test[...,np.newaxis]).max(-1) > (tc_mean_test*min_percent_var/100)) \
+                 * (tc_mean>0) * (tc_mean_test>0)
+        else:
+            nonlow_var = (np.abs(tc_full_iso - tc_mean[...,np.newaxis]).max(-1) > (tc_mean*min_percent_var/100)) \
+                 * (tc_mean>0) 
+                 
         if roi_idx is not None:
             mask = roi_mask(roi_idx, nonlow_var)
         else:
