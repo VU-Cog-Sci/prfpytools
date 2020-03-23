@@ -163,7 +163,7 @@ def prepare_data(subj,
 
                 print("For task "+task_name+", hemisphere "+hemi+" of subject "+subj+", a total of "+str(len(tc_paths))+" runs were found.")
                 
-                if fit_runs is not None and (len(fit_runs)>=len(tc_paths) or np.any(np.array(fit_runs)>=len(tc_paths))):
+                if fit_runs is not None and (len(fit_runs)>len(tc_paths) or np.any(np.array(fit_runs)>=len(tc_paths))):
                     print(f"{fit_runs} fit_runs requested but only {len(tc_paths)} runs were found.")
                     raise ValueError
 
