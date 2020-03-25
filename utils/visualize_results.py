@@ -69,12 +69,11 @@ class visualize_results(object):
                 V1V2V3 = np.concatenate((self.idx_rois[subj]['custom.V1'],self.idx_rois[subj]['custom.V2'],self.idx_rois[subj]['custom.V3']))
                 np.save('/Users/marcoaqil/PRFMapping/PRFMapping-Deriv-hires/prfpy/'+subj+'_roi-V1V2V3.npy', V1V2V3)
         
-    def pycortex_plots(self):        
-          
+
+    def set_alpha(self):
+        self.tc_min = dict()
         for space, space_res in self.main_dict.items():
             if 'fs' in space:
-                plotted_rois = dd(lambda:False)
-                plotted_stats = dd(lambda:False)
                 for analysis, analysis_res in space_res.items():       
                     for subj, subj_res in analysis_res.items():
                         print(space+" "+analysis+" "+subj)
@@ -87,47 +86,112 @@ class visualize_results(object):
                         models = p_r['RSq'].keys()
                         
                         tc_stats = subj_res['Timecourse Stats']
-                        mask = subj_res['Results']['mask']
-                        
-                        
+                       
                         #######Raw bold timecourse vein threshold
                         if subj == 'sub-006':
-                            tc_min = 45000
+                            self.tc_min[subj] = 45000
                         elif subj == 'sub-007':
-                            tc_min = 35000
+                            self.tc_min[subj] = 35000
                         elif subj == 'sub-001':
-                            tc_min = 35000
+                            self.tc_min[subj] = 35000
                             
                         ######limits for eccentricity
-                        ecc_min=0.125
-                        ecc_max=5.0
-                        ######max prf size
-                        w_max = 90
-                        
+                        self.ecc_min=0.125
+                        self.ecc_max=5.0
+              
                         #housekeeping
                         rsq = np.vstack(tuple([elem for _,elem in p_r['RSq'].items()])).T
                         ecc = np.vstack(tuple([elem for _,elem in p_r['Eccentricity'].items()])).T
-                        polar = np.vstack(tuple([elem for _,elem in p_r['Polar Angle'].items()])).T
-                        amp = np.vstack(tuple([elem for _,elem in p_r['Amplitude'].items()])).T
-                        fw_hmax = np.vstack(tuple([elem for _,elem in p_r['Size (fwhmax)'].items()])).T
             
                         #alpha dictionary
                         p_r['Alpha'] = {}          
-                        p_r['Alpha']['all'] = rsq.max(-1) * (tc_stats['Mean']>tc_min) * (ecc.min(-1)<ecc_max) * (ecc.max(-1)>ecc_min) * (rsq.min(-1)>0)
+                        p_r['Alpha']['all'] = rsq.max(-1) * (tc_stats['Mean']>self.tc_min[subj]) * (ecc.min(-1)<self.ecc_max) * (ecc.max(-1)>self.ecc_min) * (rsq.min(-1)>0)
                         
                         for model in models:
-                            p_r['Alpha'][model] = p_r['RSq'][model] * (p_r['Eccentricity'][model]>ecc_min) * (p_r['Eccentricity'][model]<ecc_max) *(p_r['Amplitude'][model]>0) * (tc_stats['Mean']>tc_min) * (p_r['Size (fwhmax)'][model]<w_max)
+                            p_r['Alpha'][model] = p_r['RSq'][model] * (p_r['Eccentricity'][model]>self.ecc_min) * (p_r['Eccentricity'][model]<self.ecc_max)\
+                                * (tc_stats['Mean']>self.tc_min[subj])
                        
-                        if self.only_roi is not None:
+
+
+    def pycortex_plots(self, rois, rsq_thresh, analysis_names = 'all'):        
+          
+        for space, space_res in self.main_dict.items():
+            if 'fs' in space:
+                plotted_rois = dd(lambda:False)
+                plotted_stats = dd(lambda:False)
+                if analysis_names == 'all':
+                    analyses = space_res.items()
+                else:
+                    analyses = [item for item in space_res.items() if item[0] in analysis_names] 
+                for analysis, analysis_res in analyses:    
+                    for subj, subj_res in analysis_res.items():
+                        
+                        if subj not in cortex.db.subjects:
+                            cortex.freesurfer.import_subj(subj, freesurfer_subject_dir=self.fs_dir, 
+                                  whitematter_surf='smoothwm')
+                        
+                        p_r = subj_res['Processed Results']
+                        models = p_r['RSq'].keys()
+                        
+                        tc_stats = subj_res['Timecourse Stats']
+                        mask = subj_res['Results']['mask']
+                        
+                        
+                        #housekeeping
+                        rsq = np.vstack(tuple([elem for _,elem in p_r['RSq'].items()])).T
+                        polar = np.vstack(tuple([elem for _,elem in p_r['Polar Angle'].items()])).T
+                        ecc = np.vstack(tuple([elem for _,elem in p_r['Eccentricity'].items()])).T
+                  
+                        if rois != 'all':
                             for key in p_r['Alpha']:
-                                p_r['Alpha'][key] = roi_mask(self.idx_rois[subj][self.only_roi], p_r['Alpha'][key])
+                                p_r['Alpha'][key] = roi_mask(self.idx_rois[subj][rois], p_r['Alpha'][key])
                                          
                         ##START PYCORTEX VISUALIZATIONS
+                        #output freesurefer-format polar angle maps to draw custom ROIs in freeview    
+                        if self.output_freesurfer_maps:
+                                          
+                            lh_c = read_morph_data(opj(self.fs_dir, subj+'/surf/lh.curv'))
+            
+                            polar_freeview = np.mean(polar, axis=-1)
+                            ecc_freeview = np.mean(ecc, axis=-1)
+                                      
+                            alpha_freeview = rsq.max(-1) * (tc_stats['Mean']>self.tc_min[subj]) * (rsq.min(-1)>0)
+            
+                            polar_freeview[alpha_freeview<rsq_thresh] = -10
+                            ecc_freeview[alpha_freeview<rsq_thresh] = -10
+            
+                            write_morph_data(opj(self.fs_dir, subj+'/surf/lh.polar')
+                                                                   ,polar_freeview[:lh_c.shape[0]])
+                            write_morph_data(opj(self.fs_dir, subj+'/surf/rh.polar')
+                                                                   ,polar_freeview[lh_c.shape[0]:])
+                            write_morph_data(opj(self.fs_dir, subj+'/surf/lh.ecc')
+                                                                   ,ecc_freeview[:lh_c.shape[0]])
+                            write_morph_data(opj(self.fs_dir, subj+'/surf/rh.ecc')
+                                                                   ,ecc_freeview[lh_c.shape[0]:])
+                            
+                            
+                            polar_freeview_masked = np.copy(polar_freeview)
+                            ecc_freeview_masked = np.copy(ecc_freeview)
+                            alpha_freeview_masked = rsq.max(-1) * (tc_stats['Mean']>self.tc_min[subj]) * (rsq.min(-1)>0)* (ecc_freeview<self.ecc_max) * (ecc_freeview>self.ecc_min)
+            
+                            polar_freeview_masked[alpha_freeview_masked<rsq_thresh] = -10
+                            ecc_freeview_masked[alpha_freeview_masked<rsq_thresh] = -10
+            
+                            write_morph_data(opj(self.fs_dir, subj+'/surf/lh.polar_masked')
+                                                                   ,polar_freeview_masked[:lh_c.shape[0]])
+                            write_morph_data(opj(self.fs_dir, subj+'/surf/rh.polar_masked')
+                                                                   ,polar_freeview_masked[lh_c.shape[0]:])
+                            write_morph_data(opj(self.fs_dir, subj+'/surf/lh.ecc_masked')
+                                                                   ,ecc_freeview_masked[:lh_c.shape[0]])
+                            write_morph_data(opj(self.fs_dir, subj+'/surf/rh.ecc_masked')
+                                                                   ,ecc_freeview_masked[lh_c.shape[0]:])
+                            
+                            
                         #data quality/stats cortex visualization 
                         if space == 'fsnative' and self.plot_stats_cortex and not plotted_stats[subj] :
-                            mean_ts_vert = cortex.Vertex2D(tc_stats['Mean'], mask*(tc_stats['Mean']>tc_min), subject=subj, cmap='Jet_2D_alpha')
-                            var_ts_vert = cortex.Vertex2D(tc_stats['Variance'], mask*(tc_stats['Mean']>tc_min), subject=subj, cmap='Jet_2D_alpha')
-                            tsnr_vert = cortex.Vertex2D(tc_stats['TSNR'], mask*(tc_stats['Mean']>tc_min), subject=subj, cmap='Jet_2D_alpha')
+                            mean_ts_vert = cortex.Vertex2D(tc_stats['Mean'], mask*(tc_stats['Mean']>self.tc_min[subj]), subject=subj, cmap='Jet_2D_alpha')
+                            var_ts_vert = cortex.Vertex2D(tc_stats['Variance'], mask*(tc_stats['Mean']>self.tc_min[subj]), subject=subj, cmap='Jet_2D_alpha')
+                            tsnr_vert = cortex.Vertex2D(tc_stats['TSNR'], mask*(tc_stats['Mean']>self.tc_min[subj]), subject=subj, cmap='Jet_2D_alpha')
             
                             data_stats ={'mean':mean_ts_vert.raw, 'var':var_ts_vert.raw, 'tsnr':tsnr_vert.raw}
             
@@ -157,40 +221,26 @@ class visualize_results(object):
             
                             plotted_rois[subj] = True
                                                     
-                        #output freesurefer-format polar angle maps to draw custom ROIs in freeview    
-                        if self.output_freesurfer_polar_maps:
-                                          
-                            lh_c = read_morph_data(opj(self.fs_dir, subj+'/surf/lh.curv'))
-            
-                            polar_freeview = np.median(polar, axis=-1)
-            
-                            alpha_freeview = rsq.max(-1) * (amp.min(-1)>0) * (tc_stats['Mean']>tc_min) #* (ecc.max(-1)<ecc_max) * (ecc.min(-1)>ecc_min)
-            
-                            polar_freeview[alpha_freeview<0.2] = -10
-            
-                            write_morph_data(opj(self.fs_dir, subj+'/surf/lh.polar')
-                                                                   ,polar_freeview[:lh_c.shape[0]])
-                            write_morph_data(opj(self.fs_dir, subj+'/surf/rh.polar')
-                                                                   ,polar_freeview[lh_c.shape[0]:])
+
                             
             
                         if self.plot_rsq_cortex:              
                             ds_rsq = {}
                             if 'CSS' in models and 'Gauss' in models:
                                 ds_rsq['CSS - Gauss'] = cortex.Vertex2D(p_r['RSq']['CSS']-p_r['RSq']['Gauss'], p_r['Alpha']['all'], subject=subj,
-                                                                          vmin=0, vmax=0.1, vmin2=0.3, vmax2=0.6, cmap='Jet_2D_alpha').raw                
+                                                                          vmin=-0.05, vmax=0.05, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw                
                             if 'DoG' in models and 'Gauss' in models:
                                 ds_rsq['DoG - Gauss'] = cortex.Vertex2D(p_r['RSq']['DoG']-p_r['RSq']['Gauss'], p_r['Alpha']['all'], subject=subj,
-                                                                      vmin=-0.02, vmax=0.02, vmin2=0.3, vmax2=0.6, cmap='Jet_2D_alpha').raw
+                                                                      vmin=-0.05, vmax=0.05, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw
                             if 'Norm' in models and 'Gauss' in models:
                                 ds_rsq['Norm - Gauss'] = cortex.Vertex2D(p_r['RSq']['Norm']-p_r['RSq']['Gauss'], p_r['Alpha']['all'], subject=subj,
-                                                                      vmin=0, vmax=0.1, vmin2=0.3, vmax2=0.6, cmap='Jet_2D_alpha').raw
+                                                                      vmin=-0.05, vmax=0.05, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw
                             if 'Norm' in models and 'DoG' in models:
                                 ds_rsq['Norm - DoG'] = cortex.Vertex2D(p_r['RSq']['Norm']-p_r['RSq']['DoG'], p_r['Alpha']['all'], subject=subj,
-                                                                      vmin=0, vmax=0.1, vmin2=0.3, vmax2=0.6, cmap='Jet_2D_alpha').raw
+                                                                      vmin=-0.05, vmax=0.05, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw
                             if 'Norm' in models and 'CSS' in models:
                                 ds_rsq['Norm - CSS'] = cortex.Vertex2D(p_r['RSq']['Norm']-p_r['RSq']['CSS'], p_r['Alpha']['all'], subject=subj, 
-                                                                      vmin=-0.02, vmax=0.02, vmin2=0.3, vmax2=0.6, cmap='Jet_2D_alpha').raw
+                                                                      vmin=-0.05, vmax=0.05, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw
                                 
                             if 'Processed Results' in self.main_dict['T1w'][analysis][subj] and self.compare_volume_surface:
                                 ds_rsq_comp={}
@@ -203,9 +253,9 @@ class visualize_results(object):
                                 xfm_trans.save(subj, 'func_space_transform')
                                 
                                 ds_rsq_comp['Norm CV rsq (volume fit)'] = cortex.Volume2D(volume_rsq.T, volume_rsq.T, subj, 'func_space_transform',
-                                                                          vmin=0.2, vmax=0.6, vmin2=0.05, vmax2=0.2, cmap='Jet_2D_alpha')
+                                                                          vmin=rsq_thresh, vmax=0.6, vmin2=0.05, vmax2=rsq_thresh, cmap='Jet_2D_alpha')
                                 ds_rsq_comp['Norm CV rsq (surface fit)'] = cortex.Vertex2D(p_r['RSq']['Norm'], p_r['RSq']['Norm'], subject=subj,
-                                                                          vmin=0.2, vmax=0.6, vmin2=0.05, vmax2=0.2, cmap='Jet_2D_alpha').raw
+                                                                          vmin=rsq_thresh, vmax=0.6, vmin2=0.05, vmax2=rsq_thresh, cmap='Jet_2D_alpha').raw
                                 self.js_handle_rsq_comp = cortex.webgl.show(ds_rsq_comp, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)
 
                             self.js_handle_rsq = cortex.webgl.show(ds_rsq, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True) 
@@ -214,7 +264,7 @@ class visualize_results(object):
                             ds_ecc = {}
                             for model in models:
                                 ds_ecc[model] = cortex.Vertex2D(p_r['Eccentricity'][model], p_r['Alpha'][model], subject=subj, 
-                                                                vmin=ecc_min, vmax=ecc_max, vmin2=0.2, vmax2=0.6, cmap='Jet_r_2D_alpha').raw
+                                                                vmin=self.ecc_min, vmax=self.ecc_max, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_r_2D_alpha').raw
             
                             self.js_handle_ecc = cortex.webgl.show(ds_ecc, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)
             
@@ -222,7 +272,7 @@ class visualize_results(object):
                             ds_polar = {}
                             for model in models:
                                 ds_polar[model] = cortex.Vertex2D(p_r['Polar Angle'][model], p_r['Alpha'][model], subject=subj, 
-                                                                  vmin2=0.2, vmax2=0.6, cmap='Retinotopy_HSV_2x_alpha').raw
+                                                                  vmin2=rsq_thresh, vmax2=0.6, cmap='Retinotopy_HSV_2x_alpha').raw
                             
                             if 'Processed Results' in self.main_dict['T1w'][analysis][subj] and self.compare_volume_surface:
                                 ds_polar_comp={}
@@ -234,9 +284,9 @@ class visualize_results(object):
                                 xfm_trans.save(subj, 'func_space_transform')
                                 
                                 ds_polar_comp['Norm CV polar (volume fit)'] = cortex.Volume2D(volume_polar.T, volume_rsq.T, subj, 'func_space_transform',
-                                                                          vmin2=0.05, vmax2=0.2, cmap='Retinotopy_HSV_2x_alpha')
+                                                                          vmin2=0.05, vmax2=rsq_thresh, cmap='Retinotopy_HSV_2x_alpha')
                                 ds_polar_comp['Norm CV polar (surface fit)'] = cortex.Vertex2D(p_r['Polar Angle']['Norm'], p_r['RSq']['Norm'], subject=subj,
-                                                                          vmin2=0.05, vmax2=0.2, cmap='Retinotopy_HSV_2x_alpha').raw
+                                                                          vmin2=0.05, vmax2=rsq_thresh, cmap='Retinotopy_HSV_2x_alpha').raw
                                 self.js_handle_polar_comp = cortex.webgl.show(ds_polar_comp, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)
 
                             
@@ -246,7 +296,7 @@ class visualize_results(object):
                             ds_size = {}
                             for model in models:
                                 ds_size[model] = cortex.Vertex2D(p_r['Size (fwhmax)'][model], p_r['Alpha'][model], subject=subj, 
-                                                                 vmin=0, vmax=6, vmin2=0.2, vmax2=0.6, cmap='Jet_2D_alpha').raw
+                                                                 vmin=0, vmax=6, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw
                   
                             self.js_handle_size = cortex.webgl.show(ds_size, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)
             
@@ -255,14 +305,14 @@ class visualize_results(object):
                             ds_amp = {}
                             for model in models:
                                 ds_amp[model] = cortex.Vertex2D(p_r['Amplitude'][model], p_r['Alpha'][model], subject=subj, 
-                                                                vmin=-1, vmax=1, vmin2=0.2, vmax2=0.6, cmap='Jet_2D_alpha').raw
+                                                                vmin=-1, vmax=1, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw
             
                             self.js_handle_amp = cortex.webgl.show(ds_amp, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)
                             
                         if self.plot_css_exp_cortex and 'CSS' in models:
                             ds_css_exp = {}
                             ds_css_exp['CSS Exponent'] = cortex.Vertex2D(p_r['CSS Exponent']['CSS'], p_r['Alpha']['CSS'], subject=subj, 
-                                                                         vmin=0, vmax=0.75, vmin2=0.2, vmax2=0.6, cmap='Jet_2D_alpha').raw
+                                                                         vmin=0, vmax=0.75, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw
             
                             self.js_handle_css_exp = cortex.webgl.show(ds_css_exp, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)
                             
@@ -270,21 +320,21 @@ class visualize_results(object):
                             ds_surround_size = {}
                             if 'DoG' in models:
                                 ds_surround_size['DoG'] = cortex.Vertex2D(p_r['Surround Size (fwatmin)']['DoG'], p_r['Alpha']['DoG'], subject=subj, 
-                                                                         vmin=0, vmax=50, vmin2=0.2, vmax2=0.6, cmap='Jet_2D_alpha').raw
+                                                                         vmin=0, vmax=50, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw
                             if 'Norm' in models:
                                 ds_surround_size['Norm'] = cortex.Vertex2D(p_r['Surround Size (fwatmin)']['Norm'], p_r['Alpha']['Norm'], subject=subj, 
-                                                                         vmin=0, vmax=50, vmin2=0.2, vmax2=0.6, cmap='Jet_2D_alpha').raw                    
+                                                                         vmin=0, vmax=50, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw                    
             
                             self.js_handle_surround_size = cortex.webgl.show(ds_surround_size, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)    
                             
                         if self.plot_norm_baselines_cortex and 'Norm' in models:
                             ds_norm_baselines = {}
                             ds_norm_baselines['Norm Param. B'] = cortex.Vertex2D(p_r['Norm Param. B']['Norm'], p_r['Alpha']['Norm'], subject=subj, 
-                                                                         vmin=0, vmax=50, vmin2=0.2, vmax2=0.6, cmap='Jet_2D_alpha').raw                    
+                                                                         vmin=0, vmax=50, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw                    
                             ds_norm_baselines['Norm Param. D'] = cortex.Vertex2D(p_r['Norm Param. D']['Norm'], p_r['Alpha']['Norm'], subject=subj, 
-                                                                         vmin=0, vmax=50, vmin2=0.2, vmax2=0.6, cmap='Jet_2D_alpha').raw
+                                                                         vmin=0, vmax=50, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw
                             ds_norm_baselines['Ratio (B/D)'] = cortex.Vertex2D(p_r['Ratio (B/D)']['Norm'], p_r['Alpha']['Norm'], subject=subj, 
-                                                                         vmin=0, vmax=50, vmin2=0.2, vmax2=0.6, cmap='Jet_2D_alpha').raw
+                                                                         vmin=0, vmax=50, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw
                             
                             self.js_handle_norm_baselines = cortex.webgl.show(ds_norm_baselines, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)    
         print('-----')                              
@@ -340,12 +390,12 @@ class visualize_results(object):
                 except:
                     pass
         
-    def ecc_size_roi_plots(self, rois, rsq_thresh, save_figures, analysis_names = None):
+    def ecc_size_roi_plots(self, rois, rsq_thresh, save_figures, analysis_names = 'all'):
         
         pl.rcParams.update({'font.size': 16})
         for space, space_res in self.main_dict.items():
             if 'fs' in space:
-                if analysis_names == None:
+                if analysis_names == 'all':
                     analyses = space_res.items()
                 else:
                     analyses = [item for item in space_res.items() if item[0] in analysis_names] 
@@ -629,12 +679,12 @@ class visualize_results(object):
                                 pl.savefig('/Users/marcoaqil/PRFMapping/Figures/'+subj+'_'+
                                            roi.replace('custom.','')+'_css-exp.png', dpi=200, bbox_inches='tight')            
             
-    def ecc_norm_baselines_roi_plots(self, rois, rsq_thresh, save_figures, analysis_names=None):
+    def ecc_norm_baselines_roi_plots(self, rois, rsq_thresh, save_figures, analysis_names='all'):
         
         pl.rcParams.update({'font.size': 16})
         for space, space_res in self.main_dict.items():
             if 'fs' in space:
-                if analysis_names == None:
+                if analysis_names == 'all':
                     analyses = space_res.items()
                 else:
                     analyses = [item for item in space_res.items() if item[0] in analysis_names] 
@@ -710,7 +760,7 @@ class visualize_results(object):
                                                param.replace("/","").replace('.','').replace(' ','_')+'.png', dpi=200, bbox_inches='tight')
                                     
                                     
-    def rsq_roi_plots(self, rois, rsq_thresh, save_figures, analysis_names=None, noise_ceiling=None):
+    def rsq_roi_plots(self, rois, rsq_thresh, save_figures, analysis_names='all', noise_ceiling=None):
         bar_position = 0
         last_bar_position = dd(lambda:0)
         x_ticks=[]
@@ -719,7 +769,7 @@ class visualize_results(object):
         pl.rc('figure', facecolor='w')
         for space, space_res in self.main_dict.items():
             if 'fs' in space:
-                if analysis_names == None:
+                if analysis_names == 'all':
                     analyses = space_res.items()
                 else:
                     analyses = [item for item in space_res.items() if item[0] in analysis_names] 

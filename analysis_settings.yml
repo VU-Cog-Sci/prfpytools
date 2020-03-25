@@ -1,58 +1,120 @@
-#intended for single subject analysis
+#settings intended for single subject analysis
+#data scaling (for now only option allowed is "psc" or equivalently "percent_signal_change".
+data_scaling: "psc"
 
-n_pix: 54
-discard_volumes: 5
-#how many volumes at beginning (after discarded volumes) and end to use for baseline calculation
-baseline_volumes_begin_end: [5,5]
-#discard time series with too low variance (max	deviation from mean < min_percent_var %	of mean)
-min_percent_var: 0.25
-dm_edges_clipping: [3,2,0,1]
+crossvalidate: False
+#always specify only one of these two
+#fit_task: "2R"
+fit_runs: [1,3,5]
 
-#data chunks for array job submission
-n_chunks: 100
+return_noise_ceiling_fraction: False
+#if fitting the hrf, set single_hrf to True to use median hrf when crossvalidating. also applies when iterating
+#however, if iterating but hrf was not previously fit, set this to False
+single_hrf: True
 
-screenshot_paths:
-#                  - "/Users/marcoaqil/PRFMapping/PRFMapping-Raw/sub-001/ses-1/rawdata/sub-001_ses-1_Logs/sub-001_ses-1_task-1R_run-1_Logs/Screenshots"
-                  - "/Users/marcoaqil/PRFMapping/PRFMapping-Raw/sub-001/ses-1/rawdata/sub-001_ses-1_Logs/sub-001_ses-1_task-1S_run-1_Logs/Screenshots"
-#                  - "/Users/marcoaqil/PRFMapping/PRFMapping-Raw/sub-001/ses-1/rawdata/sub-001_ses-1_Logs/sub-001_ses-1_task-2R_run-1_Logs/Screenshots"
-#                  - "/Users/marcoaqil/PRFMapping/PRFMapping-Raw/sub-001/ses-1/rawdata/sub-001_ses-1_Logs/sub-001_ses-1_task-4F_run-1_Logs/Screenshots"
-#                  - "/Users/marcoaqil/PRFMapping/PRFMapping-Raw/sub-001/ses-1/rawdata/sub-001_ses-1_Logs/sub-001_ses-1_task-4R_run-1_Logs/Screenshots"
+norm_model_variant: "abcd"
 
+#how to handle existing outputs (overwrite, iterate, skip)
+refit_mode: "overwrite"
+
+#expected max duration in hours:minutes
+duration: "0:10"
+
+#data chunks (50 good number for V1V2V3, 500 whole brain)
+n_chunks: 500
+#choices: fsnative, fsaverage (surface fitting), T1w (volume fitting)      
+fitting_space: "fsnative"
+data_path: ""
+#path to file with ROI indices
+#roi_idx_path: ""
+save_raw_timecourse: True
+#fitting tolerance
+xtol: 0.00000001
+ftol: 0.00000001
+#grid fit will only allow positive prfs
+pos_prfs_only: True
+
+#perform bounded iterative fit? (L-BFGS-B if True, powell if False) (all models)
+param_bounds: True
+
+#set bold baseline to 100 for all models, norm to value below
+fix_bold_baseline: True
+norm_bold_baseline: 100
+
+#constraints on surround models (positive center, large surround) (trust-constr minimizer)
+param_constraints: False 
+positive_centre_only: False
+surround_sigma_larger_than_centre: False
+
+#unit volume RFs
+normalize_RFs: False
+
+#whether to fit hrf or not
+fit_hrf: False
+#explicit hrf or spm hrf params. see prfpy for details
+hrf: [1,4.6,0]
+
+#DM size in pixels (n_pix x n_pix) (has to be divisor of 1080)
+n_pix: 54 #54 #40,108
+#pixels to be set to zero in matrix (top, bottom, left, right)
+dm_edges_clipping: [6,1,0,1]
+
+#screen settings
 screen_size_cm: 39.3
 screen_distance_cm: 210
+#data settings
 TR: 1.5
+
+#volumes to remove at beginning of time series
+discard_volumes: 4
+#volumes used in beginning/end to calculate the baseline
+baseline_volumes_begin_end: [10,5]
+#discard time series with too low variance (max deviation from mean < min_percent_var % of mean)
+min_percent_var: 0.25
+
+#filter types: "sg" for savitzky golay or "dc" for discrete cosines
+filter_predictions: False
+filter_type: "dc"
+
+#params for discrete cosine filtering
+first_modes_to_remove: 5
+last_modes_to_remove_percent: 0
+
+#params for savgol filtering (window can be a number or 'adaptive')
+window_length: 'adaptive' 
+polyorder: 1
+highpass: True
+add_mean: True
+
+#rsq threshold for iterative fit
+rsq_threshold: 0.05
+
+#standard Cartesius parallelization
+n_jobs: 23
+#mkl_num_threads: 4
+#number of voxel batches (for grid fits)
+n_batches: 23
+
+#models to fit (gauss, CSS, DoG, norm):
+models_to_fit:
+           - "gauss"
+           - "DoG"
+           - "CSS"
+           - "norm"           
 
 task_names:
 #           - "1R"
-           - "1S"
-#           - "2R"
+#           - "1S"
+           - "2R"
 #           - "4F"
 #           - "4R"
-           
-data_path: "/Users/marcoaqil/PRFMapping/PRFMapping-Deriv-noflairtse-manual-hires"
 
-#choices: fsnative, fsaverage (surface fitting), T1w (volume fitting)      
-fitting_space: "fsaverage"
+screenshot_paths:
+#                  - ""
+#                  - ""
+                  - ""
+#                  - ""
+#                  - ""
 
-#window length for savgol filtering
-window_length: 121
+verbose: False
 
-n_jobs: 4
-
-#explicit hrf or spm hrf params. see prfpy for details
-hrf: [1,1,0]
-#whether to fit the hrf params or not
-fit_hrf: False
-#number of voxel batches for grid fit
-n_batches: 10
-#gradient method to be used in iterative fitting. numerical, analytic (must be set up in prfpy), or None.
-gradient_method: "numerical"
-verbose: True
-#rsq threshold for iterative fit
-rsq_threshold: 0.2
-#if gaussian grid data was already obtained, can specify path
-#grid_data_path: "/Users/marcoaqil/PRFMapping/gauss_grid_sub-001.npy"
-#if timecourse was already preprocessed, specify
-#timecourse_data_path: "/Users/marcoaqil/PRFMapping/tc_fsaverage.npy"
-
-    
