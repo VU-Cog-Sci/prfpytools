@@ -26,9 +26,21 @@ class visualize_results(object):
     def __init__(self):
         self.main_dict = dd(lambda:dd(lambda:dd(dict)))
         
-    def transfer_parse_labels(self, fs_dir):
+    def import_rois_and_flatmaps(self, fs_dir):
         self.idx_rois = dd(dict)
         for subj in self.subjects:
+            
+            if subj not in cortex.db.subjects:
+                print("importing subject from freesurfer")
+                cortex.freesurfer.import_subj(subj, freesurfer_subject_dir=self.fs_dir, 
+                      whitematter_surf='smoothwm')
+            if os.path.exists(opj(self.fs_dir, subj, 'surf', 'rh.full.flat.patch.3d')) and os.path.exists(opj(self.fs_dir,subj,'surf', 'lh.full.flat.patch.3d'))\
+                                    and self.import_flatmaps:
+                print('importing flatmaps from freesurfer')
+                cortex.freesurfer.import_flat(subject=subj, patch='full', hemis=['lh', 'rh'], 
+                                              freesurfer_subject_dir=self.fs_dir, clean=True)
+            
+            
             if self.transfer_rois:
                 src_subject='fsaverage'
             else:
@@ -63,6 +75,14 @@ class visualize_results(object):
                 except Exception as e:
                     print(e)
                     pass
+            if self.import_rois:
+                for roi_name, roi_idx in self.idx_rois[subj].items():
+                    if 'custom' in roi_name:
+                    #need a correctly flattened brain to do this
+                        roi_data = np.zeros(cortex.db.get_surfinfo(subj).data.shape).astype('bool')
+                        roi_data[roi_idx] = 1
+                        roi_vertices=cortex.Vertex(roi_data, subj)
+                        cortex.add_roi(roi_vertices, name=roi_name, open_inkscape=False, add_path=True)
                 
             #For ROI-based fitting
             if self.output_custom_V1V2V3:
@@ -77,14 +97,13 @@ class visualize_results(object):
                 for analysis, analysis_res in space_res.items():       
                     for subj, subj_res in analysis_res.items():
                         print(space+" "+analysis+" "+subj)
-                        
-                        if subj not in cortex.db.subjects:
-                            cortex.freesurfer.import_subj(subj, freesurfer_subject_dir=self.fs_dir, 
-                                  whitematter_surf='smoothwm')
-                        
+                            
                         p_r = subj_res['Processed Results']
                         models = p_r['RSq'].keys()
                         
+                        if 'Timecourse Stats' not in subj_res:
+                            subj_res['Timecourse Stats'] = self.main_dict['fsnative']['ROI_drawing'][subj]['Timecourse Stats']
+
                         tc_stats = subj_res['Timecourse Stats']
                        
                         #######Raw bold timecourse vein threshold
@@ -94,6 +113,8 @@ class visualize_results(object):
                             self.tc_min[subj] = 35000
                         elif subj == 'sub-001':
                             self.tc_min[subj] = 35000
+                        else:
+                            self.tc_min[subj] = 0
                             
                         ######limits for eccentricity
                         self.ecc_min=0.125
@@ -138,9 +159,9 @@ class visualize_results(object):
                         
                         
                         #housekeeping
-                        rsq = np.vstack(tuple([elem for _,elem in p_r['RSq'].items()])).T
-                        polar = np.vstack(tuple([elem for _,elem in p_r['Polar Angle'].items()])).T
-                        ecc = np.vstack(tuple([elem for _,elem in p_r['Eccentricity'].items()])).T
+                        #rsq = np.vstack(tuple([elem for _,elem in p_r['RSq'].items()])).T
+                        #polar = np.vstack(tuple([elem for _,elem in p_r['Polar Angle'].items()])).T
+                        #ecc = np.vstack(tuple([elem for _,elem in p_r['Eccentricity'].items()])).T
                   
                         if rois != 'all':
                             for key in p_r['Alpha']:
@@ -152,38 +173,38 @@ class visualize_results(object):
                                           
                             lh_c = read_morph_data(opj(self.fs_dir, subj+'/surf/lh.curv'))
             
-                            polar_freeview = np.mean(polar, axis=-1)
-                            ecc_freeview = np.mean(ecc, axis=-1)
+                            polar_freeview = p_r['Polar Angle']['Norm']#np.mean(polar, axis=-1)
+                            ecc_freeview = p_r['Eccentricity']['Norm']#np.mean(ecc, axis=-1)
                                       
-                            alpha_freeview = rsq.max(-1) * (tc_stats['Mean']>self.tc_min[subj]) * (rsq.min(-1)>0)
+                            alpha_freeview = p_r['RSq']['Norm']* (tc_stats['Mean']>self.tc_min[subj])# rsq.max(-1) * (tc_stats['Mean']>self.tc_min[subj]) * (rsq.min(-1)>0)
             
                             polar_freeview[alpha_freeview<rsq_thresh] = -10
                             ecc_freeview[alpha_freeview<rsq_thresh] = -10
             
-                            write_morph_data(opj(self.fs_dir, subj+'/surf/lh.polar')
+                            write_morph_data(opj(self.fs_dir, subj+'/surf/lh.polar_norm')
                                                                    ,polar_freeview[:lh_c.shape[0]])
-                            write_morph_data(opj(self.fs_dir, subj+'/surf/rh.polar')
+                            write_morph_data(opj(self.fs_dir, subj+'/surf/rh.polar_norm')
                                                                    ,polar_freeview[lh_c.shape[0]:])
-                            write_morph_data(opj(self.fs_dir, subj+'/surf/lh.ecc')
+                            write_morph_data(opj(self.fs_dir, subj+'/surf/lh.ecc_norm')
                                                                    ,ecc_freeview[:lh_c.shape[0]])
-                            write_morph_data(opj(self.fs_dir, subj+'/surf/rh.ecc')
+                            write_morph_data(opj(self.fs_dir, subj+'/surf/rh.ecc_norm')
                                                                    ,ecc_freeview[lh_c.shape[0]:])
                             
                             
                             polar_freeview_masked = np.copy(polar_freeview)
                             ecc_freeview_masked = np.copy(ecc_freeview)
-                            alpha_freeview_masked = rsq.max(-1) * (tc_stats['Mean']>self.tc_min[subj]) * (rsq.min(-1)>0)* (ecc_freeview<self.ecc_max) * (ecc_freeview>self.ecc_min)
+                            alpha_freeview_masked = alpha_freeview * (ecc_freeview<self.ecc_max) * (ecc_freeview>self.ecc_min)
             
                             polar_freeview_masked[alpha_freeview_masked<rsq_thresh] = -10
                             ecc_freeview_masked[alpha_freeview_masked<rsq_thresh] = -10
             
-                            write_morph_data(opj(self.fs_dir, subj+'/surf/lh.polar_masked')
+                            write_morph_data(opj(self.fs_dir, subj+'/surf/lh.polar_masked_norm')
                                                                    ,polar_freeview_masked[:lh_c.shape[0]])
-                            write_morph_data(opj(self.fs_dir, subj+'/surf/rh.polar_masked')
+                            write_morph_data(opj(self.fs_dir, subj+'/surf/rh.polar_masked_norm')
                                                                    ,polar_freeview_masked[lh_c.shape[0]:])
-                            write_morph_data(opj(self.fs_dir, subj+'/surf/lh.ecc_masked')
+                            write_morph_data(opj(self.fs_dir, subj+'/surf/lh.ecc_masked_norm')
                                                                    ,ecc_freeview_masked[:lh_c.shape[0]])
-                            write_morph_data(opj(self.fs_dir, subj+'/surf/rh.ecc_masked')
+                            write_morph_data(opj(self.fs_dir, subj+'/surf/rh.ecc_masked_norm')
                                                                    ,ecc_freeview_masked[lh_c.shape[0]:])
                             
                             
@@ -213,8 +234,7 @@ class visualize_results(object):
 
                                 ds_rois[roi] = cortex.Vertex2D(roi_data, roi_data.astype('bool'), subj, cmap='RdBu_r_alpha').raw
             
-                                #need a correctly flattened brain to do this
-                                #cortex.add_roi(ds_rois[roi], name=roi, open_inkscape=False, add_path=True)
+
             
                             ds_rois['Wang2015Atlas'] = cortex.Vertex2D(data, data.astype('bool'), subj, cmap='Retinotopy_HSV_2x_alpha').raw
                             self.js_handle_rois = cortex.webgl.show(ds_rois, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)

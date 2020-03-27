@@ -33,6 +33,8 @@ TR = analysis_info["TR"]
 task_names = analysis_info["task_names"]
 data_path = analysis_info["data_path"]
 fitting_space = analysis_info["fitting_space"]
+save_raw_timecourse = analysis_info["save_raw_timecourse"]
+
 window_length = analysis_info["window_length"]
 n_jobs = analysis_info["n_jobs"]
 hrf = analysis_info["hrf"]
@@ -148,12 +150,19 @@ if len(sys.argv)>3:
     tc_ordered = np.zeros_like(tc)
     tc_ordered[order] = np.copy(tc)
     np.save(tc_path.replace('scratch-shared', 'home'), tc_ordered)
+    if save_raw_timecourse:
+        tc_raw_path=opj(data_path,  subj+"_timecourse-raw_space-"+fitting_space+".npy")
+        cp(tc_raw_path, tc_raw_path.replace('scratch-shared', 'home'))
     if crossvalidate:
         tc_test_path=opj(data_path,  subj+"_timecourse-test_space-"+fitting_space+".npy")
         tc_test = np.load(tc_test_path)
         tc_test_ordered = np.zeros_like(tc_test)
         tc_test_ordered[order] = np.copy(tc_test)
         np.save(tc_test_path.replace('scratch-shared', 'home'), tc_test_ordered)
+        if save_raw_timecourse:
+            tc_test_raw_path=opj(data_path,  subj+"_timecourse-test-raw_space-"+fitting_space+".npy")
+            cp(tc_test_raw_path, tc_test_raw_path.replace('scratch-shared', 'home'))
+        
 
 print("harvest completed")
 
