@@ -28,35 +28,44 @@ class visualize_results(object):
         
     def import_rois_and_flatmaps(self, fs_dir):
         self.idx_rois = dd(dict)
+        self.fs_dir = fs_dir
         for subj in self.subjects:
             
             if subj not in cortex.db.subjects:
                 print("importing subject from freesurfer")
+                print(f"note: this command often files when executed on mac OS via jupyter notebook.\
+                      Rather, source freesurfer and execute it in ipython: \
+                          cortex.freesurfer.import_subj({subj}, freesurfer_subject_dir={self.fs_dir}, \
+                      whitematter_surf='smoothwm')")
                 cortex.freesurfer.import_subj(subj, freesurfer_subject_dir=self.fs_dir, 
                       whitematter_surf='smoothwm')
-            if os.path.exists(opj(self.fs_dir, subj, 'surf', 'rh.full.flat.patch.3d')) and os.path.exists(opj(self.fs_dir,subj,'surf', 'lh.full.flat.patch.3d'))\
-                                    and self.import_flatmaps:
-                print('importing flatmaps from freesurfer')
-                cortex.freesurfer.import_flat(subject=subj, patch='full', hemis=['lh', 'rh'], 
+            if self.import_flatmaps:
+                try:
+                    print('importing flatmaps from freesurfer')
+                    cortex.freesurfer.import_flat(subject=subj, patch='full', hemis=['lh', 'rh'], 
                                               freesurfer_subject_dir=self.fs_dir, clean=True)
+                except Exception as e:
+                    print(e)
+                    pass
+                     
             
             
-            if self.transfer_rois:
-                src_subject='fsaverage'
-            else:
+            if os.path.exists(opj(self.fs_dir, subj, 'label', 'lh.wang2015atlas.V1d.label')):
                 src_subject=subj
+            else:
+                src_subject='fsaverage'
                     
-            self.fs_dir = fs_dir
         
             wang_rois = ["V1v", "V1d", "V2v", "V2d", "V3v", "V3d", "hV4", "VO1", "VO2", "PHC1", "PHC2",
                 "TO2", "TO1", "LO2", "LO1", "V3B", "V3A", "IPS0", "IPS1", "IPS2", "IPS3", "IPS4", 
                 "IPS5", "SPL1", "FEF"]
             for roi in wang_rois:
                 try:
-                    self.idx_rois[subj][roi], _ = cortex.freesurfer.get_label(subject=subj,
+                    self.idx_rois[subj][roi], _ = cortex.freesurfer.get_label(subj,
                                                           label='wang2015atlas.'+roi,
                                                           fs_dir=self.fs_dir,
-                                                          src_subject=src_subject)
+                                                          src_subject=src_subject,
+                                                          verbose=True)
                 except Exception as e:
                     print(e)
         
@@ -66,28 +75,36 @@ class visualize_results(object):
             self.idx_rois[subj]['V3']=np.concatenate((self.idx_rois[subj]['V3v'],self.idx_rois[subj]['V3d']))
         
             #parse custom ROIs if they have been created
-            for roi in ['custom.V1','custom.V2','custom.V3']:
+            for roi in [el for el in os.listdir(opj(self.fs_dir, subj, 'label')) if 'custom' in el]:
+                roi = roi.replace('lh.','').replace('rh.','').replace('.label','')
                 try:
-                    self.idx_rois[subj][roi], _ = cortex.freesurfer.get_label(subject=subj,
+                    self.idx_rois[subj][roi], _ = cortex.freesurfer.get_label(subj,
                                                           label=roi,
                                                           fs_dir=self.fs_dir,
-                                                          src_subject=subj)
+                                                          src_subject=subj,
+                                                          verbose=True)
                 except Exception as e:
                     print(e)
                     pass
+                
             if self.import_rois:
                 for roi_name, roi_idx in self.idx_rois[subj].items():
                     if 'custom' in roi_name:
-                    #need a correctly flattened brain to do this
-                        roi_data = np.zeros(cortex.db.get_surfinfo(subj).data.shape).astype('bool')
-                        roi_data[roi_idx] = 1
-                        roi_vertices=cortex.Vertex(roi_data, subj)
-                        cortex.add_roi(roi_vertices, name=roi_name, open_inkscape=False, add_path=True)
-                
+                        #need a correctly flattened brain to do this
+                        try:
+                            roi_data = np.zeros(cortex.db.get_surfinfo(subj).data.shape).astype('bool')
+                            roi_data[roi_idx] = 1
+                            roi_vertices=cortex.Vertex(roi_data, subj)
+                            cortex.add_roi(roi_vertices, name=roi_name, open_inkscape=False, add_path=True)
+                        except Exception as e:
+                            print(e)
+                            pass        
+                        
             #For ROI-based fitting
-            if self.output_custom_V1V2V3:
-                V1V2V3 = np.concatenate((self.idx_rois[subj]['custom.V1'],self.idx_rois[subj]['custom.V2'],self.idx_rois[subj]['custom.V3']))
-                np.save('/Users/marcoaqil/PRFMapping/PRFMapping-Deriv-hires/prfpy/'+subj+'_roi-V1V2V3.npy', V1V2V3)
+            if len(self.output_rois)>0:
+                
+                rois = np.concatenate(tuple([self.idx_rois[subj][roi] for roi in self.output_rois]), axis=0)
+                np.save('/Users/marcoaqil/PRFMapping/PRFMapping-Deriv-hires/prfpy/'+subj+'_combined-rois.npy', rois)
         
 
     def set_alpha(self):
@@ -110,7 +127,7 @@ class visualize_results(object):
                         if subj == 'sub-006':
                             self.tc_min[subj] = 45000
                         elif subj == 'sub-007':
-                            self.tc_min[subj] = 35000
+                            self.tc_min[subj] = 40000
                         elif subj == 'sub-001':
                             self.tc_min[subj] = 35000
                         else:
@@ -173,8 +190,8 @@ class visualize_results(object):
                                           
                             lh_c = read_morph_data(opj(self.fs_dir, subj+'/surf/lh.curv'))
             
-                            polar_freeview = p_r['Polar Angle']['Norm']#np.mean(polar, axis=-1)
-                            ecc_freeview = p_r['Eccentricity']['Norm']#np.mean(ecc, axis=-1)
+                            polar_freeview = np.copy(p_r['Polar Angle']['Norm'])#np.mean(polar, axis=-1)
+                            ecc_freeview = np.copy(p_r['Eccentricity']['Norm'])#np.mean(ecc, axis=-1)
                                       
                             alpha_freeview = p_r['RSq']['Norm']* (tc_stats['Mean']>self.tc_min[subj])# rsq.max(-1) * (tc_stats['Mean']>self.tc_min[subj]) * (rsq.min(-1)>0)
             
