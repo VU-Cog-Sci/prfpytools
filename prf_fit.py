@@ -520,8 +520,7 @@ gg = Iso2DGaussianGridder(stimulus=prf_stim,
 
 
 gf = Iso2DGaussianFitter(
-    data=tc_full_iso_nonzerovar_dict['tc'], gridder=gg, n_jobs=n_jobs)
-gf.fit_hrf = fit_hrf
+    data=tc_full_iso_nonzerovar_dict['tc'], gridder=gg, n_jobs=n_jobs, fit_hrf=fit_hrf)
 
 # gaussian fit
 if "grid_data_path" not in analysis_info and "gauss_iterparams_path" not in analysis_info:
@@ -563,7 +562,6 @@ if "gauss_iterparams_path" in analysis_info:
         gf.iterative_fit(rsq_threshold=rsq_threshold, verbose=verbose,
                          starting_params=gf.iterative_search_params,
                          bounds=gauss_bounds,
-                         fit_hrf=fit_hrf,
                          constraints=constraints_gauss,
                              xtol=xtol,
                              ftol=ftol)
@@ -595,7 +593,6 @@ else:
 
         gf.iterative_fit(rsq_threshold=rsq_threshold, verbose=verbose,
                          bounds=gauss_bounds,
-                         fit_hrf=fit_hrf,
                          constraints=constraints_gauss,
                              xtol=xtol,
                              ftol=ftol)
@@ -633,7 +630,6 @@ else:
             gf.iterative_fit(rsq_threshold=rsq_threshold, verbose=verbose,
                              starting_params=np.load(save_path+".npy"),
                              bounds=gauss_bounds,
-                             fit_hrf=fit_hrf,
                              constraints=constraints_gauss,
                              xtol=xtol,
                              ftol=ftol)
@@ -679,7 +675,7 @@ if "CSS" in models_to_fit:
                                       add_mean=add_mean,                                      
                                       normalize_RFs=normalize_RFs)
     gf_css = CSS_Iso2DGaussianFitter(
-        data=tc_full_iso_nonzerovar_dict['tc'], gridder=gg_css, n_jobs=n_jobs,
+        data=tc_full_iso_nonzerovar_dict['tc'], gridder=gg_css, n_jobs=n_jobs, fit_hrf=fit_hrf,
         previous_gaussian_fitter=gf)
 
     save_path = opj(data_path, subj+"_iterparams-css_space-"+fitting_space+str(chunk_nr))
@@ -693,7 +689,6 @@ if "CSS" in models_to_fit:
             gf_css.iterative_fit(rsq_threshold=rsq_threshold, verbose=verbose,
                              starting_params=gf_css.iterative_search_params,
                              bounds=css_bounds,
-                             fit_hrf=fit_hrf,
                              constraints=constraints_css,
                              xtol=xtol,
                              ftol=ftol)
@@ -725,7 +720,6 @@ if "CSS" in models_to_fit:
     
             gf_css.iterative_fit(rsq_threshold=rsq_threshold, verbose=verbose,
                                  bounds=css_bounds,
-                                 fit_hrf=fit_hrf,
                                  constraints=constraints_css,
                              xtol=xtol,
                              ftol=ftol)
@@ -761,7 +755,6 @@ if "CSS" in models_to_fit:
                 gf_css.iterative_fit(rsq_threshold=rsq_threshold, verbose=verbose,
                                      starting_params=np.load(save_path+".npy"),
                                      bounds=css_bounds,
-                                     fit_hrf=fit_hrf,
                                      constraints=constraints_css,
                              xtol=xtol,
                              ftol=ftol)
@@ -808,6 +801,7 @@ if "DoG" in models_to_fit:
     gf_dog = DoG_Iso2DGaussianFitter(data=tc_full_iso_nonzerovar_dict['tc'],
                                      gridder=gg_dog,
                                      n_jobs=n_jobs,
+                                     fit_hrf=fit_hrf,
                                      previous_gaussian_fitter=gf)
 
     save_path = opj(data_path, subj+"_iterparams-dog_space-"+fitting_space+str(chunk_nr))
@@ -821,7 +815,6 @@ if "DoG" in models_to_fit:
             gf_dog.iterative_fit(rsq_threshold=rsq_threshold, verbose=verbose,
                              starting_params=gf_dog.iterative_search_params,
                              bounds=dog_bounds,
-                             fit_hrf=fit_hrf,
                              constraints=constraints_dog,
                              xtol=xtol,
                              ftol=ftol)
@@ -852,7 +845,6 @@ if "DoG" in models_to_fit:
     
             gf_dog.iterative_fit(rsq_threshold=rsq_threshold, verbose=verbose,
                                          bounds=dog_bounds,
-                                         fit_hrf=fit_hrf,
                                          constraints=constraints_dog,
                                          xtol=xtol,
                                          ftol=ftol)
@@ -891,7 +883,6 @@ if "DoG" in models_to_fit:
                 gf_dog.iterative_fit(rsq_threshold=rsq_threshold, verbose=verbose,
                                      starting_params=np.load(save_path+".npy"),
                                      bounds=dog_bounds,
-                                     fit_hrf=fit_hrf,
                                      constraints=constraints_dog,
                                      xtol=xtol,
                                      ftol=ftol)
@@ -940,6 +931,7 @@ if "norm" in models_to_fit:
     gf_norm = Norm_Iso2DGaussianFitter(data=tc_full_iso_nonzerovar_dict['tc'],
                                        gridder=gg_norm,
                                        n_jobs=n_jobs,
+                                       fit_hrf=fit_hrf,
                                        previous_gaussian_fitter=gf)
     
     #normalization grid stage
@@ -981,7 +973,6 @@ if "norm" in models_to_fit:
             gf_norm.iterative_fit(rsq_threshold=rsq_threshold, verbose=verbose,
                              starting_params=gf_norm.iterative_search_params,
                              bounds=norm_bounds,
-                             fit_hrf=fit_hrf,
                              constraints=constraints_norm,
                              xtol=xtol,
                              ftol=ftol)
@@ -1011,7 +1002,6 @@ if "norm" in models_to_fit:
     
             gf_norm.iterative_fit(rsq_threshold=rsq_threshold, verbose=verbose,
                                            bounds=norm_bounds,
-                                           fit_hrf=fit_hrf,
                                            constraints=constraints_norm,
                                            xtol=xtol,
                                            ftol=ftol)
@@ -1049,7 +1039,6 @@ if "norm" in models_to_fit:
                 gf_norm.iterative_fit(rsq_threshold=rsq_threshold, verbose=verbose,
                                       starting_params=np.load(save_path+".npy"),
                                               bounds=norm_bounds,
-                                              fit_hrf=fit_hrf,
                                               constraints=constraints_norm,
                                               xtol=xtol,
                                               ftol=ftol)
