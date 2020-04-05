@@ -59,7 +59,7 @@ analysis_time = analysis_info["analysis_time"]
 previous_analysis_time = analysis_info["previous_analysis_time"]
 previous_analysis_refit_mode = analysis_info["previous_analysis_refit_mode"]
 
-if refit_mode == previous_analysis_refit_mode:
+if refit_mode == previous_analysis_refit_mode and refit_mode!="overwrite":
     analysis_time = previous_analysis_time
 
 #first check if iteration was completed
