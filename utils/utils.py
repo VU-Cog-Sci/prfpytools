@@ -594,88 +594,51 @@ def fwhmax_fwatmin(model, params, normalize_RFs=False, return_profiles=False):
         return result
 
 
-def combine_results(subj, fitting_space, results_folder, suffix_list, 
+def combine_results(subj, fitting_space, results_folder, suffix_list,
                     raw_timecourse_path=None, normalize_RFs=False, ref_img_path=None):
     mask = np.load(opj(results_folder, subj+'_mask_space-'+fitting_space+'.npy'))
-    for i, suffix in enumerate(suffix_list):
-        if i == 0:
-            try:
-                gauss = np.load(opj(results_folder,subj+'_iterparams-gauss_space-'+fitting_space+suffix+'.npy'))
-            except Exception as e:
-                gauss = 0
-                print(e)
-                pass
-            try:
-                css = np.load(opj(results_folder,subj+'_iterparams-css_space-'+fitting_space+suffix+'.npy'))
-            except Exception as e:
-                css = 0
-                print(e)
-                pass
-            try:
-                dog = np.load(opj(results_folder,subj+'_iterparams-dog_space-'+fitting_space+suffix+'.npy'))
-            except Exception as e:
-                dog = 0
-                print(e)
-                pass
-            try:
-                norm = np.load(opj(results_folder,subj+'_iterparams-norm_space-'+fitting_space+suffix+'.npy'))
-            except Exception as e:
-                norm = 0
-                print(e)
-                pass
-            try:
-                gauss_grid = np.load(opj(results_folder,subj+'_gridparams-gauss_space-'+fitting_space+suffix+'.npy'))
-            except Exception as e:
-                gauss_grid = 0
-                print(e)
-                pass
-            try:
-                norm_grid = np.load(opj(results_folder,subj+'_gridparams-norm_space-'+fitting_space+suffix+'.npy'))
-            except Exception as e:
-                norm_grid = 0
-                print(e)
-                pass
-        else:
-            try:
-                gauss_it = np.load(opj(results_folder,subj+'_iterparams-gauss_space-'+fitting_space+suffix+'.npy'))
-            except Exception as e:
-                print(e)
-                pass
-            try:
-                css_it = np.load(opj(results_folder,subj+'_iterparams-css_space-'+fitting_space+suffix+'.npy'))
-            except Exception as e:
-                print(e)
-                pass
-            try:
-                dog_it = np.load(opj(results_folder,subj+'_iterparams-dog_space-'+fitting_space+suffix+'.npy'))
-            except Exception as e:
-                print(e)
-                pass
-            try:
-                norm_it = np.load(opj(results_folder,subj+'_iterparams-norm_space-'+fitting_space+suffix+'.npy'))
-            except Exception as e:
-                print(e)
-                pass
-            try:
-                gauss[(gauss[:,-1]<gauss_it[:,-1])] = np.copy(gauss_it[(gauss[:,-1]<gauss_it[:,-1])])
-            except Exception as e:
-                print(e)
-                pass
-            try:
-                css[(css[:,-1]<css_it[:,-1])] = np.copy(css_it[(css[:,-1]<css_it[:,-1])])
-            except Exception as e:
-                print(e)
-                pass
-            try:
-                dog[(dog[:,-1]<dog_it[:,-1])] = np.copy(dog_it[(dog[:,-1]<dog_it[:,-1])])
-            except Exception as e:
-                print(e)
-                pass
-            try:
-                norm[(norm[:,-1]<norm_it[:,-1])] = np.copy(norm_it[(norm[:,-1]<norm_it[:,-1])])
-            except Exception as e:
-                print(e)
-                pass
+    g_l = []
+    c_l = []
+    d_l = []
+    n_l = []
+    for suf_list in suffix_list:
+        for i, suffix in enumerate(suf_list):
+            if i == 0:
+                try:
+                    gauss = np.load(opj(results_folder,subj+'_iterparams-gauss_space-'+fitting_space+suffix+'.npy'))
+                    css = np.load(opj(results_folder,subj+'_iterparams-css_space-'+fitting_space+suffix+'.npy'))
+                    dog = np.load(opj(results_folder,subj+'_iterparams-dog_space-'+fitting_space+suffix+'.npy'))
+                    norm = np.load(opj(results_folder,subj+'_iterparams-norm_space-'+fitting_space+suffix+'.npy'))
+                except Exception as e:
+                    print(e)
+                    pass
+            else:
+                try:
+                    gauss_it = np.load(opj(results_folder,subj+'_iterparams-gauss_space-'+fitting_space+suffix+'.npy'))
+                    css_it = np.load(opj(results_folder,subj+'_iterparams-css_space-'+fitting_space+suffix+'.npy'))
+                    dog_it = np.load(opj(results_folder,subj+'_iterparams-dog_space-'+fitting_space+suffix+'.npy'))
+                    norm_it = np.load(opj(results_folder,subj+'_iterparams-norm_space-'+fitting_space+suffix+'.npy'))
+                    gauss[(gauss[:,-1]<gauss_it[:,-1])] = np.copy(gauss_it[(gauss[:,-1]<gauss_it[:,-1])])
+                    css[(css[:,-1]<css_it[:,-1])] = np.copy(css_it[(css[:,-1]<css_it[:,-1])])
+                    dog[(dog[:,-1]<dog_it[:,-1])] = np.copy(dog_it[(dog[:,-1]<dog_it[:,-1])])
+                    norm[(norm[:,-1]<norm_it[:,-1])] = np.copy(norm_it[(norm[:,-1]<norm_it[:,-1])])
+                except Exception as e:
+                    print(e)
+                    pass
+        try:        
+            g_l.append(gauss)
+            c_l.append(css)
+            d_l.append(dog)
+            n_l.append(norm)
+        except Exception as e:
+            print(e)
+            pass                    
+    gauss = np.mean(g_l, axis=0)
+    css = np.mean(c_l, axis=0)
+    dog = np.mean(d_l, axis=0)
+    norm=np.mean(n_l, axis=0)            
+                
+                
     raw_tc_stats = dict()
     if raw_timecourse_path is not None:
         
@@ -695,7 +658,7 @@ def combine_results(subj, fitting_space, results_folder, suffix_list,
         tc_tsnr_full[mask] = tc_mean/np.sqrt(tc_var)
         raw_tc_stats['TSNR'] = tc_tsnr_full
     
-    return {'Gauss grid':gauss_grid, 'Norm grid':norm_grid, 'Gauss':gauss,
+    return {'Gauss':gauss, #'Gauss grid':gauss_grid, 'Norm grid':norm_grid, 
             'CSS':css, 'DoG':dog, 'Norm':norm,
             'mask':mask, 'normalize_RFs':normalize_RFs, 
             'Timecourse Stats':raw_tc_stats, 'ref_img_path':ref_img_path}
