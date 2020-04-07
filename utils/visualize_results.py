@@ -102,10 +102,12 @@ class visualize_results(object):
                         
             #For ROI-based fitting
             if len(self.output_rois)>0:
-                
-                rois = np.concatenate(tuple([self.idx_rois[subj][roi] for roi in self.output_rois]), axis=0)
-                np.save('/Users/marcoaqil/PRFMapping/PRFMapping-Deriv-hires/prfpy/'+subj+'_combined-rois.npy', rois)
-        
+                try:
+                    rois = np.concatenate(tuple([self.idx_rois[subj][roi] for roi in self.output_rois]), axis=0)
+                    np.save('/Users/marcoaqil/PRFMapping/PRFMapping-Deriv-hires/prfpy/'+subj+'_combined-rois.npy', rois)
+                except Exception as e:
+                    print(e)
+                    pass          
 
     def set_alpha(self):
         self.tc_min = dict()
@@ -120,6 +122,9 @@ class visualize_results(object):
                         
                         if 'Timecourse Stats' not in subj_res:
                             subj_res['Timecourse Stats'] = self.main_dict['fsnative']['ROI_drawing'][subj]['Timecourse Stats']
+                        elif len(subj_res['Timecourse Stats'].keys())==0:
+                            subj_res['Timecourse Stats'] = self.main_dict['fsnative']['ROI_drawing'][subj]['Timecourse Stats']
+                            
 
                         tc_stats = subj_res['Timecourse Stats']
                        
@@ -797,11 +802,8 @@ class visualize_results(object):
                                                param.replace("/","").replace('.','').replace(' ','_')+'.png', dpi=200, bbox_inches='tight')
                                     
                                     
-    def rsq_roi_plots(self, rois, rsq_thresh, save_figures, analysis_names='all', noise_ceiling=None):
-        bar_position = 0
-        last_bar_position = dd(lambda:0)
-        x_ticks=[]
-        x_labels=[]
+    def rsq_roi_plots(self, rois, rsq_thresh, save_figures, analysis_names='all', noise_ceiling=None, plot_hist=False):
+
         pl.rcParams.update({'font.size': 16})
         pl.rc('figure', facecolor='w')
         for space, space_res in self.main_dict.items():
@@ -813,6 +815,10 @@ class visualize_results(object):
                 for analysis, analysis_res in analyses:        
                     for subj, subj_res in analysis_res.items():
                         print(space+" "+analysis+" "+subj)
+                        x_ticks=[]
+                        x_labels=[]    
+                        bar_position = 0
+                        last_bar_position = 0#dd(lambda:0)
             
                         # binned eccentricity vs other parameters relationships       
             
@@ -820,12 +826,14 @@ class visualize_results(object):
                         
 
                         for roi in rois:
-                            bar_position=last_bar_position[roi]+0.1
-                            pl.figure(roi+'RSq', figsize=(8, 6), frameon=False)
-                            pl.ylabel(roi.replace('custom.','')+' Mean RSq')
+                            bar_position=last_bar_position+0.1
+                            pl.figure(subj+' RSq', figsize=(8, 6), frameon=False)
+                            pl.ylabel(subj+' Mean RSq')
                             alpha_roi = roi_mask(self.idx_rois[subj][roi], subj_res['Processed Results']['Alpha']['all'])>rsq_thresh
                             model_list = [k for k in subj_res['Processed Results']['RSq'].keys()]
                             
+                            x_ticks.append(bar_position+0.15)
+                            x_labels.append(roi.replace('custom.','')+'\n')
                             for model in model_list:                                
                                 model_rsq = subj_res['Processed Results']['RSq'][model][alpha_roi]
                                 # if noise_ceiling is not None:
@@ -833,24 +841,26 @@ class visualize_results(object):
                                     
                                 bar_height = np.mean(model_rsq)
                                 bar_err = sem(model_rsq)
-                                pl.bar(bar_position, bar_height, width=0.1, yerr=bar_err, color=model_colors[model],edgecolor='black')
-                                x_ticks.append(bar_position)
-                                if 'ABCD' in analysis:
-                                    x_labels.append(analysis.replace('_100','').replace('ABCD_','')+'\n'+model)
-                                else:
-                                    x_labels.append(analysis.replace('_100','')+'\n'+model)
+                                pl.bar(bar_position, bar_height, width=0.1, yerr=bar_err, color=model_colors[model],edgecolor='black', label=model)
+                                
+                                # if 'ABCD' in analysis:
+                                #     x_labels.append(analysis.replace('_100','').replace('ABCD_','')+'\n'+model)
+                                # else:
+                                #     x_labels.append(analysis.replace('_100','')+'\n'+model)
+                                
                                 bar_position += 0.1
                                 
                             if noise_ceiling is not None:
-                                bar_height=np.mean(noise_ceiling[alpha_roi])
-                                bar_err = sem(noise_ceiling[alpha_roi])
-                                pl.bar(bar_position, bar_height, width=0.1, yerr=bar_err, color='grey',edgecolor='black')
-                                x_ticks.append(bar_position)
-                                x_labels.append('NC')
+                                bar_height=np.mean(noise_ceiling[subj][alpha_roi])
+                                bar_err = sem(noise_ceiling[subj][alpha_roi])
+                                pl.bar(bar_position, bar_height, width=0.1, yerr=bar_err, color='grey',edgecolor='black', label='NC')
                                 bar_position += 0.1
 
-                            last_bar_position[roi] = bar_position
+                            last_bar_position = bar_position
                             pl.xticks(x_ticks,x_labels)
+                            handles, labels = pl.gca().get_legend_handles_labels()
+                            by_label = dict(zip(labels, handles))
+                            pl.legend(by_label.values(), by_label.keys())
 
                              
                             if 'CSS' in model_list and 'DoG' in model_list:
@@ -882,7 +892,7 @@ class visualize_results(object):
                                                                               
                                 print(f"Norm-CSS in {roi} surround voxels: {np.mean(norm_css_surrvox)}")
                                 print(f"Norm-DoG in {roi} nonlinear voxels: {np.mean(norm_dog_nonlvox)}")
-                                if len(analysis_names)<5:
+                                if plot_hist:
                                     fig, axs = pl.subplots(2, 2, sharey=True, sharex=True)
                                     fig.suptitle(roi.replace('custom.',''))
                                     axs[0,0].set_xlabel('Norm-CSS')
