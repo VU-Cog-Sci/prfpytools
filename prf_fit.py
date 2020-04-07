@@ -115,9 +115,14 @@ if "norm" in models_to_fit and "norm_model_variant" in analysis_info:
 else:
     norm_model_variant = "abcd"
 
-if "roi_idx_path" in analysis_info and os.path.exists(analysis_info["roi_idx_path"]):
-    roi_idx = np.load(analysis_info["roi_idx_path"])
-    print("Using ROI mask from: "+analysis_info["roi_idx_path"])
+if "roi_idx_path" in analysis_info:
+    roi_idx_path = analysis_info["roi_idx_path"].replace("$subj$", subj)
+    if os.path.exists(roi_idx_path):
+        roi_idx = np.load(roi_idx_path)
+        print(f"Using ROI mask from: {roi_idx_path}")
+    else:
+        print("ROI mask does not exist. Fitting all.")
+        roi_idx = None
 else:
     roi_idx = None
 
