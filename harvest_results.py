@@ -44,6 +44,8 @@ models_to_fit = analysis_info["models_to_fit"]
 n_batches = analysis_info["n_batches"]
 fit_hrf = analysis_info["fit_hrf"]
 crossvalidate = analysis_info["crossvalidate"]
+    
+save_noise_ceiling = analysis_info["save_noise_ceiling"]
 
 dm_edges_clipping = analysis_info["dm_edges_clipping"]
 baseline_volumes_begin_end = analysis_info["baseline_volumes_begin_end"]
@@ -142,26 +144,33 @@ cp(analysis_settings, analysis_settings.replace('scratch-shared', 'home').replac
 if len(sys.argv)>3:
     print("Grabbing timecourse and mask for this analysis...")
     #mask is saved in original order so only need to copypaste
-    mask_path=opj(data_path,  subj+"_mask_space-"+fitting_space+".npy")
-    cp(mask_path, mask_path.replace('scratch-shared', 'home'))
-    ###fix this: these are saved in randomized order, so must take into account. like for models above
+    mask_path=opj(data_path,  f"{subj}_mask_space-{fitting_space}.npy")
+    cp(mask_path, mask_path.replace('scratch-shared', 'home').replace('.npy',analysis_time+'.npy'))
+    
+    #these are saved in randomized order, so must take into account. like for models above
     tc_path=opj(data_path,  subj+"_timecourse_space-"+fitting_space+".npy")
     tc = np.load(tc_path)
     tc_ordered = np.zeros_like(tc)
     tc_ordered[order] = np.copy(tc)
-    np.save(tc_path.replace('scratch-shared', 'home'), tc_ordered)
+    np.save(tc_path.replace('scratch-shared', 'home').replace('.npy',analysis_time+'.npy'), tc_ordered)
+    
     if save_raw_timecourse:
         tc_raw_path=opj(data_path,  subj+"_timecourse-raw_space-"+fitting_space+".npy")
-        cp(tc_raw_path, tc_raw_path.replace('scratch-shared', 'home'))
+        cp(tc_raw_path, tc_raw_path.replace('scratch-shared', 'home').replace('.npy',analysis_time+'.npy'))
+    
+    if save_noise_ceiling:
+        nc_path = opj(data_path,f"{subj}_noise-ceiling_space-{fitting_space}.npy")
+        cp(nc_path, nc_path.replace('scratch-shared', 'home').replace('.npy',analysis_time+'.npy'))
+        
     if crossvalidate:
         tc_test_path=opj(data_path,  subj+"_timecourse-test_space-"+fitting_space+".npy")
         tc_test = np.load(tc_test_path)
         tc_test_ordered = np.zeros_like(tc_test)
         tc_test_ordered[order] = np.copy(tc_test)
-        np.save(tc_test_path.replace('scratch-shared', 'home'), tc_test_ordered)
+        np.save(tc_test_path.replace('scratch-shared', 'home').replace('.npy',analysis_time+'.npy'), tc_test_ordered)
         if save_raw_timecourse:
             tc_test_raw_path=opj(data_path,  subj+"_timecourse-test-raw_space-"+fitting_space+".npy")
-            cp(tc_test_raw_path, tc_test_raw_path.replace('scratch-shared', 'home'))
+            cp(tc_test_raw_path, tc_test_raw_path.replace('scratch-shared', 'home').replace('.npy',analysis_time+'.npy'))
         
 
 print("harvest completed")

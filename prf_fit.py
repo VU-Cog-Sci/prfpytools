@@ -71,6 +71,7 @@ if fix_bold_baseline:
 
 
 crossvalidate = analysis_info["crossvalidate"]
+save_noise_ceiling = False
 
 if crossvalidate and "fit_task" in analysis_info and "fit_runs" in analysis_info:
     print("Can only specify one between fit_task and fit_runs for crossvalidation.")
@@ -83,6 +84,7 @@ elif crossvalidate and "fit_runs" in analysis_info:
     print("Performing crossvalidation over runs.")    
     fit_task = None
     fit_runs = analysis_info["fit_runs"]
+    save_noise_ceiling = analysis_info["save_noise_ceiling"]
 else:
     print("Not performing crossvalidation.")
     fit_task = None
@@ -262,7 +264,8 @@ else:
                                                    
                                                    crossvalidate,
                                                    fit_runs,
-                                                   fit_task)
+                                                   fit_task,
+                                                   save_noise_ceiling)
 
         if crossvalidate:
             save_path = opj(data_path, subj+"_timecourse-test_space-"+fitting_space)

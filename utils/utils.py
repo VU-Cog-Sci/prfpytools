@@ -151,7 +151,8 @@ def prepare_data(subj,
                  
                  crossvalidate,
                  fit_runs,
-                 fit_task):
+                 fit_task,
+                 save_noise_ceiling):
 
     if fitting_space == 'fsaverage' or fitting_space == 'fsnative':
         
@@ -299,11 +300,15 @@ def prepare_data(subj,
             if crossvalidate:
                 tc_full_iso_nonzerovar_test += (tc_full_iso_nonzerovar_test.mean(-1)-iso_full_test[mask])[...,np.newaxis]
                            
-        
+                
         if save_raw_timecourse:
             np.save(opj(data_path,'prfpy',subj+"_timecourse-raw_space-"+fitting_space+".npy"),tc_full_iso[mask])
             if crossvalidate:
                 np.save(opj(data_path,'prfpy',subj+"_timecourse-test-raw_space-"+fitting_space+".npy"),tc_full_iso_test[mask])
+                
+        if save_noise_ceiling:
+            noise_ceiling = 1-np.sum((tc_full_iso_test[mask]-tc_full_iso[mask])**2, axis=-1)/(tc_full_iso_test[mask].shape[-1]*tc_full_iso_test[mask].var(-1))
+            np.save(opj(data_path,'prfpy',f"{subj}_noise-ceiling_space-{fitting_space}.npy"),noise_ceiling)
                 
         order = np.random.permutation(tc_full_iso_nonzerovar.shape[0])
 
