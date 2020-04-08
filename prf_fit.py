@@ -382,7 +382,7 @@ elif norm_model_variant == "abd":
     neural_baseline_grid=np.array([0,0.1,0.5,1,2,4,8,10], dtype='float32')
     surround_baseline_grid=np.array([0.1,1.0,10.0,100.0], dtype='float32')
 
-    norm_bounds[5] = (1, 1),  # surround amplitude 
+    norm_bounds[5] = (1, 1)  # surround amplitude 
 
 
 elif norm_model_variant == "ab":
@@ -391,7 +391,7 @@ elif norm_model_variant == "ab":
     neural_baseline_grid=np.array([0,0.1,0.5,1,2,4,6,8,10,100], dtype='float32')
     surround_baseline_grid=np.array([1], dtype='float32')
     
-    norm_bounds[5] = (1, 1),  # surround amplitude 
+    norm_bounds[5] = (1, 1)  # surround amplitude 
     norm_bounds[8] = (1, 1)  # surround baseline
 
 
