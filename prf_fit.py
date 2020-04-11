@@ -31,7 +31,7 @@ from scipy.optimize import LinearConstraint, NonlinearConstraint
 
 from utils.utils import create_full_stim, prepare_data
 
-from prfpy.grid import Iso2DGaussianGridder, Norm_Iso2DGaussianGridder, DoG_Iso2DGaussianGridder, CSS_Iso2DGaussianGridder
+from prfpy.grid import Iso2DGaussianModel, Norm_Iso2DGaussianModel, DoG_Iso2DGaussianModel, CSS_Iso2DGaussianModel
 from prfpy.fit import Iso2DGaussianFitter, Norm_Iso2DGaussianFitter, DoG_Iso2DGaussianFitter, CSS_Iso2DGaussianFitter
 
 # note that screenshot paths and task names should be in the same order
@@ -57,6 +57,13 @@ window_length = analysis_info["window_length"]
 polyorder = analysis_info["polyorder"]
 highpass = analysis_info["highpass"]
 add_mean = analysis_info["add_mean"]
+
+filter_params = {x:analysis_info[x] for x in ["first_modes_to_remove",
+                                              "last_modes_to_remove_percent",
+                                              "window_length",
+                                              "polyorder",
+                                              "highpass",
+                                              "add_mean"]}
 
 n_jobs = analysis_info["n_jobs"]
 hrf = analysis_info["hrf"]
@@ -248,13 +255,7 @@ else:
                                                    
                                                    filter_type,
                                                    
-                                                   first_modes_to_remove,
-                                                   last_modes_to_remove_percent,
-                                                   
-                                                   window_length,
-                                                   polyorder,
-                                                   highpass,
-                                                   add_mean,
+                                                   filter_params,
                                                    
                                                    data_path[:-5],
                                                    fitting_space,
@@ -483,21 +484,16 @@ else:
 print("Started modeling at: "+datetime.now().strftime('%Y/%m/%d %H:%M:%S'))
 
 # Gaussian model
-gg = Iso2DGaussianGridder(stimulus=prf_stim,
+gg = Iso2DGaussianModel(stimulus=prf_stim,
                           hrf=hrf,
                           filter_predictions=filter_predictions,
                           filter_type=filter_type,
-                          first_modes_to_remove=first_modes_to_remove,
-                          last_modes_to_remove_percent=last_modes_to_remove_percent,
-                          window_length=window_length,
-                          polyorder=polyorder,
-                          highpass=highpass,
-                          add_mean=add_mean,
+                          filter_params,
                           normalize_RFs=normalize_RFs)
 
 
 gf = Iso2DGaussianFitter(
-    data=tc_full_iso_nonzerovar_dict['tc'], gridder=gg, n_jobs=n_jobs, fit_hrf=fit_hrf)
+    data=tc_full_iso_nonzerovar_dict['tc'], model=gg, n_jobs=n_jobs, fit_hrf=fit_hrf)
 
 # gaussian fit
 if "grid_data_path" not in analysis_info and "gauss_iterparams_path" not in analysis_info:
@@ -640,19 +636,14 @@ else:
 
 # CSS iterative fit
 if "CSS" in models_to_fit:
-    gg_css = CSS_Iso2DGaussianGridder(stimulus=prf_stim,
+    gg_css = CSS_Iso2DGaussianModel(stimulus=prf_stim,
                                       hrf=hrf,
                                       filter_predictions=filter_predictions,
                                       filter_type=filter_type,
-                                      first_modes_to_remove=first_modes_to_remove,
-                                      last_modes_to_remove_percent=last_modes_to_remove_percent,
-                                      window_length=window_length,
-                                      polyorder=polyorder,
-                                      highpass=highpass,
-                                      add_mean=add_mean,                                      
+                                      filter_params,                                     
                                       normalize_RFs=normalize_RFs)
     gf_css = CSS_Iso2DGaussianFitter(
-        data=tc_full_iso_nonzerovar_dict['tc'], gridder=gg_css, n_jobs=n_jobs, fit_hrf=fit_hrf,
+        data=tc_full_iso_nonzerovar_dict['tc'], model=gg_css, n_jobs=n_jobs, fit_hrf=fit_hrf,
         previous_gaussian_fitter=gf)
 
     save_path = opj(data_path, subj+"_iterparams-css_space-"+fitting_space+str(chunk_nr))
@@ -763,20 +754,15 @@ if "CSS" in models_to_fit:
 
 if "DoG" in models_to_fit:    
     # difference of gaussians iterative fit
-    gg_dog = DoG_Iso2DGaussianGridder(stimulus=prf_stim,
+    gg_dog = DoG_Iso2DGaussianModel(stimulus=prf_stim,
                                       hrf=hrf,
                                       filter_predictions=filter_predictions,
                                       filter_type=filter_type,
-                                      first_modes_to_remove=first_modes_to_remove,
-                                      last_modes_to_remove_percent=last_modes_to_remove_percent,
-                                      window_length=window_length,
-                                      polyorder=polyorder,
-                                      highpass=highpass,
-                                      add_mean=add_mean,                                      
+                                      filter_params,                                     
                                       normalize_RFs=normalize_RFs)
 
     gf_dog = DoG_Iso2DGaussianFitter(data=tc_full_iso_nonzerovar_dict['tc'],
-                                     gridder=gg_dog,
+                                     model=gg_dog,
                                      n_jobs=n_jobs,
                                      fit_hrf=fit_hrf,
                                      previous_gaussian_fitter=gf)
@@ -893,20 +879,15 @@ if "DoG" in models_to_fit:
 
 if "norm" in models_to_fit:
     # normalization iterative fit
-    gg_norm = Norm_Iso2DGaussianGridder(stimulus=prf_stim,
+    gg_norm = Norm_Iso2DGaussianModel(stimulus=prf_stim,
                                         hrf=hrf,
                                         filter_predictions=filter_predictions,
                                         filter_type=filter_type,
-                                        first_modes_to_remove=first_modes_to_remove,
-                                        last_modes_to_remove_percent=last_modes_to_remove_percent,
-                                        window_length=window_length,
-                                        polyorder=polyorder,
-                                        highpass=highpass,
-                                        add_mean=add_mean,                                        
+                                        filter_params,                                       
                                         normalize_RFs=normalize_RFs)
 
     gf_norm = Norm_Iso2DGaussianFitter(data=tc_full_iso_nonzerovar_dict['tc'],
-                                       gridder=gg_norm,
+                                       model=gg_norm,
                                        n_jobs=n_jobs,
                                        fit_hrf=fit_hrf,
                                        previous_gaussian_fitter=gf)
