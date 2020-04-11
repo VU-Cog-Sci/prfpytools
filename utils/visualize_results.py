@@ -141,10 +141,13 @@ class visualize_results(object):
                         ######limits for eccentricity
                         self.ecc_min=0.125
                         self.ecc_max=5.0
+                        ######max prf size
+                        w_max = 90                        
               
                         #housekeeping
                         rsq = np.vstack(tuple([elem for _,elem in p_r['RSq'].items()])).T
                         ecc = np.vstack(tuple([elem for _,elem in p_r['Eccentricity'].items()])).T
+                        fw_hmax = np.vstack(tuple([elem for _,elem in p_r['Size (fwhmax)'].items()])).T
             
                         #alpha dictionary
                         p_r['Alpha'] = {}          
@@ -152,7 +155,7 @@ class visualize_results(object):
                         
                         for model in models:
                             p_r['Alpha'][model] = p_r['RSq'][model] * (p_r['Eccentricity'][model]>self.ecc_min) * (p_r['Eccentricity'][model]<self.ecc_max)\
-                                * (tc_stats['Mean']>self.tc_min[subj])
+                                * (tc_stats['Mean']>self.tc_min[subj]) *(p_r['Size (fwhmax)'][model]<w_max)
                        
 
 
@@ -178,12 +181,14 @@ class visualize_results(object):
                         
                         tc_stats = subj_res['Timecourse Stats']
                         mask = subj_res['Results']['mask']
-                        
-                        
+
+                    
+                                                                      
                         #housekeeping
                         #rsq = np.vstack(tuple([elem for _,elem in p_r['RSq'].items()])).T
                         #polar = np.vstack(tuple([elem for _,elem in p_r['Polar Angle'].items()])).T
                         #ecc = np.vstack(tuple([elem for _,elem in p_r['Eccentricity'].items()])).T
+                        #fw_hmax = np.vstack(tuple([elem for _,elem in p_r['Size (fwhmax)'].items()])).T 
                   
                         if rois != 'all':
                             for key in p_r['Alpha']:
@@ -454,13 +459,16 @@ class visualize_results(object):
                         roi_colors['custom.V1']= 'black'
                         roi_colors['custom.V2']= 'red'
                         roi_colors['custom.V3']= 'pink'
+                        roi_colors['custom.hV4']='blue'
+                        roi_colors['custom.V3AB']='orange'
+                        #roi_colors['custom.']
             
                         fw_hmax_stats = dd(lambda:dd(list))
                         ecc_stats = dd(lambda:dd(list))
             
                         for roi in rois:
             
-                            pl.figure(roi+' fw_hmax', figsize=(8, 6), frameon=False)
+                            pl.figure(f'{subj} {roi} fw_hmax', figsize=(8, 6), frameon=False)
            
                             for model in subj_res['Processed Results']['Size (fwhmax)'].keys():                                
             
@@ -504,7 +512,7 @@ class visualize_results(object):
                                            roi.replace('custom.','')+'_fw-hmax.png', dpi=200, bbox_inches='tight')
                                 
                         for model in subj_res['Processed Results']['Size (fwhmax)'].keys():
-                            pl.figure(model+' fw_hmax', figsize=(8, 6), frameon=False)
+                            pl.figure(f'{subj} {model} fw_hmax', figsize=(8, 6), frameon=False)
                             for roi in rois:
                                 #model-specific alpha? or all models same alpha?
                                 alpha_roi = roi_mask(self.idx_rois[subj][roi], subj_res['Processed Results']['Alpha'][model])>rsq_thresh

@@ -135,13 +135,7 @@ def prepare_data(subj,
                  
                  filter_type,
                  
-                 first_modes_to_remove,
-                 last_modes_to_remove_percent,
-                 
-                 window_length,
-                 polyorder,
-                 highpass,
-                 add_mean,                
+                 filter_params,                
 
                  data_path,
                  fitting_space,
@@ -178,12 +172,7 @@ def prepare_data(subj,
                     #no need to pass further args, only filtering 1 condition
                     tc_task.append(filter_predictions(np.array([arr.data for arr in tc_run.darrays]).T[...,discard_volumes:],
                                                      filter_type=filter_type,
-                                                     first_modes_to_remove=first_modes_to_remove,
-                                                     last_modes_to_remove_percent=last_modes_to_remove_percent,
-                                                     window_length=window_length,
-                                                     polyorder=polyorder,
-                                                     highpass=highpass,
-                                                     add_mean=add_mean))
+                                                     filter_params=filter_params))
     
                     #when scanning sub-001 i mistakenly set the length of the 4F scan to 147, while it should have been 145
                     #therefore, there are two extra images at the end to discard in that time series.
@@ -214,12 +203,7 @@ def prepare_data(subj,
                         #no need to pass further args, only filtering 1 condition
                         tc_task.append(filter_predictions(np.array([arr.data for arr in tc_run.darrays]).T[...,discard_volumes:],
                                                          filter_type=filter_type,
-                                                         first_modes_to_remove=first_modes_to_remove,
-                                                         last_modes_to_remove_percent=last_modes_to_remove_percent,                                                        
-                                                         window_length=window_length,
-                                                         polyorder=polyorder,
-                                                         highpass=highpass,
-                                                         add_mean=add_mean))
+                                                         filter_params=filter_params))
         
                         #when scanning sub-001 i mistakenly set the length of the 4F scan to 147, while it should have been 145
                         #therefore, there are two extra images at the end to discard in that time series.
