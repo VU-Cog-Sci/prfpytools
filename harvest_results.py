@@ -139,14 +139,19 @@ for model in models_to_fit:
 
     np.save(iter_path.replace('scratch-shared', 'home'), model_result)
 
-cp(analysis_settings, analysis_settings.replace('scratch-shared', 'home').replace('.yml',analysis_time+'.yml'))
+#mask is saved in original order so only need to copypaste
+mask_path=opj(data_path,  f"{subj}_mask_space-{fitting_space}.npy")
+cp(mask_path, mask_path.replace('scratch-shared', 'home').replace('.npy',analysis_time+'.npy'))
+
+#save noise ceiling
+if save_noise_ceiling:
+    nc_path = opj(data_path,f"{subj}_noise-ceiling_space-{fitting_space}.npy")
+    cp(nc_path, nc_path.replace('scratch-shared', 'home').replace('.npy',analysis_time+'.npy'))
+
 
 if len(sys.argv)>3:
-    print("Grabbing timecourse and mask for this analysis...")
-    #mask is saved in original order so only need to copypaste
-    mask_path=opj(data_path,  f"{subj}_mask_space-{fitting_space}.npy")
-    cp(mask_path, mask_path.replace('scratch-shared', 'home').replace('.npy',analysis_time+'.npy'))
-    
+    print("Grabbing timecourse for this analysis...")
+
     #these are saved in randomized order, so must take into account. like for models above
     tc_path=opj(data_path,  subj+"_timecourse_space-"+fitting_space+".npy")
     tc = np.load(tc_path)
@@ -158,9 +163,6 @@ if len(sys.argv)>3:
         tc_raw_path=opj(data_path,  subj+"_timecourse-raw_space-"+fitting_space+".npy")
         cp(tc_raw_path, tc_raw_path.replace('scratch-shared', 'home').replace('.npy',analysis_time+'.npy'))
     
-    if save_noise_ceiling:
-        nc_path = opj(data_path,f"{subj}_noise-ceiling_space-{fitting_space}.npy")
-        cp(nc_path, nc_path.replace('scratch-shared', 'home').replace('.npy',analysis_time+'.npy'))
         
     if crossvalidate:
         tc_test_path=opj(data_path,  subj+"_timecourse-test_space-"+fitting_space+".npy")
@@ -171,7 +173,8 @@ if len(sys.argv)>3:
         if save_raw_timecourse:
             tc_test_raw_path=opj(data_path,  subj+"_timecourse-test-raw_space-"+fitting_space+".npy")
             cp(tc_test_raw_path, tc_test_raw_path.replace('scratch-shared', 'home').replace('.npy',analysis_time+'.npy'))
-        
 
+        
+cp(analysis_settings, analysis_settings.replace('scratch-shared', 'home').replace('.yml',analysis_time+'.yml'))
 print("harvest completed")
 
