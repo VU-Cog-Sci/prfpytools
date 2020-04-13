@@ -835,7 +835,7 @@ class visualize_results(object):
 
                         for roi in rois:
                             bar_position=last_bar_position+0.1
-                            pl.figure(subj+' RSq', figsize=(8, 6), frameon=False)
+                            pl.figure(analysis+subj+' RSq', figsize=(8, 6), frameon=False)
                             pl.ylabel(subj+' Mean RSq')
                             alpha_roi = roi_mask(self.idx_rois[subj][roi], subj_res['Processed Results']['Alpha']['all'])>rsq_thresh
                             model_list = [k for k in subj_res['Processed Results']['RSq'].keys()]

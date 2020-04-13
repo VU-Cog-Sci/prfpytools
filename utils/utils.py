@@ -585,11 +585,18 @@ def fwhmax_fwatmin(model, params, normalize_RFs=False, return_profiles=False):
 
 def combine_results(subj, fitting_space, results_folder, suffix_list,
                     raw_timecourse_path=None, normalize_RFs=False, ref_img_path=None):
-    mask = np.load(opj(results_folder, subj+'_mask_space-'+fitting_space+'.npy'))
+    try:
+        mask = np.load(opj(results_folder, subj+'_mask_space-'+fitting_space+'.npy'))
+    except Exception as e:
+        print(e)
+        pass
+    
     g_l = []
     c_l = []
     d_l = []
     n_l = []
+    masks = []
+    
     for suf_list in suffix_list:
         for i, suffix in enumerate(suf_list):
             if i == 0:
@@ -598,6 +605,8 @@ def combine_results(subj, fitting_space, results_folder, suffix_list,
                     css = np.load(opj(results_folder,subj+'_iterparams-css_space-'+fitting_space+suffix+'.npy'))
                     dog = np.load(opj(results_folder,subj+'_iterparams-dog_space-'+fitting_space+suffix+'.npy'))
                     norm = np.load(opj(results_folder,subj+'_iterparams-norm_space-'+fitting_space+suffix+'.npy'))
+                    mask = np.load(opj(results_folder, subj+'_mask_space-'+fitting_space+suffix+'.npy'))
+                    print(f"gauss iter {np.sum(gauss[:,-1]>0.5)}")
                 except Exception as e:
                     print(e)
                     pass
@@ -614,22 +623,59 @@ def combine_results(subj, fitting_space, results_folder, suffix_list,
                 except Exception as e:
                     print(e)
                     pass
-        try:        
-            g_l.append(gauss)
-            c_l.append(css)
-            d_l.append(dog)
-            n_l.append(norm)
+        try:
+
+            gauss_full = np.zeros((mask.shape[0],gauss.shape[-1]))
+            css_full = np.zeros((mask.shape[0],css.shape[-1]))
+            dog_full = np.zeros((mask.shape[0],dog.shape[-1]))
+            norm_full = np.zeros((mask.shape[0],norm.shape[-1]))
+            gauss_full[mask] = np.copy(gauss)
+            css_full[mask] = np.copy(css)
+            dog_full[mask] = np.copy(dog)
+            norm_full[mask] = np.copy(norm)
+            print(f"gauss fold {np.sum(gauss_full[:,-1]>0.5)}")
+            print(mask.shape)
+
+            
+            g_l.append(gauss_full)
+            c_l.append(css_full)
+            d_l.append(dog_full)
+            n_l.append(norm_full)
+            masks.append(mask)
         except Exception as e:
             print(e)
-            pass                    
-    gauss = np.mean(g_l, axis=0)
-    css = np.mean(c_l, axis=0)
-    dog = np.mean(d_l, axis=0)
-    norm=np.mean(n_l, axis=0)            
-                
+            pass
+
+     
+    gauss_full = np.median(g_l, axis=0)
+    css_full = np.median(c_l, axis=0)
+    dog_full = np.median(d_l, axis=0)
+    norm_full = np.median(n_l, axis=0)
+    
+    print(f"{[np.sum(mask) for mask in masks]}")
+    print(f"{np.sum(np.prod(masks, axis=0))}")
+    print(f"gauss median {np.sum(gauss_full[:,-1]>0.5)}")
+    print(f"norm median {np.sum(norm_full[:,-1]>0.5)}")
+
+    try:
+        mask = np.load(opj(results_folder, subj+'_mask_space-'+fitting_space+'.npy'))
+    except Exception as e:
+        print(e)
+        mask = (gauss_full[:,-1]>0)
+        pass
+    
+    gauss = np.copy(gauss_full[mask])
+    css = np.copy(css_full[mask])
+    dog = np.copy(dog_full[mask])
+    norm = np.copy(norm_full[mask])
+    print(f"gauss in mask: {np.sum(gauss[:,-1]>0.5)}")
+    print(f"norm in mask: {np.sum(norm[:,-1]>0.5)}")
+    
+    
                 
     raw_tc_stats = dict()
     if raw_timecourse_path is not None:
+        
         
         tc_raw = np.load(raw_timecourse_path)
         
