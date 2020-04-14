@@ -291,7 +291,7 @@ def prepare_data(subj,
                 np.save(opj(data_path,'prfpy',subj+"_timecourse-test-raw_space-"+fitting_space+".npy"),tc_full_iso_test[mask])
                 
         if save_noise_ceiling:
-            noise_ceiling = 1-np.sum((tc_full_iso_test[mask]-tc_full_iso[mask])**2, axis=-1)/(tc_full_iso_test[mask].shape[-1]*tc_full_iso_test[mask].var(-1))
+            noise_ceiling = 1-np.sum((tc_full_iso_nonzerovar_test-tc_full_iso_nonzerovar)**2, axis=-1)/(tc_full_iso_nonzerovar_test.shape[-1]*tc_full_iso_nonzerovar_test.var(-1))
             np.save(opj(data_path,'prfpy',f"{subj}_noise-ceiling_space-{fitting_space}.npy"),noise_ceiling)
                 
         order = np.random.permutation(tc_full_iso_nonzerovar.shape[0])
@@ -596,6 +596,7 @@ def combine_results(subj, fitting_space, results_folder, suffix_list,
     d_l = []
     n_l = []
     masks = []
+    nc_l = []
     
     for suf_list in suffix_list:
         for i, suffix in enumerate(suf_list):
@@ -606,6 +607,7 @@ def combine_results(subj, fitting_space, results_folder, suffix_list,
                     dog = np.load(opj(results_folder,subj+'_iterparams-dog_space-'+fitting_space+suffix+'.npy'))
                     norm = np.load(opj(results_folder,subj+'_iterparams-norm_space-'+fitting_space+suffix+'.npy'))
                     mask = np.load(opj(results_folder, subj+'_mask_space-'+fitting_space+suffix+'.npy'))
+                    noise_ceiling = np.load(opj(results_folder, subj+'_noise-ceiling_space-'+fitting_space+suffix+'.npy'))
                     print(f"gauss iter {np.sum(gauss[:,-1]>0.5)}")
                 except Exception as e:
                     print(e)
@@ -629,10 +631,13 @@ def combine_results(subj, fitting_space, results_folder, suffix_list,
             css_full = np.zeros((mask.shape[0],css.shape[-1]))
             dog_full = np.zeros((mask.shape[0],dog.shape[-1]))
             norm_full = np.zeros((mask.shape[0],norm.shape[-1]))
+            
             gauss_full[mask] = np.copy(gauss)
             css_full[mask] = np.copy(css)
             dog_full[mask] = np.copy(dog)
             norm_full[mask] = np.copy(norm)
+            
+
             print(f"gauss fold {np.sum(gauss_full[:,-1]>0.5)}")
             print(mask.shape)
 
@@ -642,16 +647,24 @@ def combine_results(subj, fitting_space, results_folder, suffix_list,
             d_l.append(dog_full)
             n_l.append(norm_full)
             masks.append(mask)
+            noise_ceiling_full = np.zeros(mask.shape[0])
+            noise_ceiling_full[mask] = np.copy(noise_ceiling)
+            nc_l.append(noise_ceiling_full)
+
         except Exception as e:
             print(e)
             pass
 
-     
-    gauss_full = np.median(g_l, axis=0)
-    css_full = np.median(c_l, axis=0)
-    dog_full = np.median(d_l, axis=0)
-    norm_full = np.median(n_l, axis=0)
+    try:     
+        gauss_full = np.median(g_l, axis=0)
+        css_full = np.median(c_l, axis=0)
+        dog_full = np.median(d_l, axis=0)
+        norm_full = np.median(n_l, axis=0)
     
+        noise_ceiling_full = np.max(nc_l, axis=0)
+    except Exception as e:
+        print(e)
+        pass    
     print(f"{[np.sum(mask) for mask in masks]}")
     print(f"{np.sum(np.prod(masks, axis=0))}")
     print(f"gauss median {np.sum(gauss_full[:,-1]>0.5)}")
@@ -663,14 +676,19 @@ def combine_results(subj, fitting_space, results_folder, suffix_list,
         print(e)
         mask = (gauss_full[:,-1]>0)
         pass
-    
-    gauss = np.copy(gauss_full[mask])
-    css = np.copy(css_full[mask])
-    dog = np.copy(dog_full[mask])
-    norm = np.copy(norm_full[mask])
-    print(f"gauss in mask: {np.sum(gauss[:,-1]>0.5)}")
-    print(f"norm in mask: {np.sum(norm[:,-1]>0.5)}")
-    
+
+    try:     
+        gauss = np.copy(gauss_full[mask])
+        css = np.copy(css_full[mask])
+        dog = np.copy(dog_full[mask])
+        norm = np.copy(norm_full[mask])
+        noise_ceiling = np.copy(noise_ceiling_full[mask])
+        print(f"gauss in mask: {np.sum(gauss[:,-1]>0.5)}")
+        print(f"norm in mask: {np.sum(norm[:,-1]>0.5)}")
+    except Exception as e:
+        print(e)
+        noise_ceiling=0
+        pass      
     
                 
     raw_tc_stats = dict()
@@ -695,7 +713,7 @@ def combine_results(subj, fitting_space, results_folder, suffix_list,
     
     return {'Gauss':gauss, #'Gauss grid':gauss_grid, 'Norm grid':norm_grid, 
             'CSS':css, 'DoG':dog, 'Norm':norm,
-            'mask':mask, 'normalize_RFs':normalize_RFs, 
+            'mask':mask, 'noise_ceiling':noise_ceiling, 'normalize_RFs':normalize_RFs, 
             'Timecourse Stats':raw_tc_stats, 'ref_img_path':ref_img_path}
 
 
@@ -712,23 +730,23 @@ def process_results(results_dict, return_norm_profiles):
 
             #loop over contents of single-subject analysis results (models and mask)
             for k2, v2 in v['Results'].items():
-                if k2 != 'mask' and isinstance(v2, np.ndarray) and 'grid' not in k2 and 'Stats' not in k2:
+                if k2 != 'mask' and isinstance(v2, np.ndarray) and 'grid' not in k2 and 'Stats' not in k2 and k2 != 'noise_ceiling':
 
-                    processed_results['RSq'][k2][mask] = v2[:,-1]
+                    processed_results['RSq'][k2][mask] = np.copy(v2[:,-1])
                     processed_results['Eccentricity'][k2][mask] = np.sqrt(v2[:,0]**2+v2[:,1]**2)
                     processed_results['Polar Angle'][k2][mask] = np.arctan2(v2[:,1], v2[:,0])
-                    processed_results['Amplitude'][k2][mask] = v2[:,3]
+                    processed_results['Amplitude'][k2][mask] = np.copy(v2[:,3])
 
                     if k2 == 'CSS':
-                        processed_results['CSS Exponent'][k2][mask] = v2[:,5]
+                        processed_results['CSS Exponent'][k2][mask] =  np.copy(v2[:,5])
 
                     if k2 == 'DoG':
                         (processed_results['Size (fwhmax)'][k2][mask],
                         processed_results['Surround Size (fwatmin)'][k2][mask]) = fwhmax_fwatmin(k2, v2, normalize_RFs)
 
                     elif k2 == 'Norm':
-                        processed_results['Norm Param. B'][k2][mask] = v2[:,7]
-                        processed_results['Norm Param. D'][k2][mask] = v2[:,8]
+                        processed_results['Norm Param. B'][k2][mask] = np.copy(v2[:,7])
+                        processed_results['Norm Param. D'][k2][mask] = np.copy(v2[:,8])
                         processed_results['Ratio (B/D)'][k2][mask] = v2[:,7]/v2[:,8]
 
                         if return_norm_profiles and len(mask.shape)<2:
@@ -744,6 +762,8 @@ def process_results(results_dict, return_norm_profiles):
                         processed_results['Size (fwhmax)'][k2][mask] = fwhmax_fwatmin(k2, v2, normalize_RFs)
                 elif 'Stats' in k2:
                     v[k2] = v['Results'][k2]
+                elif k2 == 'noise_ceiling':
+                    processed_results['Noise Ceiling']['Noise Ceiling'][mask] = np.copy(v2)
                     
 
             v['Processed Results'] = {ke : dict(va) for ke, va in processed_results.items()}

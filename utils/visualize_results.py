@@ -810,7 +810,7 @@ class visualize_results(object):
                                                param.replace("/","").replace('.','').replace(' ','_')+'.png', dpi=200, bbox_inches='tight')
                                     
                                     
-    def rsq_roi_plots(self, rois, rsq_thresh, save_figures, analysis_names='all', noise_ceiling=None, plot_hist=False):
+    def rsq_roi_plots(self, rois, rsq_thresh, save_figures, analysis_names='all', plot_hist=False):
 
         pl.rcParams.update({'font.size': 16})
         pl.rc('figure', facecolor='w')
@@ -858,9 +858,10 @@ class visualize_results(object):
                                 
                                 bar_position += 0.1
                                 
-                            if noise_ceiling is not None:
-                                bar_height=np.mean(noise_ceiling[subj][alpha_roi])
-                                bar_err = sem(noise_ceiling[subj][alpha_roi])
+                            if 'Noise Ceiling' in subj_res['Processed Results']:
+                                noise_ceiling = subj_res['Processed Results']['Noise Ceiling']['Noise Ceiling']
+                                bar_height=np.mean(noise_ceiling[alpha_roi])
+                                bar_err = sem(noise_ceiling[alpha_roi])
                                 pl.bar(bar_position, bar_height, width=0.1, yerr=bar_err, color='grey',edgecolor='black', label='NC')
                                 bar_position += 0.1
 
