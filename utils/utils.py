@@ -104,7 +104,7 @@ def create_full_stim(screenshot_paths,
         stop=start+task_lengths[i]
         if task_name not in screenshot_paths[i]:
             print("WARNING: check that screenshot paths and task names are in the same order")
-        late_iso_dict[task_name] = late_iso_dict['periods'][np.where((late_iso_dict['periods']>=start) & (late_iso_dict['periods']<stop))]
+        late_iso_dict[task_name] = late_iso_dict['periods'][np.where((late_iso_dict['periods']>=start) & (late_iso_dict['periods']<stop))]-start
             
         start+=task_lengths[i]
 

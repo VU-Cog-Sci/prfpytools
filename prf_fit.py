@@ -225,7 +225,7 @@ else:
     
 if chunk_nr == 0 and len(save_runs)>0:
     for i, task in enumerate(task_names):
-        prf_stim_single_task = create_full_stim(screenshot_paths[i],
+        prf_stim_single_task = create_full_stim([screenshot_paths[i]],
             n_pix,
             discard_volumes,
             baseline_volumes_begin_end,
@@ -266,8 +266,8 @@ if chunk_nr == 0 and len(save_runs)>0:
             tc_ordered = np.zeros_like(run_tc_dict['tc'])
             tc_ordered[order] = np.copy(run_tc_dict['tc'])
             
-            np.save(opj(data_path.replace('scratch_shared','home'),f"{subj}_timecourse_task-{task}_run-{run}"), tc_ordered)
-            np.save(opj(data_path.replace('scratch_shared','home'),f"{subj}_mask_task-{task}_run-{run}"), mask)
+            np.save(opj(data_path.replace('scratch-shared','home'),f"{subj}_timecourse_space-{fitting_space}_task-{task}_run-{run}"), tc_ordered)
+            np.save(opj(data_path.replace('scratch-shared','home'),f"{subj}_mask_space-{fitting_space}_task-{task}_run-{run}"), mask)
             
             
             
