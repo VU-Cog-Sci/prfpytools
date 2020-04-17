@@ -535,7 +535,7 @@ gg = Iso2DGaussianModel(stimulus=prf_stim,
                           hrf=hrf,
                           filter_predictions=filter_predictions,
                           filter_type=filter_type,
-                          filter_params,
+                          filter_params=filter_params,
                           normalize_RFs=normalize_RFs)
 
 
@@ -687,7 +687,7 @@ if "CSS" in models_to_fit:
                                       hrf=hrf,
                                       filter_predictions=filter_predictions,
                                       filter_type=filter_type,
-                                      filter_params,                                     
+                                      filter_params=filter_params,                                     
                                       normalize_RFs=normalize_RFs)
     gf_css = CSS_Iso2DGaussianFitter(
         data=tc_full_iso_nonzerovar_dict['tc'], model=gg_css, n_jobs=n_jobs, fit_hrf=fit_hrf,
@@ -805,7 +805,7 @@ if "DoG" in models_to_fit:
                                       hrf=hrf,
                                       filter_predictions=filter_predictions,
                                       filter_type=filter_type,
-                                      filter_params,                                     
+                                      filter_params=filter_params,                                     
                                       normalize_RFs=normalize_RFs)
 
     gf_dog = DoG_Iso2DGaussianFitter(data=tc_full_iso_nonzerovar_dict['tc'],
@@ -930,7 +930,7 @@ if "norm" in models_to_fit:
                                         hrf=hrf,
                                         filter_predictions=filter_predictions,
                                         filter_type=filter_type,
-                                        filter_params,                                       
+                                        filter_params=filter_params,                                       
                                         normalize_RFs=normalize_RFs)
 
     gf_norm = Norm_Iso2DGaussianFitter(data=tc_full_iso_nonzerovar_dict['tc'],
