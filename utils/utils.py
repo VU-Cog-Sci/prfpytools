@@ -162,7 +162,7 @@ def prepare_data(subj,
                     print(f"{fit_runs} fit_runs requested but only {len(tc_paths)} runs were found.")
                     raise ValueError
 
-                if not crossvalidate or fit_task is not None:
+                if fit_runs is None:
                     #if CV over tasks, or if no CV, use all runs
                     fit_runs = np.arange(len(tc_paths))
                 
@@ -661,7 +661,7 @@ def combine_results(subj, fitting_space, results_folder, suffix_list,
         dog_full = np.median(d_l, axis=0)
         norm_full = np.median(n_l, axis=0)
     
-        noise_ceiling_full = np.max(nc_l, axis=0)
+        noise_ceiling_full = np.median(nc_l, axis=0)
     except Exception as e:
         print(e)
         pass    

@@ -843,7 +843,7 @@ class visualize_results(object):
                             x_ticks.append(bar_position+0.15)
                             x_labels.append(roi.replace('custom.','')+'\n')
                             for model in model_list:                                
-                                model_rsq = subj_res['Processed Results']['RSq'][model][alpha_roi]
+                                model_rsq = subj_res['Processed Results']['RSq'][model][alpha_roi]#100* subj_res['Processed Results']['RSq'][model][alpha_roi] / subj_res['Processed Results']['RSq']['Gauss'][alpha_roi]
                                 # if noise_ceiling is not None:
                                 #     model_rsq /= noise_ceiling[alpha_roi]
                                     
@@ -858,12 +858,12 @@ class visualize_results(object):
                                 
                                 bar_position += 0.1
                                 
-                            if 'Noise Ceiling' in subj_res['Processed Results']:
-                                noise_ceiling = subj_res['Processed Results']['Noise Ceiling']['Noise Ceiling']
-                                bar_height=np.mean(noise_ceiling[alpha_roi])
-                                bar_err = sem(noise_ceiling[alpha_roi])
-                                pl.bar(bar_position, bar_height, width=0.1, yerr=bar_err, color='grey',edgecolor='black', label='NC')
-                                bar_position += 0.1
+                            # if 'Noise Ceiling' in subj_res['Processed Results']:
+                            #     noise_ceiling = subj_res['Processed Results']['Noise Ceiling']['Noise Ceiling']
+                            #     bar_height=np.mean(noise_ceiling[alpha_roi])
+                            #     bar_err = sem(noise_ceiling[alpha_roi])
+                            #     pl.bar(bar_position, bar_height, width=0.1, yerr=bar_err, color='grey',edgecolor='black', label='NC')
+                            #     bar_position += 0.1
 
                             last_bar_position = bar_position
                             pl.xticks(x_ticks,x_labels)
