@@ -78,7 +78,7 @@ if fix_bold_baseline:
 
 
 crossvalidate = analysis_info["crossvalidate"]
-save_noise_ceiling = False
+save_noise_ceiling = False #just to set default
 
 if crossvalidate and "fit_task" in analysis_info and "fit_runs" in analysis_info:
     print("Can only specify one between fit_task and fit_runs for crossvalidation.")
@@ -111,13 +111,13 @@ param_bounds = analysis_info["param_bounds"]
 pos_prfs_only = analysis_info["pos_prfs_only"]
 normalize_RFs = analysis_info["normalize_RFs"]
 
-
 param_constraints = analysis_info["param_constraints"]
 surround_sigma_larger_than_centre = analysis_info["surround_sigma_larger_than_centre"]
 positive_centre_only = analysis_info["positive_centre_only"]
 
 n_chunks = analysis_info["n_chunks"]
 refit_mode = analysis_info["refit_mode"].lower()
+save_runs = analysis_info["save_runs"]
 
 if "norm" in models_to_fit and "norm_model_variant" in analysis_info:
     norm_model_variant = analysis_info["norm_model_variant"]
@@ -223,6 +223,54 @@ else:
     #for all other cases, a separate test-set stimulus it not needed
     test_prf_stim = prf_stim
     
+if chunk_nr == 0 and len(save_runs)>0:
+    for i, task in enumerate(task_names):
+        prf_stim_single_task = create_full_stim(screenshot_paths[i],
+            n_pix,
+            discard_volumes,
+            baseline_volumes_begin_end,
+            dm_edges_clipping,
+            screen_size_cm,
+            screen_distance_cm,
+            TR,
+            [task])
+        
+        test_prf_stim_single_task = prf_stim_single_task
+        
+        for run in save_runs:
+            run_tc_dict = prepare_data(subj,
+                                prf_stim_single_task,
+                                test_prf_stim_single_task,
+                                
+                                discard_volumes,
+                                min_percent_var,
+                                fix_bold_baseline,
+                                
+                                filter_type,                               
+                                filter_params,
+                               
+                                data_path[:-5],
+                                fitting_space,
+                                data_scaling,
+                                roi_idx,
+                                save_raw_timecourse=False,
+                                
+                                crossvalidate=False,
+                                fit_runs=[run],
+                                fit_task=None,
+                                save_noise_ceiling=False)
+
+            order = run_tc_dict['order']
+            mask = run_tc_dict['mask']
+                
+            tc_ordered = np.zeros_like(run_tc_dict['tc'])
+            tc_ordered[order] = np.copy(run_tc_dict['tc'])
+            
+            np.save(opj(data_path.replace('scratch_shared','home'),f"{subj}_timecourse_task-{task}_run-{run}"), tc_ordered)
+            np.save(opj(data_path.replace('scratch_shared','home'),f"{subj}_mask_task-{task}_run-{run}"), mask)
+            
+            
+            
 
 
 if "timecourse_data_path" in analysis_info:
@@ -359,7 +407,6 @@ if norm_model_variant == "abcd":
     neural_baseline_grid=np.array([0,1,10,100], dtype='float32')
     surround_baseline_grid=np.array([0.1,1.0,10.0,100.0], dtype='float32')
     
-
 
 elif norm_model_variant == "abc":
     surround_amplitude_grid=np.array([0,0.05,0.2,1,2,5,10], dtype='float32')
