@@ -31,7 +31,7 @@ from scipy.optimize import LinearConstraint, NonlinearConstraint
 
 from utils.utils import create_full_stim, prepare_data
 
-from prfpy.grid import Iso2DGaussianModel, Norm_Iso2DGaussianModel, DoG_Iso2DGaussianModel, CSS_Iso2DGaussianModel
+from prfpy.model import Iso2DGaussianModel, Norm_Iso2DGaussianModel, DoG_Iso2DGaussianModel, CSS_Iso2DGaussianModel
 from prfpy.fit import Iso2DGaussianFitter, Norm_Iso2DGaussianFitter, DoG_Iso2DGaussianFitter, CSS_Iso2DGaussianFitter
 
 # note that screenshot paths and task names should be in the same order
