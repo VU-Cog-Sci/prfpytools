@@ -147,7 +147,7 @@ class visualize_results(object):
                         #housekeeping
                         rsq = np.vstack(tuple([elem for _,elem in p_r['RSq'].items()])).T
                         ecc = np.vstack(tuple([elem for _,elem in p_r['Eccentricity'].items()])).T
-                        fw_hmax = np.vstack(tuple([elem for _,elem in p_r['Size (fwhmax)'].items()])).T
+                        #fw_hmax = np.vstack(tuple([elem for _,elem in p_r['Size (fwhmax)'].items()])).T
             
                         #alpha dictionary
                         p_r['Alpha'] = {}          

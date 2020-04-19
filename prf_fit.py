@@ -172,7 +172,7 @@ if chunk_nr == 0:
         yaml.dump(analysis_info, outfile)
 else:
     while True:
-        time.sleep(1)
+        time.sleep(10)
         try:
             with open(save_path+".yml") as f:
                 current_an = yaml.safe_load(f)
