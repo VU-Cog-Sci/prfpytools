@@ -147,7 +147,7 @@ if not param_bounds and norm_model_variant != "abcd":
 
 #analysis_time = datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
 
-job_id = sys.getenv('SLURM_ARRAY_JOB_ID')
+job_id = int(os.getenv('SLURM_ARRAY_JOB_ID'))
 analysis_time = os.popen(f'sacct -j {job_id} -o submit -X --noheader | uniq').read().replace('T','-').replace(' \n','').replace(':','-')
 analysis_info["analysis_time"] = analysis_time
 analysis_info["job_id"] = job_id
