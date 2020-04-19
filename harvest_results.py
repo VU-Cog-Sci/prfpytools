@@ -78,7 +78,7 @@ if refit_mode in ["skip", "overwrite"]:
 else:
     finished_chunks = np.arange(n_chunks)
 
-if refit_mode in ["iterate", "overwrite"]:
+if refit_mode in ["iterate", "overwrite"] and "--force_harvest" not in sys.argv:
     for model in models_to_fit:
         model=model.lower()
         last_edited = np.array([(datetime.fromtimestamp(os.stat(opj(data_path,
@@ -104,7 +104,7 @@ if refit_mode in ["iterate", "overwrite"]:
 
 
 
-if len(unfinished_chunks)>0:
+if len(unfinished_chunks)>0 and "--force_harvest" not in sys.argv:
     print("Make sure to be in skip or iterate mode first! Then run:")
     str_resub='"( '
     for value in np.unique(unfinished_chunks):
@@ -149,7 +149,7 @@ if save_noise_ceiling:
     cp(nc_path, nc_path.replace('scratch-shared', 'home').replace('.npy',analysis_time+'.npy'))
 
 
-if len(sys.argv)>3:
+if "--grab" in sys.argv:
     print("Grabbing timecourse for this analysis...")
 
     #these are saved in randomized order, so must take into account. like for models above
