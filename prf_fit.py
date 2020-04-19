@@ -16,6 +16,7 @@ import time
 subj = sys.argv[1]
 analysis_settings = sys.argv[2]
 chunk_nr = int(sys.argv[3])
+job_id = int(sys.argv[4])
 
 with open(analysis_settings) as f:
     analysis_info = yaml.safe_load(f)
@@ -145,18 +146,22 @@ if not param_bounds and norm_model_variant != "abcd":
           but param_bounds=False. param_bounds will be set to True.")
     param_bounds = True
 
-analysis_time = datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
+#analysis_time = datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
+
+analysis_time = os.popen(f'sacct -j {job_id} -o submit -X --noheader | uniq').read().replace('T','-').replace(' \n','').replace(':','-')
 analysis_info["analysis_time"] = analysis_time
+analysis_info["job_id"] = job_id
 
 data_path = opj(data_path,'prfpy')
 save_path = opj(data_path, subj+"_analysis_settings")
 
 
-if chunk_nr == 0:
-    if os.path.exists(save_path+".yml"):
-        with open(save_path+".yml") as f:
-            previous_analysis_info = yaml.safe_load(f)
-
+if os.path.exists(save_path+".yml"):
+    with open(save_path+".yml") as f:
+        previous_analysis_info = yaml.safe_load(f)
+    
+    if previous_analysis_info['job_id'] != job_id:
+ 
         previous_analysis_time = previous_analysis_info["analysis_time"]
         previous_analysis_refit_mode = previous_analysis_info["refit_mode"].lower()
 
@@ -164,23 +169,22 @@ if chunk_nr == 0:
         analysis_info["previous_analysis_refit_mode"] = previous_analysis_refit_mode
 
         os.rename(save_path+".yml",save_path+previous_analysis_time+".yml")
+        
+        with open(save_path+".yml", 'w+') as outfile:
+            yaml.dump(analysis_info, outfile)
+        
     else:
-        analysis_info["previous_analysis_time"] = ""
-        analysis_info["previous_analysis_refit_mode"] = ""
-
+        previous_analysis_time = previous_analysis_info["previous_analysis_time"]
+        previous_analysis_refit_mode = previous_analysis_info["previous_analysis_refit_mode"]        
+        
+else:
+    time.sleep(2)
+    analysis_info["previous_analysis_time"] = ""
+    analysis_info["previous_analysis_refit_mode"] = ""
     with open(save_path+".yml", 'w+') as outfile:
         yaml.dump(analysis_info, outfile)
-else:
-    while True:
-        time.sleep(10)
-        try:
-            with open(save_path+".yml") as f:
-                current_an = yaml.safe_load(f)
-            previous_analysis_time = current_an["previous_analysis_time"]
-            previous_analysis_refit_mode = current_an["previous_analysis_refit_mode"]
-        except:
-            continue
-        break
+
+    
 
 
 
