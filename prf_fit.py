@@ -157,6 +157,7 @@ save_path = opj(data_path, subj+"_analysis_settings")
 
 
 if os.path.exists(save_path+".yml"):
+    time.sleep(10*np.random.rand())
     with open(save_path+".yml") as f:
         previous_analysis_info = yaml.safe_load(f)
     
@@ -167,12 +168,15 @@ if os.path.exists(save_path+".yml"):
 
         analysis_info["previous_analysis_time"] = previous_analysis_time
         analysis_info["previous_analysis_refit_mode"] = previous_analysis_refit_mode
-
-        os.rename(save_path+".yml",save_path+previous_analysis_time+".yml")
         
-        with open(save_path+".yml", 'w+') as outfile:
-            yaml.dump(analysis_info, outfile)
-        
+        try:
+            os.rename(save_path+".yml",save_path+previous_analysis_time+".yml")
+            
+            with open(save_path+".yml", 'w+') as outfile:
+                yaml.dump(analysis_info, outfile)
+        except:
+            pass
+                          
     else:
         previous_analysis_time = previous_analysis_info["previous_analysis_time"]
         previous_analysis_refit_mode = previous_analysis_info["previous_analysis_refit_mode"]        
