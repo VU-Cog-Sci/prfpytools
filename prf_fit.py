@@ -156,37 +156,43 @@ data_path = opj(data_path,'prfpy')
 save_path = opj(data_path, subj+"_analysis_settings")
 
 
-if os.path.exists(save_path+".yml"):
-    time.sleep(10*np.random.rand())
-    with open(save_path+".yml") as f:
-        previous_analysis_info = yaml.safe_load(f)
-    
-    if previous_analysis_info['job_id'] != job_id:
- 
+if chunk_nr ==0:
+    if os.path.exists(save_path+".yml"):
+        with open(save_path+".yml") as f:
+            previous_analysis_info = yaml.safe_load(f)
+        
         previous_analysis_time = previous_analysis_info["analysis_time"]
-        previous_analysis_refit_mode = previous_analysis_info["refit_mode"].lower()
-
+        previous_analysis_refit_mode = previous_analysis_info["refit_mode"]
+    
         analysis_info["previous_analysis_time"] = previous_analysis_time
         analysis_info["previous_analysis_refit_mode"] = previous_analysis_refit_mode
-        
-        try:
-            os.rename(save_path+".yml",save_path+previous_analysis_time+".yml")
-            
-            with open(save_path+".yml", 'w+') as outfile:
-                yaml.dump(analysis_info, outfile)
-        except:
-            pass
-                          
+    
+        os.popen(f"cp {save_path}.yml {save_path}{previous_analysis_time}.yml")
     else:
-        previous_analysis_time = previous_analysis_info["previous_analysis_time"]
-        previous_analysis_refit_mode = previous_analysis_info["previous_analysis_refit_mode"]        
-        
-else:
-    time.sleep(2)
-    analysis_info["previous_analysis_time"] = ""
-    analysis_info["previous_analysis_refit_mode"] = ""
+        analysis_info["previous_analysis_time"] = ""
+        analysis_info["previous_analysis_refit_mode"] = ""        
+            
     with open(save_path+".yml", 'w+') as outfile:
         yaml.dump(analysis_info, outfile)
+
+else:
+    while not os.path.exists(save_path+".yml"):
+        time.sleep(30)
+    else:
+        with open(save_path+".yml") as f:
+            current_analysis_info = yaml.safe_load(f)
+        
+        while current_analysis_info['job_id'] != job_id:
+            time.sleep(30)
+            with open(save_path+".yml") as f:
+                current_analysis_info = yaml.safe_load(f)
+        else:
+            previous_analysis_time = current_analysis_info["previous_analysis_time"]
+            previous_analysis_refit_mode = current_analysis_info["previous_analysis_refit_mode"]               
+
+     
+        
+
 
     
 
