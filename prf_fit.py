@@ -29,7 +29,7 @@ if "mkl_num_threads" in analysis_info:
 import numpy as np
 from scipy.optimize import LinearConstraint, NonlinearConstraint
 
-from utils.utils import create_full_stim, prepare_data
+from utils.preproc_utils import create_full_stim, prepare_data
 
 from prfpy.model import Iso2DGaussianModel, Norm_Iso2DGaussianModel, DoG_Iso2DGaussianModel, CSS_Iso2DGaussianModel
 from prfpy.fit import Iso2DGaussianFitter, Norm_Iso2DGaussianFitter, DoG_Iso2DGaussianFitter, CSS_Iso2DGaussianFitter
@@ -157,9 +157,16 @@ save_path = opj(data_path, subj+"_analysis_settings")
 
 
 if os.path.exists(save_path+".yml"):
-    time.sleep(10*np.random.rand())
-    with open(save_path+".yml") as f:
-        previous_analysis_info = yaml.safe_load(f)
+    previous_analysis_info = None
+    delay = 0
+    while previous_analysis_info == None:
+        with open(save_path+".yml") as f:
+            previous_analysis_info = yaml.safe_load(f)
+        time.sleep(5)
+        delay+=5
+        #max 10 minutes wait, if more something went wrong
+        if delay > 600:
+            break
     
     if previous_analysis_info['job_id'] != job_id:
                 
