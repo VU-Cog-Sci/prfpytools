@@ -11,6 +11,7 @@ import matplotlib.pyplot as pl
 import cortex
 import nibabel as nb
 from collections import defaultdict as dd
+from copy import deepcopy
 
 import time
 from scipy.stats import sem, ks_2samp, ttest_1samp, wilcoxon
@@ -20,11 +21,26 @@ opj = os.path.join
 from statsmodels.stats import weightstats
 from sklearn.linear_model import LinearRegression
 from nibabel.freesurfer.io import read_morph_data, write_morph_data
-from utils.utils import roi_mask
+from utils.preproc_utils import roi_mask
 
 class visualize_results(object):
-    def __init__(self):
-        self.main_dict = dd(lambda:dd(lambda:dd(dict)))
+    def __init__(self, results):
+        self.main_dict = deepcopy(results.main_dict) 
+        self.get_spaces()
+        self.get_subjects(self.main_dict)
+        
+    def get_subjects(self, curr_dict, subject_list = []):
+        for k, v in curr_dict.items():
+            if 'sub-' not in k:# and isinstance(v, (dict,dd)):
+                self.get_subjects(v, subject_list)
+            else:
+                if k not in subject_list:
+                    subject_list.append(k)
+        
+        self.subjects = subject_list
+    
+    def get_spaces(self):
+        self.spaces = self.main_dict.keys()
         
     def import_rois_and_flatmaps(self, fs_dir):
         self.idx_rois = dd(dict)
