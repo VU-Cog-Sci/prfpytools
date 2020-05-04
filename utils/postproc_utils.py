@@ -3,165 +3,266 @@ import numpy as np
 import scipy as sp
 import matplotlib.pyplot as pl
 from matplotlib import colors
+from tqdm import tqdm
 import cortex
+import yaml
+from pathlib import Path
 from collections import defaultdict as dd
 import matplotlib.image as mpimg
-
+from copy import deepcopy
+from prfpy.model import Iso2DGaussianModel, Norm_Iso2DGaussianModel, DoG_Iso2DGaussianModel, CSS_Iso2DGaussianModel
+from utils.preproc_utils import create_full_stim
 
 opj = os.path.join
 
 class results(object):
     def __init__(self):
-        self.main_dict = dd(lambda:dd(lambda:dd(dict)))
+        self.main_dict = dd(lambda:dd(lambda:dd(lambda:dd(dict))))
     
-    def combine_results(self, subj, fitting_space, results_folder, suffix_list,
-                        raw_timecourse_path=None, normalize_RFs=False, ref_img_path=None):
-        try:
-            mask = np.load(opj(results_folder, subj+'_mask_space-'+fitting_space+'.npy'))
-        except Exception as e:
-            print(e)
-            pass
+    def combine_results(self, results_folder,
+                        timecourse_folder=None,
+                        ref_volume_path=None):
         
-        g_l = []
-        c_l = []
-        d_l = []
-        n_l = []
-        masks = []
-        nc_l = []
+        an_list = [path for path in os.listdir(results_folder) if 'analysis' in path]
+        subjects = [path[:7] for path in an_list]
+        an_infos = []
+        for path in an_list:
+            with open(opj(results_folder,path)) as f:
+                an_infos.append(yaml.safe_load(f))
+                
+        an_names = []
+        an_tasks = []
+        an_runs = []
+        for i, an_info in enumerate(an_infos):
+            an_info['subj'] = subjects[i]
+            
+            if len(an_info['task_names'])>1:
+                an_tasks.append('all')
+            else:
+                an_tasks.append(''.join(an_info['task_names']))
+                
+            if an_info['crossvalidate'] == True:
+                an_runs.append(''.join([str(el) for el in an_info['fit_runs']]))#(len(an_info['fit_runs']))#
+            else:
+                an_runs.append('all')
+            
+            an_names.append(f"{subjects[i]}_fit-task-{an_tasks[i]}_fit-runs-{an_runs[i]}")
+            
+        unique_an_names = np.unique(np.array(an_names)).tolist()
         
-        for suf_list in suffix_list:
-            for i, suffix in enumerate(suf_list):
-                if i == 0:
-                    try:
-                        gauss = np.load(opj(results_folder,subj+'_iterparams-gauss_space-'+fitting_space+suffix+'.npy'))
-                        css = np.load(opj(results_folder,subj+'_iterparams-css_space-'+fitting_space+suffix+'.npy'))
-                        dog = np.load(opj(results_folder,subj+'_iterparams-dog_space-'+fitting_space+suffix+'.npy'))
-                        norm = np.load(opj(results_folder,subj+'_iterparams-norm_space-'+fitting_space+suffix+'.npy'))
-                        mask = np.load(opj(results_folder, subj+'_mask_space-'+fitting_space+suffix+'.npy'))
-                        noise_ceiling = np.load(opj(results_folder, subj+'_noise-ceiling_space-'+fitting_space+suffix+'.npy'))
-                        print(f"gauss iter {np.sum(gauss[:,-1]>0.5)}")
-                    except Exception as e:
-                        print(e)
-                        pass
-                else:
-                    try:
-                        gauss_it = np.load(opj(results_folder,subj+'_iterparams-gauss_space-'+fitting_space+suffix+'.npy'))
-                        css_it = np.load(opj(results_folder,subj+'_iterparams-css_space-'+fitting_space+suffix+'.npy'))
-                        dog_it = np.load(opj(results_folder,subj+'_iterparams-dog_space-'+fitting_space+suffix+'.npy'))
-                        norm_it = np.load(opj(results_folder,subj+'_iterparams-norm_space-'+fitting_space+suffix+'.npy'))
+        unique_an_results=dict()
+        prf_stims=dict()
+        
+        #this is to combine multiple iterations (max) and different models fit on the same fold
+        for an_name in tqdm(unique_an_names):
+            current_an_infos = np.array(an_infos)[np.array(an_names)==an_name]
+            merged_an_info = mergedict(current_an_infos)
+  
+            r_r = dict()
+            r_r_full=dict()
+                        
+            mask = np.load(opj(results_folder,f"{current_an_infos[0]['subj']}_mask_space-{current_an_infos[0]['fitting_space']}{current_an_infos[0]['analysis_time']}.npy"))
+  
+            for curr_an_info in current_an_infos:
+                if os.path.exists(opj(timecourse_folder,f"{curr_an_info['subj']}_timecourse_space-{curr_an_info['fitting_space']}{curr_an_info['analysis_time']}.npy")):
+                    merged_an_info["timecourse_analysis_time"] = curr_an_info["analysis_time"]
+                
+                if curr_an_info['refit_mode'] in ['overwrite', 'skip']:
+                    r_r[f"Norm_{curr_an_info['norm_model_variant']}"] = (np.load(opj(results_folder,f"{curr_an_info['subj']}_iterparams-norm_space-{curr_an_info['fitting_space']}{curr_an_info['analysis_time']}.npy")))
+    
+                    if curr_an_info['norm_model_variant'] == 'abcd':
+                        r_r['Gauss'] = (np.load(opj(results_folder,f"{curr_an_info['subj']}_iterparams-gauss_space-{curr_an_info['fitting_space']}{curr_an_info['analysis_time']}.npy")))
+                        r_r['CSS'] = (np.load(opj(results_folder,f"{curr_an_info['subj']}_iterparams-css_space-{curr_an_info['fitting_space']}{curr_an_info['analysis_time']}.npy")))
+                        r_r['DoG'] = (np.load(opj(results_folder,f"{curr_an_info['subj']}_iterparams-dog_space-{curr_an_info['fitting_space']}{curr_an_info['analysis_time']}.npy")))
+            
+            for curr_an_info in current_an_infos:
+                if curr_an_info['refit_mode'] not in ['overwrite', 'skip']:
+                    norm = np.copy(r_r[f"Norm_{curr_an_info['norm_model_variant']}"])
+                    gauss = np.copy(r_r['Gauss'])
+                    css = np.copy(r_r['CSS'])
+                    dog = np.copy(r_r['DoG'])
+                      
+                    norm_it = (np.load(opj(results_folder,f"{curr_an_info['subj']}_iterparams-norm_space-{curr_an_info['fitting_space']}{curr_an_info['analysis_time']}.npy")))
+                    norm[(norm[:,-1]<norm_it[:,-1])] = np.copy(norm_it[(norm[:,-1]<norm_it[:,-1])])
+                    
+                    if curr_an_info['norm_model_variant'] == 'abcd':
+                        gauss_it = (np.load(opj(results_folder,f"{curr_an_info['subj']}_iterparams-gauss_space-{curr_an_info['fitting_space']}{curr_an_info['analysis_time']}.npy")))
+                        css_it = (np.load(opj(results_folder,f"{curr_an_info['subj']}_iterparams-css_space-{curr_an_info['fitting_space']}{curr_an_info['analysis_time']}.npy")))
+                        dog_it = (np.load(opj(results_folder,f"{curr_an_info['subj']}_iterparams-dog_space-{curr_an_info['fitting_space']}{curr_an_info['analysis_time']}.npy")))                     
                         gauss[(gauss[:,-1]<gauss_it[:,-1])] = np.copy(gauss_it[(gauss[:,-1]<gauss_it[:,-1])])
                         css[(css[:,-1]<css_it[:,-1])] = np.copy(css_it[(css[:,-1]<css_it[:,-1])])
                         dog[(dog[:,-1]<dog_it[:,-1])] = np.copy(dog_it[(dog[:,-1]<dog_it[:,-1])])
-                        norm[(norm[:,-1]<norm_it[:,-1])] = np.copy(norm_it[(norm[:,-1]<norm_it[:,-1])])
-                    except Exception as e:
-                        print(e)
-                        pass
-            try:
+                        
     
-                gauss_full = np.zeros((mask.shape[0],gauss.shape[-1]))
-                css_full = np.zeros((mask.shape[0],css.shape[-1]))
-                dog_full = np.zeros((mask.shape[0],dog.shape[-1]))
-                norm_full = np.zeros((mask.shape[0],norm.shape[-1]))
+                    r_r[f"Norm_{curr_an_info['norm_model_variant']}"] = np.copy(norm)
+                    r_r['Gauss'] = np.copy(gauss)
+                    r_r['CSS'] = np.copy(css)
+                    r_r['DoG'] = np.copy(dog)
+
+
+            #move to full surface space so different masks can be handled when merging folds later
+            for key in r_r:
+                r_r_full[key] = np.zeros((mask.shape[0],r_r[key].shape[-1]))
+                r_r_full[key][mask] = np.copy(r_r[key])   
+
+            
                 
-                gauss_full[mask] = np.copy(gauss)
-                css_full[mask] = np.copy(css)
-                dog_full[mask] = np.copy(dog)
-                norm_full[mask] = np.copy(norm)
-                
-    
-                print(f"gauss fold {np.sum(gauss_full[:,-1]>0.5)}")
-                print(mask.shape)
-    
-                
-                g_l.append(gauss_full)
-                c_l.append(css_full)
-                d_l.append(dog_full)
-                n_l.append(norm_full)
-                masks.append(mask)
-                noise_ceiling_full = np.zeros(mask.shape[0])
-                noise_ceiling_full[mask] = np.copy(noise_ceiling)
-                nc_l.append(noise_ceiling_full)
-    
-            except Exception as e:
-                print(e)
-                pass
-    
-        try:     
-            gauss_full = np.median(g_l, axis=0)
-            css_full = np.median(c_l, axis=0)
-            dog_full = np.median(d_l, axis=0)
-            norm_full = np.median(n_l, axis=0)
-        
-            noise_ceiling_full = np.median(nc_l, axis=0)
-        except Exception as e:
-            print(e)
-            pass    
-        print(f"{[np.sum(mask) for mask in masks]}")
-        print(f"{np.sum(np.prod(masks, axis=0))}")
-        print(f"gauss median {np.sum(gauss_full[:,-1]>0.5)}")
-        print(f"norm median {np.sum(norm_full[:,-1]>0.5)}")
-    
-        try:
-            mask = np.load(opj(results_folder, subj+'_mask_space-'+fitting_space+'.npy'))
-        except Exception as e:
-            print(e)
-            mask = (gauss_full[:,-1]>0)
-            pass
-    
-        try:     
-            gauss = np.copy(gauss_full[mask])
-            css = np.copy(css_full[mask])
-            dog = np.copy(dog_full[mask])
-            norm = np.copy(norm_full[mask])
-            noise_ceiling = np.copy(noise_ceiling_full[mask])
-            print(f"gauss in mask: {np.sum(gauss[:,-1]>0.5)}")
-            print(f"norm in mask: {np.sum(norm[:,-1]>0.5)}")
-        except Exception as e:
-            print(e)
-            noise_ceiling=0
-            pass      
-        
+            #housekeeping
+            tc_paths = [str(path) for path in sorted(Path(timecourse_folder).glob(f"{merged_an_info['subj']}_timecourse_space-{merged_an_info['fitting_space']}_task-*_run-*.npy"))]    
+            mask_paths = [tc_path.replace('timecourse_','mask_') for tc_path in tc_paths]
+            all_task_names = np.unique(np.array([elem.replace('task-','') for path in tc_paths for elem in path.split('_')  if 'task' in elem]))
+            all_runs = np.unique(np.array([int(elem.replace('run-','').replace('.npy','')) for path in tc_paths for elem in path.split('_')  if 'run' in elem]))
+            
+            #calculate cross-condition r-squared
+            
+            if not merged_an_info["crossvalidate"]:
+                for task in [tsk for tsk in all_task_names if tsk not in merged_an_info['task_names']]:
+                    if task not in prf_stims:
+                        prf_stims[task] = create_full_stim(screenshot_paths=[opj(timecourse_folder,f'task-{task}_screenshots')],
+                                n_pix=merged_an_info['n_pix'],
+                                discard_volumes=merged_an_info['discard_volumes'],
+                                baseline_volumes_begin_end=merged_an_info['baseline_volumes_begin_end'],
+                                dm_edges_clipping=merged_an_info['dm_edges_clipping'],
+                                screen_size_cm=merged_an_info['screen_size_cm'],
+                                screen_distance_cm=merged_an_info['screen_distance_cm'],
+                                TR=merged_an_info['TR'],
+                                task_names=[task])
+                        
+
+                    all_tcs_task = [np.load(tc_path) for tc_path in tc_paths if task in tc_path]
+                    all_masks_task = [np.load(mask_path) for mask_path in mask_paths if task in mask_path]
                     
+                    mask_task = np.product(all_masks_task, axis=0).astype('bool')
+                    tc_full = np.zeros((mask_task.shape[0], all_tcs_task[0].shape[-1]))
+                    
+                    for i in range(len(all_tcs_task)):
+                        tc_full[all_masks_task[i]] += all_tcs_task[i]
+
+                    tc_full /= len(all_tcs_task)
+
+                    common_mask = mask_task * mask
+                    tc_comp = np.copy(tc_full[common_mask])              
+                    
+                    tc_comp *= (100/tc_comp.mean(-1))[...,np.newaxis]
+                    tc_comp += (tc_comp.mean(-1)-np.median(tc_comp[...,prf_stims[task].late_iso_dict[task]], axis=-1))[...,np.newaxis]
+                    
+
+                    
+                    for key in r_r:
+                        gg = model_wrapper(key,
+                                           stimulus=prf_stims[task],
+                                           hrf=merged_an_info['hrf'],
+                                           filter_predictions=merged_an_info['filter_predictions'],
+                                           filter_type=merged_an_info['filter_type'],
+                                           filter_params={x:merged_an_info[x] for x in ["first_modes_to_remove",
+                                                                                              "last_modes_to_remove_percent",
+                                                                                              "window_length",
+                                                                                              "polyorder",
+                                                                                              "highpass",
+                                                                                              "add_mean"]},
+                                           normalize_RFs=merged_an_info['normalize_RFs'])
+                        
+                        preds = gg.return_prediction(*list(r_r[key][:,:-1].T))
+                        preds_full = np.zeros((mask.shape[0],tc_comp.shape[-1]))
+                        preds_full[mask] = np.copy(preds)
+                        
+                        preds_comp = np.copy(preds_full[common_mask])
+                        
+                        cc_rsq = (1-np.sum((preds_comp-tc_comp)**2, axis=-1)/(tc_comp.var(-1)*tc_comp.shape[-1]))
+                        
+                        cc_rsq_full = np.zeros(mask.shape[0])
+                        cc_rsq_full[common_mask] = np.copy(cc_rsq)
+                        
+                        r_r_full[f'CCrsq_task-{task}_model-{key}'] = np.copy(cc_rsq_full)
+                        
+
+                
+             
+            r_r_full["mask"] = np.copy(mask)                            
+            r_r_full["analysis_info"] = deepcopy(merged_an_info)                          
+            unique_an_results[an_name] = deepcopy(r_r_full)
+            
+            
+            
+
+            
+        #this is to combine over folds (median)    
+        folds = [key for key in unique_an_results if 'fit-runs-all' not in key]
+        no_folds = [key for key in unique_an_results if 'fit-runs-all' in key]
+        
+        combined_results = dd(dict)
+        for key in set([key[:-13] for key in folds]):
+            current_fold_infos = [unique_an_results[fold]['analysis_info'] for fold in folds if key in fold]
+            for res in unique_an_results[folds[0]]:
+                if 'info' in res:
+                    combined_results[key+'_fit-runs-5050CVmedian'][res] = mergedict(current_fold_infos)
+                elif 'mask' in res:
+                    combined_results[key+'_fit-runs-5050CVmedian'][res] = np.product([unique_an_results[fold][res] for fold in folds if key in fold], axis=0).astype('bool')
+                else:
+                    combined_results[key+'_fit-runs-5050CVmedian'][res] = np.median([unique_an_results[fold][res] for fold in folds if key in fold], axis=0)
+                                    
+        for key in no_folds:
+            combined_results[key] = deepcopy(unique_an_results[key])
+            
+ 
+        
+        for an, an_res in combined_results.items():
+            subj = an_res['analysis_info']['subj']
+            space = an_res['analysis_info']['fitting_space']
+            reduced_an_name = an.replace(f"{subj}_",'')
+            mask = an_res['mask']
+            
+            for res in an_res:
+                if 'mask' not in res and 'info' not in res:
+                    self.main_dict[space][reduced_an_name][subj]['Results'][res] = deepcopy(an_res[res][mask])   
+                else:
+                    self.main_dict[space][reduced_an_name][subj][res] = deepcopy(an_res[res])
+                
+            
+                       
         raw_tc_stats = dict()
-        if raw_timecourse_path is not None:
-            
-            
-            tc_raw = np.load(raw_timecourse_path)
-            
+
+        for subj in set(subjects):
+
+            tc_raw = np.load(opj(timecourse_folder,f'{subj}_timecourse-raw_space-fsnative.npy'))
+            mask = np.load(opj(timecourse_folder,f'{subj}_mask-raw_space-fsnative.npy'))
+        
             tc_mean = tc_raw.mean(-1)
             tc_mean_full = np.zeros(mask.shape)
             tc_mean_full[mask] = tc_mean
             raw_tc_stats['Mean'] = tc_mean_full
-            
+        
             tc_var = tc_raw.var(-1)
             tc_var_full = np.zeros(mask.shape)
             tc_var_full[mask] = tc_var
             raw_tc_stats['Variance'] = tc_var_full
-            
+        
             tc_tsnr_full = np.zeros(mask.shape)
             tc_tsnr_full[mask] = tc_mean/np.sqrt(tc_var)
             raw_tc_stats['TSNR'] = tc_tsnr_full
+            
+            for ke in self.main_dict['fsnative']:
+                self.main_dict['fsnative'][ke][subj]['Timecourse Stats'] = deepcopy(raw_tc_stats)
+                
+        return
         
-        return {'Gauss':gauss, #'Gauss grid':gauss_grid, 'Norm grid':norm_grid, 
-                'CSS':css, 'DoG':dog, 'Norm':norm,
-                'mask':mask, 'noise_ceiling':noise_ceiling, 'normalize_RFs':normalize_RFs, 
-                'Timecourse Stats':raw_tc_stats, 'ref_img_path':ref_img_path}
+
     
     
-    def process_results(self, results_dict, return_norm_profiles):
-        for k, v in results_dict.items():
+    def process_results(self, results_dict, return_norm_profiles=False):
+        for k, v in tqdm(results_dict.items()):
             if 'sub-' not in k:
                 self.process_results(v, return_norm_profiles)
             elif 'Results' in v and 'Processed Results' not in v:
-                normalize_RFs = v['Results']['normalize_RFs']
-                mask = v['Results']['mask']
+                mask = v['mask']
+                normalize_RFs = v['analysis_info']['normalize_RFs']
     
                 #store processed results in nested default dictionary
                 processed_results = dd(lambda:dd(lambda:np.zeros(mask.shape)))
     
                 #loop over contents of single-subject analysis results (models and mask)
                 for k2, v2 in v['Results'].items():
-                    if k2 != 'mask' and isinstance(v2, np.ndarray) and 'grid' not in k2 and 'Stats' not in k2 and k2 != 'noise_ceiling':
+                    if isinstance(v2, np.ndarray) and v2.ndim == 2:
     
                         processed_results['RSq'][k2][mask] = np.copy(v2[:,-1])
                         processed_results['Eccentricity'][k2][mask] = np.sqrt(v2[:,0]**2+v2[:,1]**2)
@@ -175,7 +276,7 @@ class results(object):
                             (processed_results['Size (fwhmax)'][k2][mask],
                             processed_results['Surround Size (fwatmin)'][k2][mask]) = fwhmax_fwatmin(k2, v2, normalize_RFs)
     
-                        elif k2 == 'Norm':
+                        elif 'Norm' in k2:
                             processed_results['Norm Param. B'][k2][mask] = np.copy(v2[:,7])
                             processed_results['Norm Param. D'][k2][mask] = np.copy(v2[:,8])
                             processed_results['Ratio (B/D)'][k2][mask] = v2[:,7]/v2[:,8]
@@ -191,17 +292,40 @@ class results(object):
     
                         else:
                             processed_results['Size (fwhmax)'][k2][mask] = fwhmax_fwatmin(k2, v2, normalize_RFs)
-                    elif 'Stats' in k2:
-                        v[k2] = v['Results'][k2]
-                    elif k2 == 'noise_ceiling':
-                        processed_results['Noise Ceiling']['Noise Ceiling'][mask] = np.copy(v2)
+
+                        ####copy beta and cross-cond rsq to processed results
+                            #####################
+                    elif isinstance(v2, np.ndarray) and v2.ndim == 1:
+                        processed_results[k2.split('_model-')[0]][k2.split('_model-')[1]][mask] = np.copy(v2)
+
+
                         
     
-                v['Processed Results'] = {ke : dict(va) for ke, va in processed_results.items()}
+                v['Processed Results'] = deepcopy(processed_results)
+        return
+
+
+
+
+def mergedict(li):
+    result = deepcopy(li[0])
+    for element in li:
+        for key in element:
+            if key in result and result[key] != element[key]:
+                del result[key]
+            
+    return result
+
+def model_wrapper(key,**kwargs):
+    if key == 'Gauss':
+        return Iso2DGaussianModel(**kwargs)
+    elif key == 'DoG':
+        return DoG_Iso2DGaussianModel(**kwargs)
+    elif key == 'CSS':
+        return CSS_Iso2DGaussianModel(**kwargs)
+    elif 'Norm' in key:
+        return Norm_Iso2DGaussianModel(**kwargs)
     
-
-
-
 
 def create_retinotopy_colormaps():
     hue, alpha = np.meshgrid(np.linspace(
@@ -274,7 +398,7 @@ def fwhmax_fwatmin(model, params, normalize_RFs=False, return_profiles=False):
     prf = params[...,3] * np.exp(-0.5*x[...,np.newaxis]**2 / params[...,2]**2)
     vol_prf =  2*np.pi*params[...,2]**2
 
-    if model in ['dog', 'norm']:
+    if 'dog' in model or 'norm' in model:
         srf = params[...,5] * np.exp(-0.5*x[...,np.newaxis]**2 / params[...,6]**2)
         vol_srf = 2*np.pi*params[...,6]**2
 
@@ -288,7 +412,7 @@ def fwhmax_fwatmin(model, params, normalize_RFs=False, return_profiles=False):
         elif model =='dog':
             profile = prf / vol_prf - \
                        srf / vol_srf
-        elif model == 'norm':
+        elif 'norm' in model:
             profile = (prf / vol_prf + params[...,7]) /\
                       (srf / vol_srf + params[...,8]) - params[...,7]/params[...,8]
     else:
@@ -299,7 +423,7 @@ def fwhmax_fwatmin(model, params, normalize_RFs=False, return_profiles=False):
             profile = prf**params[...,5] * params[...,3]**(1 - params[...,5])
         elif model =='dog':
             profile = prf - srf
-        elif model == 'norm':
+        elif 'norm' in model:
             profile = (prf + params[...,7])/(srf + params[...,8]) - params[...,7]/params[...,8]
 
 
@@ -307,7 +431,7 @@ def fwhmax_fwatmin(model, params, normalize_RFs=False, return_profiles=False):
     fwhmax = np.abs(2*x[np.argmin(np.abs(half_max-profile), axis=0)])
 
 
-    if model in ['dog', 'norm']:
+    if 'dog' in model or 'norm' in model:
 
         min_profile = np.min(profile, axis=0)
         fwatmin = np.abs(2*x[np.argmin(np.abs(min_profile-profile), axis=0)])
@@ -317,7 +441,7 @@ def fwhmax_fwatmin(model, params, normalize_RFs=False, return_profiles=False):
         result = fwhmax
 
     if return_profiles:
-        if model == 'norm':
+        if 'norm' in model:
             #accounting for the previous subtraction of baseline
             profile += params[...,7]/params[...,8]
 
