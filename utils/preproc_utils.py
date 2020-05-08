@@ -13,8 +13,8 @@ from prfpy.stimulus import PRFStimulus2D
 
 
 def roi_mask(roi, array):
-    array_2 = np.zeros_like(array)
-    array_2[roi] = 1
+    array_2 = np.zeros(array.shape).astype('bool')
+    array_2[roi] = True
     masked_array = array * array_2
     return masked_array
 
