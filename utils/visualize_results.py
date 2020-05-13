@@ -884,7 +884,7 @@ class visualize_results(object):
                         #model_colors = {'Gauss':'blue','CSS':'orange','DoG':'green','Norm':'red'}
                         import matplotlib
 
-                        cmap = matplotlib.cm.get_cmap('Set1')
+                        cmap = matplotlib.cm.get_cmap('tab10')
                         
                         
 
@@ -892,7 +892,7 @@ class visualize_results(object):
                             bar_position=last_bar_position+0.1
                             pl.figure(analysis+subj+' RSq', figsize=(8, 6), frameon=False)
                             
-                            pl.ylim((0.25,0.75))
+                            pl.ylim((0.24,0.71))
                             
                             alpha_roi = roi_mask(self.idx_rois[subj][roi], subj_res['Processed Results']['Alpha']['all']>rsq_thresh) #* (subj_res['Processed Results']['RSq']['CSS']>subj_res['Processed Results']['RSq']['Gauss']) * (subj_res['Processed Results']['RSq']['DoG']>subj_res['Processed Results']['RSq']['Gauss'])
                             print(self.idx_rois[subj][roi].shape)
@@ -902,7 +902,7 @@ class visualize_results(object):
                             model_list = [k for k in subj_res['Processed Results']['RSq'].keys() if 'Norm_abcd' == k or 'Norm' not in k]
                             model_list.sort()
                             model_list[0], model_list[2] = model_list[2], model_list[0]
-                            model_colors = {model:cmap(val) for model,val in zip(model_list,np.arange(len(model_list)))}
+                            model_colors = {model:cmap(val) for model,val in zip(model_list,[0,2,1,3])}
                             
                             # for model in model_list:
                             #     alpha_roi *= (subj_res['Processed Results']['CCrsq_task-4R'][model]>0.0)
