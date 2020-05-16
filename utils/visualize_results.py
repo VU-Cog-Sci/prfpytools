@@ -200,19 +200,12 @@ class visualize_results(object):
                         tc_stats = subj_res['Timecourse Stats']
                         mask = subj_res['mask']
 
-                    
-                                                                      
-                        #housekeeping
-                        #rsq = np.vstack(tuple([elem for _,elem in p_r['RSq'].items()])).T
-                        #polar = np.vstack(tuple([elem for _,elem in p_r['Polar Angle'].items()])).T
-                        #ecc = np.vstack(tuple([elem for _,elem in p_r['Eccentricity'].items()])).T
-                        #fw_hmax = np.vstack(tuple([elem for _,elem in p_r['Size (fwhmax)'].items()])).T 
                   
                         if rois != 'all':
                             for key in p_r['Alpha']:
                                 p_r['Alpha'][key] = roi_mask(self.idx_rois[subj][rois], p_r['Alpha'][key])
                                          
-                        ##START PYCORTEX VISUALIZATIONS
+
                         #output freesurefer-format polar angle maps to draw custom ROIs in freeview    
                         if self.output_freesurfer_maps:
                                           
@@ -252,7 +245,7 @@ class visualize_results(object):
                             write_morph_data(opj(self.fs_dir, subj+'/surf/rh.ecc_masked_norm')
                                                                    ,ecc_freeview_masked[lh_c.shape[0]:])
                             
-                            
+                        ##START PYCORTEX VISUALIZATIONS                            
                         #data quality/stats cortex visualization 
                         if space == 'fsnative' and self.plot_stats_cortex and not plotted_stats[subj] :
                             mean_ts_vert = cortex.Vertex2D(tc_stats['Mean'], mask*(tc_stats['Mean']>self.tc_min[subj]), subject=subj, cmap='Jet_2D_alpha')
@@ -385,7 +378,7 @@ class visualize_results(object):
                         if self.plot_css_exp_cortex and 'CSS' in models:
                             ds_css_exp = {}
                             ds_css_exp['CSS Exponent'] = cortex.Vertex2D(p_r['CSS Exponent']['CSS'], p_r['Alpha']['CSS'], subject=subj, 
-                                                                         vmin=0, vmax=0.75, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw
+                                                                         vmin=0, vmax=1, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw
             
                             self.js_handle_css_exp = cortex.webgl.show(ds_css_exp, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)
                             
@@ -803,19 +796,22 @@ class visualize_results(object):
                         # symbol['ACD_100'] = 's'
                         # symbol['ABC_100'] = 'D'
             
-                        
-                                             
-                        
+
                         for param in params:
                             for model in [model for model in subj_res['Processed Results']['RSq'].keys() if 'Norm_abcd' == model]:
                                 subj_res['Processed Results']['AD-BC (nonlinearity?)'][model]=np.zeros(subj_res['mask'].shape)
                                 subj_res['Processed Results']['AD-BC (nonlinearity?)'][model][subj_res['mask']] = subj_res['Results'][model][:,3]*subj_res['Results'][model][:,8]- subj_res['Results'][model][:,5]*subj_res['Results'][model][:,7]
                                 
-                                pl.figure(analysis+param+subj+model, figsize=(8, 6), frameon=False)
+                                
                                 ecc_stats = dd(lambda:dd(list)) 
                                 norm_baselines_stats = dd(lambda:dd(list))
+                                
+                                bar_position = 0
+                                x_ticks=[]
+                                x_labels=[] 
+                                
                                 for roi in rois:
-                                    
+                                    pl.figure(analysis+param+subj+model, figsize=(8, 6), frameon=False)
                                     #model-specific alpha? or all models same alpha?
                                     alpha_roi = roi_mask(self.idx_rois[subj][roi], subj_res['Processed Results']['Alpha'][model]>rsq_thresh)#* (subj_res['Processed Results']['RSq']['CSS']>subj_res['Processed Results']['RSq']['Gauss'])
                                     
@@ -848,7 +844,22 @@ class visualize_results(object):
                                        yerr=np.array([np.abs(ss.zconfint_mean(alpha=0.05)-ss.mean) for ss in norm_baselines_stats[roi][param]]).T,
                                        xerr=np.array([np.abs(ss.zconfint_mean(alpha=0.05)-ss.mean) for ss in ecc_stats[roi][param]]).T,
                                        fmt='s',  mec='black', label=roi.replace('custom.',''), color=p[-1].get_color())#, mfc=roi_colors[roi],ecolor=roi_colors[roi])
-            
+                                    
+                                    pl.figure(analysis+param+subj+model+'mean', figsize=(8, 6), frameon=False)
+                                    full_roi_stats = weightstats.DescrStatsW(norm_baselines_roi, weights=rsq_model_roi)
+                                    
+                                    bar_height = full_roi_stats.mean
+                                    bar_err = np.array(np.abs(full_roi_stats.zconfint_mean(alpha=0.05)-bar_height)).reshape((-1,1))
+
+                                    pl.bar(bar_position, bar_height, width=0.1, yerr=bar_err,edgecolor='black',color=p[-1].get_color())#
+                                    x_ticks.append(bar_position)
+                                    x_labels.append(roi.replace('custom.',''))
+                                    bar_position+=0.15
+                                    
+                                    pl.xticks(x_ticks,x_labels)
+                                    
+                                    
+                                pl.figure(analysis+param+subj+model, figsize=(8, 6), frameon=False)    
                                 pl.xlabel('Eccentricity (degrees)')
                                 pl.ylabel(param)
                                 pl.legend(loc=0)
@@ -872,7 +883,8 @@ class visualize_results(object):
                     analyses = [item for item in space_res.items() if item[0] in analysis_names] 
                 for analysis, analysis_res in analyses:
                     model_rsq=dd(lambda:dd(dict))
-                    for subj, subj_res in analysis_res.items():
+                    
+                    for i, (subj, subj_res) in enumerate(analysis_res.items()):
                         print(space+" "+analysis+" "+subj)
                         x_ticks=[]
                         x_labels=[]    
@@ -885,13 +897,11 @@ class visualize_results(object):
                         import matplotlib
 
                         cmap = matplotlib.cm.get_cmap('tab10')
-                        
-                        
 
                         for roi in rois:
                             bar_position=last_bar_position+0.1
                             pl.figure(analysis+subj+' RSq', figsize=(8, 6), frameon=False)
-                            
+                            pl.ylabel(subj+' % of Gauss model R-squared')  
                             pl.ylim((0.24,0.71))
                             
                             alpha_roi = roi_mask(self.idx_rois[subj][roi], subj_res['Processed Results']['Alpha']['all']>rsq_thresh) #* (subj_res['Processed Results']['RSq']['CSS']>subj_res['Processed Results']['RSq']['Gauss']) * (subj_res['Processed Results']['RSq']['DoG']>subj_res['Processed Results']['RSq']['Gauss'])
@@ -907,33 +917,38 @@ class visualize_results(object):
                             # for model in model_list:
                             #     alpha_roi *= (subj_res['Processed Results']['CCrsq_task-4R'][model]>0.0)
                                  
-                            print(alpha_roi.sum())     
+                            #print(alpha_roi.sum())     
                             x_ticks.append(bar_position+0.15)
                             x_labels.append(roi.replace('custom.','')+'\n')
                             for model in model_list:
                                                             
                                 model_rsq[roi][model][subj] = (subj_res['Processed Results']['RSq'][model][alpha_roi])#-subj_res['Processed Results']['RSq']['Gauss'][alpha_roi])#*100 / subj_res['Processed Results']['RSq']['Gauss'][alpha_roi]
                                 
-                                # if noise_ceiling is not None:
-                                #     model_rsq /= noise_ceiling[alpha_roi]
                                 group_rsq = np.concatenate(tuple([model_rsq[roi][model][k] for k in model_rsq[roi][model]]))#.flatten()   
                                 group = ''.join([k for k in model_rsq[roi][model]])
                                 #print(group_rsq)
-                                bar_height = np.mean(group_rsq)
+                                bar_height = np.mean(model_rsq[roi][model][subj])
                                 #print(bar_height)
-                                bar_err = sem(group_rsq)
+                                bar_err = sem(model_rsq[roi][model][subj])
                                 #print(bar_err)
                                 pl.bar(bar_position, bar_height, width=0.1, yerr=bar_err,edgecolor='black', label=model, color=model_colors[model])
                                 
+                                if i+1 == len(analysis_res.keys()):
+                                    pl.figure(analysis+'group RSq', figsize=(8, 6), frameon=False)
+                                    pl.ylabel(group+' % of Gauss model R-squared')  
+                                    pl.ylim((0.24,0.71))
+                                    bar_height = np.mean(group_rsq)
+                                    bar_err = sem(group_rsq)
+                                    pl.bar(bar_position, bar_height, width=0.1, yerr=bar_err,edgecolor='black', label=model, color=model_colors[model])
+                                
+                                    pl.xticks(x_ticks,x_labels)
+                                    handles, labels = pl.gca().get_legend_handles_labels()
+                                    by_label = dict(zip(labels, handles))
+                                    pl.legend(by_label.values(), by_label.keys())
+                                    pl.figure(analysis+subj+' RSq', figsize=(8, 6), frameon=False)
                                 
                                 bar_position += 0.1
-                            pl.ylabel(group+' % of Gauss model R-squared')    
-                            # if 'Noise Ceiling' in subj_res['Processed Results']:
-                            #     noise_ceiling = subj_res['Processed Results']['Noise Ceiling']['Noise Ceiling']
-                            #     bar_height=np.mean(noise_ceiling[alpha_roi])
-                            #     bar_err = sem(noise_ceiling[alpha_roi])
-                            #     pl.bar(bar_position, bar_height, width=0.1, yerr=bar_err, color='grey',edgecolor='black', label='NC')
-                            #     bar_position += 0.1
+                              
 
                             last_bar_position = bar_position
                             pl.xticks(x_ticks,x_labels)

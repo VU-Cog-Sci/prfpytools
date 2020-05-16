@@ -63,41 +63,29 @@ class results(object):
                         
             mask = np.load(opj(results_folder,f"{current_an_infos[0]['subj']}_mask_space-{current_an_infos[0]['fitting_space']}{current_an_infos[0]['analysis_time']}.npy"))
   
-            for curr_an_info in current_an_infos:
+            for i, curr_an_info in enumerate(current_an_infos):
                 if os.path.exists(opj(timecourse_folder,f"{curr_an_info['subj']}_timecourse_space-{curr_an_info['fitting_space']}{curr_an_info['analysis_time']}.npy")):
                     merged_an_info["timecourse_analysis_time"] = curr_an_info["analysis_time"]
                 
-                if curr_an_info['refit_mode'] in ['overwrite', 'skip']:
-                    r_r[f"Norm_{curr_an_info['norm_model_variant']}"] = (np.load(opj(results_folder,f"{curr_an_info['subj']}_iterparams-norm_space-{curr_an_info['fitting_space']}{curr_an_info['analysis_time']}.npy")))
-    
-                    if curr_an_info['norm_model_variant'] == 'abcd':
-                        r_r['Gauss'] = (np.load(opj(results_folder,f"{curr_an_info['subj']}_iterparams-gauss_space-{curr_an_info['fitting_space']}{curr_an_info['analysis_time']}.npy")))
-                        r_r['CSS'] = (np.load(opj(results_folder,f"{curr_an_info['subj']}_iterparams-css_space-{curr_an_info['fitting_space']}{curr_an_info['analysis_time']}.npy")))
-                        r_r['DoG'] = (np.load(opj(results_folder,f"{curr_an_info['subj']}_iterparams-dog_space-{curr_an_info['fitting_space']}{curr_an_info['analysis_time']}.npy")))
-            
-            for curr_an_info in current_an_infos:
-                if curr_an_info['refit_mode'] not in ['overwrite', 'skip']:
-                    norm = np.copy(r_r[f"Norm_{curr_an_info['norm_model_variant']}"])
-                    gauss = np.copy(r_r['Gauss'])
-                    css = np.copy(r_r['CSS'])
-                    dog = np.copy(r_r['DoG'])
-                      
-                    norm_it = (np.load(opj(results_folder,f"{curr_an_info['subj']}_iterparams-norm_space-{curr_an_info['fitting_space']}{curr_an_info['analysis_time']}.npy")))
-                    norm[(norm[:,-1]<norm_it[:,-1])] = np.copy(norm_it[(norm[:,-1]<norm_it[:,-1])])
+                for model in curr_an_info["models_to_fit"]:
+                    raw_model_result = (np.load(opj(results_folder,f"{curr_an_info['subj']}_iterparams-{model.lower()}_space-{curr_an_info['fitting_space']}{curr_an_info['analysis_time']}.npy")))
                     
-                    if curr_an_info['norm_model_variant'] == 'abcd':
-                        gauss_it = (np.load(opj(results_folder,f"{curr_an_info['subj']}_iterparams-gauss_space-{curr_an_info['fitting_space']}{curr_an_info['analysis_time']}.npy")))
-                        css_it = (np.load(opj(results_folder,f"{curr_an_info['subj']}_iterparams-css_space-{curr_an_info['fitting_space']}{curr_an_info['analysis_time']}.npy")))
-                        dog_it = (np.load(opj(results_folder,f"{curr_an_info['subj']}_iterparams-dog_space-{curr_an_info['fitting_space']}{curr_an_info['analysis_time']}.npy")))                     
-                        gauss[(gauss[:,-1]<gauss_it[:,-1])] = np.copy(gauss_it[(gauss[:,-1]<gauss_it[:,-1])])
-                        css[(css[:,-1]<css_it[:,-1])] = np.copy(css_it[(css[:,-1]<css_it[:,-1])])
-                        dog[(dog[:,-1]<dog_it[:,-1])] = np.copy(dog_it[(dog[:,-1]<dog_it[:,-1])])
+                    if i==0:
+                        if model == 'norm':
+                            r_r[f"Norm_{curr_an_info['norm_model_variant']}"] = np.copy(raw_model_result)
+                        elif model == 'gauss':
+                            r_r['Gauss'] = np.copy(raw_model_result)
+                        else:
+                            r_r[model] = np.copy(raw_model_result)
+                    else:
+                        if model == 'norm':
+                            r_r[f"Norm_{curr_an_info['norm_model_variant']}"][r_r[f"Norm_{curr_an_info['norm_model_variant']}"][:,-1]<raw_model_result[:,-1]] = np.copy(raw_model_result[r_r[f"Norm_{curr_an_info['norm_model_variant']}"][:,-1]<raw_model_result[:,-1]])
+                        elif model == 'gauss':
+                            r_r['Gauss'][r_r['Gauss'][:,-1]<raw_model_result[:,-1]] = np.copy(raw_model_result[r_r['Gauss'][:,-1]<raw_model_result[:,-1]])
+                        else:
+                            r_r[model][r_r[model][:,-1]<raw_model_result[:,-1]] = np.copy(raw_model_result[r_r[model][:,-1]<raw_model_result[:,-1]])                            
                         
-    
-                    r_r[f"Norm_{curr_an_info['norm_model_variant']}"] = np.copy(norm)
-                    r_r['Gauss'] = np.copy(gauss)
-                    r_r['CSS'] = np.copy(css)
-                    r_r['DoG'] = np.copy(dog)
+                    
 
 
             #move to full surface space so different masks can be handled when merging folds later
