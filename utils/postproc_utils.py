@@ -68,8 +68,11 @@ class results(object):
                     merged_an_info["timecourse_analysis_time"] = curr_an_info["analysis_time"]
                 
                 for model in curr_an_info["models_to_fit"]:
-                    raw_model_result = (np.load(opj(results_folder,f"{curr_an_info['subj']}_iterparams-{model.lower()}_space-{curr_an_info['fitting_space']}{curr_an_info['analysis_time']}.npy")))
-                    
+                    try:
+                        raw_model_result = (np.load(opj(results_folder,f"{curr_an_info['subj']}_iterparams-{model.lower()}_space-{curr_an_info['fitting_space']}{curr_an_info['analysis_time']}.npy")))
+                    except:
+                        raw_model_result = (np.load(opj(results_folder,f"{curr_an_info['subj']}_iterparams-{model.lower()}_space-{curr_an_info['fitting_space']}{curr_an_info['previous_analysis_time']}.npy")))
+                        
                     if i==0:
                         if model == 'norm':
                             r_r[f"Norm_{curr_an_info['norm_model_variant']}"] = np.copy(raw_model_result)
@@ -188,7 +191,15 @@ class results(object):
                     combined_results[key+'_fit-runs-5050CVmedian'][res] = np.product([unique_an_results[fold][res] for fold in folds if key in fold], axis=0).astype('bool')
                 else:
                     combined_results[key+'_fit-runs-5050CVmedian'][res] = np.median([unique_an_results[fold][res] for fold in folds if key in fold], axis=0)
-                                    
+                    
+            #for res in unique_an_results[folds[0]]:     
+                #final_mask = combined_results[key+'_fit-runs-5050CVmedian']['mask']
+                #if 'Norm' in res:
+                #    combined_results[key+'_fit-runs-5050CVmedian'][f'Size (fwhmax)_model-{res}'] = np.zeros(final_mask.shape)
+                #    combined_results[key+'_fit-runs-5050CVmedian'][f'Surround Size (fwatmin)_model-{res}']= np.zeros(final_mask.shape)
+                #    (combined_results[key+'_fit-runs-5050CVmedian'][f'Size (fwhmax)_model-{res}'][final_mask],
+                #     combined_results[key+'_fit-runs-5050CVmedian'][f'Surround Size (fwatmin)_model-{res}'][final_mask]) = np.median([fwhmax_fwatmin(res, unique_an_results[fold][res][final_mask], False, False) for fold in folds if key in fold], axis=0)
+                                
         for key in no_folds:
             combined_results[key] = deepcopy(unique_an_results[key])
             
@@ -275,6 +286,7 @@ class results(object):
                                 processed_results['Surround Size (fwatmin)'][k2][mask]),
                                 processed_results['pRF Profiles'][k2][mask]) = fwhmax_fwatmin(k2, v2, normalize_RFs, True)
                             else:
+                                
                                 (processed_results['Size (fwhmax)'][k2][mask],
                                 processed_results['Surround Size (fwatmin)'][k2][mask]) = fwhmax_fwatmin(k2, v2, normalize_RFs, False)
     
@@ -416,23 +428,19 @@ def fwhmax_fwatmin(model, params, normalize_RFs=False, return_profiles=False):
 
 
     half_max = np.max(profile, axis=0)/2
-    fwhmax = np.abs(2*x[np.argmin(np.abs(half_max-profile), axis=0)])
+    fwhmax = np.abs(2*x[np.argmin(np.abs(profile-half_max), axis=0)])
 
 
     if 'dog' in model or 'norm' in model:
 
         min_profile = np.min(profile, axis=0)
-        fwatmin = np.abs(2*x[np.argmin(np.abs(min_profile-profile), axis=0)])
+        fwatmin = np.abs(2*x[np.argmin(np.abs(profile-min_profile), axis=0)])
 
         result = fwhmax, fwatmin
     else:
         result = fwhmax
 
     if return_profiles:
-        if 'norm' in model:
-            #accounting for the previous subtraction of baseline
-            profile += params[...,7]/params[...,8]
-
         return result, profile.T
     else:
         return result

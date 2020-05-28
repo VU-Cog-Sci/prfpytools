@@ -129,6 +129,7 @@ class visualize_results(object):
         return
 
     def set_alpha(self, only_models=None):
+        self.only_models=only_models
         self.tc_min = dict()
         for space, space_res in self.main_dict.items():
             if 'fs' in space:
@@ -153,8 +154,8 @@ class visualize_results(object):
                             self.tc_min[subj] = 0
                             
                         ######limits for eccentricity
-                        self.ecc_min=0.125
-                        self.ecc_max=5
+                        self.ecc_min=0
+                        self.ecc_max=4
                         ######max prf size (implemented in surround and size plotting functions)
                         #w_max = 90                        
               
@@ -262,6 +263,7 @@ class visualize_results(object):
                             
                             ds_rois = {}
                             data = np.zeros_like(mask).astype('int')
+                            custom_rois_data = np.zeros_like(mask).astype('int')
             
                             for i, roi in enumerate(self.idx_rois[subj]):
             
@@ -269,12 +271,16 @@ class visualize_results(object):
                                 roi_data[self.idx_rois[subj][roi]] = 1
                                 if 'custom' not in roi and 'visual' not in roi:
                                     data[self.idx_rois[subj][roi]] = i+1
+                                if 'custom' in roi and 'Pole' not in roi:
+                                    custom_rois_data[self.idx_rois[subj][roi]] = i+1
 
                                 ds_rois[roi] = cortex.Vertex2D(roi_data, roi_data.astype('bool'), subj, cmap='RdBu_r_alpha').raw
             
 
             
                             ds_rois['Wang2015Atlas'] = cortex.Vertex2D(data, data.astype('bool'), subj, cmap='Retinotopy_HSV_2x_alpha').raw
+                            ds_rois['Custom ROIs'] = cortex.Vertex2D(custom_rois_data, custom_rois_data.astype('bool'), subj, cmap='Retinotopy_HSV_2x_alpha').raw 
+                            
                             self.js_handle_rois = cortex.webgl.show(ds_rois, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)
             
                             plotted_rois[subj] = True
@@ -284,29 +290,38 @@ class visualize_results(object):
             
                         if self.plot_rsq_cortex:              
                             ds_rsq = {}
-                            only_models = ['Gauss', 'Norm_abcd', 'CSS', 'DoG']
-                            best_model = np.argmax([p_r['RSq'][model] for model in only_models],axis=0)
+                            
+                            best_model = np.argmax([p_r['RSq'][model] for model in ['Gauss','Norm_abcd','CSS','DoG']],axis=0)
+
                             ds_rsq['Best model'] = cortex.Vertex2D(best_model, p_r['Alpha']['all'], subject=subj,
                                                                           vmin2=rsq_thresh, vmax2=0.6, cmap='BROYG_2D').raw 
-                            
-                            if 'CSS' in models and 'Gauss' in models:
+                            ds_rsq['vidx'] = cortex.Vertex2D(np.arange(len(best_model)), p_r['Alpha']['all'], subject=subj,
+                                                                          vmin2=-10, vmax2=-1, cmap='Jet_2D_alpha').raw                            
+                            if 'CSS' in models and 'Gauss' in self.only_models:
                                 ds_rsq['CSS - Gauss'] = cortex.Vertex2D(p_r['RSq']['CSS']-p_r['RSq']['Gauss'], p_r['Alpha']['all'], subject=subj,
                                                                           vmin=-0.05, vmax=0.05, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw   
                                 
-                            if 'DoG' in models and 'Gauss' in models:
+                            if 'DoG' in models and 'Gauss' in self.only_models:
                                 ds_rsq['DoG - Gauss'] = cortex.Vertex2D(p_r['RSq']['DoG']-p_r['RSq']['Gauss'], p_r['Alpha']['all'], subject=subj,
                                                                       vmin=-0.05, vmax=0.05, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw
                             
-                            for model in [model for model in models if 'Norm' in model]:
+                            if 'Norm_abcd' in self.only_models and 'CSS' in self.only_models and 'DoG' in self.only_models and 'Gauss' in self.only_models:
 
-                                ds_rsq[f'{model} - Gauss'] = cortex.Vertex2D(p_r['RSq'][model]-p_r['RSq']['Gauss'], p_r['Alpha']['all'], subject=subj,
+                                ds_rsq[f'Norm_abcd - Gauss'] = cortex.Vertex2D(p_r['RSq']['Norm_abcd']-p_r['RSq']['Gauss'], p_r['Alpha']['all'], subject=subj,
                                                                           vmin=-0.05, vmax=0.05, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw
 
-                                ds_rsq[f'{model} - DoG'] = cortex.Vertex2D(p_r['RSq'][model]-p_r['RSq']['DoG'], p_r['Alpha']['all'], subject=subj,
+                                ds_rsq[f'Norm_abcd - DoG'] = cortex.Vertex2D(p_r['RSq']['Norm_abcd']-p_r['RSq']['DoG'], p_r['Alpha']['all'], subject=subj,
                                                                           vmin=-0.05, vmax=0.05, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw
 
-                                ds_rsq[f'{model} - CSS'] = cortex.Vertex2D(p_r['RSq'][model]-p_r['RSq']['CSS'], p_r['Alpha']['all'], subject=subj, 
+                                ds_rsq[f'Norm_abcd - CSS'] = cortex.Vertex2D(p_r['RSq']['Norm_abcd']-p_r['RSq']['CSS'], p_r['Alpha']['all'], subject=subj, 
                                                                           vmin=-0.05, vmax=0.05, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw
+ 
+
+                            for model in [model for model in self.only_models if 'Norm' in model and 'Norm_abcd' != model]:
+
+                                ds_rsq[f'{model} - Norm_abcd'] = cortex.Vertex2D(p_r['RSq'][model]-p_r['RSq']['Norm_abcd'], p_r['Alpha']['all'], subject=subj,
+                                                                          vmin=-0.05, vmax=0.05, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw
+                                
                                 
                             if 'Processed Results' in self.main_dict['T1w'][analysis][subj] and self.compare_volume_surface:
                                 ds_rsq_comp={}
@@ -323,12 +338,17 @@ class visualize_results(object):
                                 ds_rsq_comp['Norm_abcd CV rsq (surface fit)'] = cortex.Vertex2D(p_r['RSq']['Norm_abcd'], p_r['RSq']['Norm_abcd'], subject=subj,
                                                                           vmin=rsq_thresh, vmax=0.6, vmin2=0.05, vmax2=rsq_thresh, cmap='Jet_2D_alpha').raw
                                 self.js_handle_rsq_comp = cortex.webgl.show(ds_rsq_comp, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)
-
-                            self.js_handle_rsq = cortex.webgl.show(ds_rsq, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True) 
+                            
+                            def printer(a,b):
+                                print(f"Vertex index: {b}")
+                                for model in models:
+                                    print(f"{model} rsq {p_r['RSq'][model][int(b)]}")
+                                return
+                            self.js_handle_rsq = cortex.webgl.show(ds_rsq, pickerfun=printer, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True) 
                             
                         if self.plot_ecc_cortex:
                             ds_ecc = {}
-                            for model in models:
+                            for model in self.only_models:
                                 ds_ecc[model] = cortex.Vertex2D(p_r['Eccentricity'][model], p_r['Alpha'][model], subject=subj, 
                                                                 vmin=self.ecc_min, vmax=self.ecc_max, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_r_2D_alpha').raw
             
@@ -336,7 +356,7 @@ class visualize_results(object):
             
                         if self.plot_polar_cortex:
                             ds_polar = {}
-                            for model in models:
+                            for model in self.only_models:
                                 ds_polar[model] = cortex.Vertex2D(p_r['Polar Angle'][model], p_r['Alpha'][model], subject=subj, 
                                                                   vmin2=rsq_thresh, vmax2=0.6, cmap='Retinotopy_HSV_2x_alpha').raw
                             
@@ -360,7 +380,7 @@ class visualize_results(object):
             
                         if self.plot_size_cortex:
                             ds_size = {}
-                            for model in models:
+                            for model in self.only_models:
                                 ds_size[model] = cortex.Vertex2D(p_r['Size (fwhmax)'][model], p_r['Alpha'][model], subject=subj, 
                                                                  vmin=0, vmax=6, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw
                   
@@ -369,13 +389,13 @@ class visualize_results(object):
             
                         if self.plot_amp_cortex:
                             ds_amp = {}
-                            for model in models:
+                            for model in self.only_models:
                                 ds_amp[model] = cortex.Vertex2D(p_r['Amplitude'][model], p_r['Alpha'][model], subject=subj, 
                                                                 vmin=-1, vmax=1, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw
             
                             self.js_handle_amp = cortex.webgl.show(ds_amp, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)
                             
-                        if self.plot_css_exp_cortex and 'CSS' in models:
+                        if self.plot_css_exp_cortex and 'CSS' in self.only_models:
                             ds_css_exp = {}
                             ds_css_exp['CSS Exponent'] = cortex.Vertex2D(p_r['CSS Exponent']['CSS'], p_r['Alpha']['CSS'], subject=subj, 
                                                                          vmin=0, vmax=1, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw
@@ -384,7 +404,7 @@ class visualize_results(object):
                             
                         if self.plot_surround_size_cortex:
                             ds_surround_size = {}
-                            for model in models:
+                            for model in self.only_models:
                                 if model == 'DoG':
                                     ds_surround_size['DoG'] = cortex.Vertex2D(p_r['Surround Size (fwatmin)']['DoG'], p_r['Alpha']['DoG'], subject=subj, 
                                                                          vmin=0, vmax=50, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw
@@ -396,7 +416,7 @@ class visualize_results(object):
                             
                         if self.plot_norm_baselines_cortex:
                             ds_norm_baselines = {}
-                            for model in [model for model in models if 'Norm_abcd' in model]:
+                            for model in [model for model in self.only_models if 'Norm' in model]:
 
                                 ds_norm_baselines[f'{model} Param. B'] = cortex.Vertex2D(p_r['Norm Param. B'][model], p_r['Alpha'][model], subject=subj, 
                                                                              vmin=0, vmax=1, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw                    
@@ -409,12 +429,8 @@ class visualize_results(object):
         print('-----')                              
         return    
         
-    def save_pycortex_views(self, js_handle, base_str):
-        views = dict(dorsal=dict(radius=191, altitude=73, azimuth=178, pivot=0),
-                     medial=dict(radius=10, altitude=101, azimuth=359, pivot=167),
-                     lateral=dict(radius=277, altitude=90, azimuth=177, pivot=123),
-                     ventral=dict(radius=221, altitude=131, azimuth=175, pivot=0)
-                    )
+    def save_pycortex_views(self, js_handle, base_str, views):
+
         
         surfaces = dict(inflated=dict(unfold=1))#,
                        # fiducial=dict(unfold=0.0))
@@ -485,18 +501,24 @@ class visualize_results(object):
                         # roi_colors['custom.hV4']='blue'
                         # roi_colors['custom.V3AB']='orange'
                         # #roi_colors['custom.']
+                        symbol={}
+                        symbol['custom.V1'] = 's'
+                        symbol['custom.V2'] = '^'
+                        symbol['custom.V3'] = 'v'
+                        symbol['custom.LO'] = 'D'
+                        symbol['custom.TO'] = 'o'
                         
-                        w_max=90
+                        w_max=40
             
                         fw_hmax_stats = dd(lambda:dd(list))
                         ecc_stats = dd(lambda:dd(list))
             
                         for roi in rois:
             
-                            pl.figure(f'{subj} {roi} fw_hmax', figsize=(8, 6), frameon=False)
+                            pl.figure(f"{subj} {roi.replace('custom.','')} fw_hmax", figsize=(8, 8), frameon=False)
            
-                            for model in [k for k in subj_res['Processed Results']['Size (fwhmax)'].keys() if 'Norm_abcd' in k or 'Norm' not in k]:                                
-            
+                            for model in self.only_models:                                
+
                                 #model-specific alpha? or all models same alpha?
                                 alpha_roi = (roi_mask(self.idx_rois[subj][roi], subj_res['Processed Results']['Alpha'][model]>rsq_thresh)) * (subj_res['Processed Results']['Size (fwhmax)'][model]<w_max)
                                 
@@ -517,6 +539,7 @@ class visualize_results(object):
                        
                                 WLS = LinearRegression()
                                 WLS.fit(ecc_model_roi.reshape(-1, 1), fwhmax_model_roi, sample_weight=rsq_model_roi)
+                                
                                 p=pl.plot([ss.mean for ss in ecc_stats[roi][model]],
                                         WLS.predict(np.array([ss.mean for ss in ecc_stats[roi][model]]).reshape(-1, 1)))
                                         #color=model_colors[model])
@@ -530,15 +553,20 @@ class visualize_results(object):
                                    fmt='s',  mec='black', label=model, color=p[-1].get_color())#, mfc=model_colors[model], ecolor=model_colors[model])
             
                             pl.xlabel('Eccentricity (degrees)')
-                            pl.ylabel(roi.replace('custom.','')+' pRF size (degrees)')
+                            pl.ylabel(f"{subj} {roi.replace('custom.','')} pRF size (degrees)")
                             pl.legend(loc=0)
                             if save_figures:
                                 pl.savefig('/Users/marcoaqil/PRFMapping/Figures/'+subj+'_'+
-                                           roi.replace('custom.','')+'_fw-hmax.pdf', dpi=200, bbox_inches='tight')
+                                           roi.replace('custom.','')+'_fw-hmax.pdf', dpi=300, bbox_inches='tight')
+
+                        fw_hmax_stats = dd(lambda:dd(list))
+                        ecc_stats = dd(lambda:dd(list))
                                 
-                        for model in [k for k in subj_res['Processed Results']['Size (fwhmax)'].keys() if 'Norm_abcd' in k or 'Norm' not in k]:
-                            pl.figure(f'{subj} {model} fw_hmax', figsize=(8, 6), frameon=False)
-                            for roi in rois:
+                        for model in self.only_models:
+                            pl.figure(f'{subj} {model} fw_hmax', figsize=(8, 8), frameon=False)
+                            pl.ylim(1.8,11.5)
+                            pl.xlim(0.2,4)
+                            for i, roi in enumerate(rois):
                                 #model-specific alpha? or all models same alpha?
                                 alpha_roi = roi_mask(self.idx_rois[subj][roi], subj_res['Processed Results']['Alpha'][model]>rsq_thresh)
                                 
@@ -559,8 +587,10 @@ class visualize_results(object):
                        
                                 WLS = LinearRegression()
                                 WLS.fit(ecc_model_roi.reshape(-1, 1), fwhmax_model_roi, sample_weight=rsq_model_roi)
+                                print(len([ss.mean for ss in ecc_stats[roi][model]]))
                                 p=pl.plot([ss.mean for ss in ecc_stats[roi][model]],
-                                        WLS.predict(np.array([ss.mean for ss in ecc_stats[roi][model]]).reshape(-1, 1)))
+                                        WLS.predict(np.array([ss.mean for ss in ecc_stats[roi][model]]).reshape(-1, 1)),
+                                        color=f"C{i+4}")
                                         #color=roi_colors[roi])
                                             
                                 print(roi+" "+model+" "+str(WLS.score(ecc_model_roi.reshape(-1, 1), fwhmax_model_roi, sample_weight=rsq_model_roi)))
@@ -569,25 +599,29 @@ class visualize_results(object):
                                    [ss.mean for ss in fw_hmax_stats[roi][model]],
                                    yerr=np.array([np.abs(ss.zconfint_mean(alpha=0.05)-ss.mean) for ss in fw_hmax_stats[roi][model]]).T,
                                    xerr=np.array([np.abs(ss.zconfint_mean(alpha=0.05)-ss.mean) for ss in ecc_stats[roi][model]]).T,
-                                   fmt='s', mec='black', label=roi.replace('custom.',''), color=p[-1].get_color())#, mfc=roi_colors[roi], ecolor=roi_colors[roi])
+                                   fmt=symbol[roi], mec='black', label=roi.replace('custom.',''), color=p[-1].get_color())#, mfc=roi_colors[roi], ecolor=roi_colors[roi])
             
                             pl.xlabel('Eccentricity (degrees)')
-                            pl.ylabel(model+' pRF size (degrees)')
+                            pl.ylabel(f"{subj} {model} pRF size (degrees)")
                             pl.legend(loc=0)
                             if save_figures:
                                 pl.savefig('/Users/marcoaqil/PRFMapping/Figures/'+subj+'_'+
-                                           model+'_fw-hmax.pdf', dpi=200, bbox_inches='tight')
+                                           model+'_fw-hmax.pdf', dpi=300, bbox_inches='tight')
 
         return
     
     
-    def ecc_surround_roi_plots(self, rois, rsq_thresh, save_figures):
+    def ecc_surround_roi_plots(self, rois, rsq_thresh, save_figures, analysis_names = 'all'):
         
         pl.rcParams.update({'font.size': 16})
         pl.rcParams.update({'pdf.fonttype':42})
         for space, space_res in self.main_dict.items():
             if 'fs' in space:
-                for analysis, analysis_res in space_res.items():       
+                if analysis_names == 'all':
+                    analyses = space_res.items()
+                else:
+                    analyses = [item for item in space_res.items() if item[0] in analysis_names] 
+                for analysis, analysis_res in analyses:       
                     for subj, subj_res in analysis_res.items():
                         print(space+" "+analysis+" "+subj)
             
@@ -605,13 +639,13 @@ class visualize_results(object):
                         ecc_stats = dd(lambda:dd(list))
                         
                         #exclude surrounds sizes larger than this (no surround)
-                        w_max=90
+                        w_max=60
             
                         for roi in rois:
             
-                            pl.figure(roi+' fw_atmin', figsize=(8, 6), frameon=False)
+                            pl.figure(subj+roi+' fw_atmin', figsize=(8, 8), frameon=False)
            
-                            for model in subj_res['Processed Results']['Surround Size (fwatmin)'].keys():                                
+                            for model in [k for k in subj_res['Processed Results']['Surround Size (fwatmin)'].keys() if k in self.only_models]:
             
                                 #model-specific alpha? or all models same alpha?
                                 alpha_roi = roi_mask(self.idx_rois[subj][roi], subj_res['Processed Results']['Alpha'][model]>rsq_thresh) * (subj_res['Processed Results']['Surround Size (fwatmin)'][model]<w_max)
@@ -633,7 +667,7 @@ class visualize_results(object):
                        
                                 WLS = LinearRegression()
                                 WLS.fit(ecc_model_roi.reshape(-1, 1), fwatmin_model_roi, sample_weight=rsq_model_roi)
-                                pl.plot([ss.mean for ss in ecc_stats[roi][model]],
+                                p=pl.plot([ss.mean for ss in ecc_stats[roi][model]],
                                         WLS.predict(np.array([ss.mean for ss in ecc_stats[roi][model]]).reshape(-1, 1)))
                                         #,color=model_colors[model])
                                             
@@ -643,18 +677,22 @@ class visualize_results(object):
                                    [ss.mean for ss in fw_atmin_stats[roi][model]],
                                    yerr=np.array([np.abs(ss.zconfint_mean(alpha=0.05)-ss.mean) for ss in fw_atmin_stats[roi][model]]).T,
                                    xerr=np.array([np.abs(ss.zconfint_mean(alpha=0.05)-ss.mean) for ss in ecc_stats[roi][model]]).T,
-                                   fmt='s',  mec='black', label=model)#, mfc=model_colors[model],ecolor=model_colors[model])
+                                   fmt='s',  mec='black', label=model,color=p[-1].get_color())#, mfc=model_colors[model],ecolor=model_colors[model])
             
                             pl.xlabel('Eccentricity (degrees)')
-                            pl.ylabel(roi.replace('custom.','')+' pRF Surround Size (degrees)')
+                            pl.ylabel(f"{subj} {roi.replace('custom.','')} pRF Surround Size (degrees)")
                             pl.legend(loc=0)
                             if save_figures:
                                 pl.savefig('/Users/marcoaqil/PRFMapping/Figures/'+subj+'_'+
-                                           roi.replace('custom.','')+'_fw-atmin.pdf', dpi=200, bbox_inches='tight')
+                                           roi.replace('custom.','')+'_fw-atmin.pdf', dpi=300, bbox_inches='tight')
+
+
+                        fw_atmin_stats = dd(lambda:dd(list))
+                        ecc_stats = dd(lambda:dd(list))
                                 
-                        for model in subj_res['Processed Results']['Surround Size (fwatmin)'].keys():
-                            pl.figure(model+' fw_atmin', figsize=(8, 6), frameon=False)
-                            for roi in rois:
+                        for model in [k for k in subj_res['Processed Results']['Surround Size (fwatmin)'].keys() if k in self.only_models]:
+                            pl.figure(subj+model+' fw_atmin', figsize=(8, 8), frameon=False)
+                            for i, roi in enumerate(rois):
                                 #model-specific alpha? or all models same alpha?
                                 alpha_roi = roi_mask(self.idx_rois[subj][roi], subj_res['Processed Results']['Alpha'][model]>rsq_thresh) * (subj_res['Processed Results']['Surround Size (fwatmin)'][model]<w_max)
                                 
@@ -675,8 +713,9 @@ class visualize_results(object):
                        
                                 WLS = LinearRegression()
                                 WLS.fit(ecc_model_roi.reshape(-1, 1), fwatmin_model_roi, sample_weight=rsq_model_roi)
-                                pl.plot([ss.mean for ss in ecc_stats[roi][model]],
-                                        WLS.predict(np.array([ss.mean for ss in ecc_stats[roi][model]]).reshape(-1, 1)))#,
+                                p=pl.plot([ss.mean for ss in ecc_stats[roi][model]],
+                                        WLS.predict(np.array([ss.mean for ss in ecc_stats[roi][model]]).reshape(-1, 1)),
+                                        color=f"C{i+4}")#,
                                         #color=roi_colors[roi])
                                             
                                 print(roi+" "+model+" "+str(WLS.score(ecc_model_roi.reshape(-1, 1), fwatmin_model_roi, sample_weight=rsq_model_roi)))
@@ -685,25 +724,29 @@ class visualize_results(object):
                                    [ss.mean for ss in fw_atmin_stats[roi][model]],
                                    yerr=np.array([np.abs(ss.zconfint_mean(alpha=0.05)-ss.mean) for ss in fw_atmin_stats[roi][model]]).T,
                                    xerr=np.array([np.abs(ss.zconfint_mean(alpha=0.05)-ss.mean) for ss in ecc_stats[roi][model]]).T,
-                                   fmt='s', mec='black', label=roi.replace('custom.',''))#, mfc=roi_colors[roi], ecolor=roi_colors[roi])
+                                   fmt='s', mec='black', label=roi.replace('custom.',''),color=p[-1].get_color())#, mfc=roi_colors[roi], ecolor=roi_colors[roi])
             
                             pl.xlabel('Eccentricity (degrees)')
-                            pl.ylabel(model+' pRF Surround Size (degrees)')
+                            pl.ylabel(f'{subj} {model} pRF Surround Size (degrees)')
                             pl.legend(loc=0)
                             if save_figures:
                                 pl.savefig('/Users/marcoaqil/PRFMapping/Figures/'+subj+'_'+
-                                           model+'_fw-atmin.pdf', dpi=200, bbox_inches='tight')            
+                                           model+'_fw-atmin.pdf', dpi=300, bbox_inches='tight')            
             
         return     
 
        
-    def ecc_css_exp_roi_plots(self, rois, rsq_thresh, save_figures):
+    def ecc_css_exp_roi_plots(self, rois, rsq_thresh, save_figures, analysis_names = 'all'):
         
         pl.rcParams.update({'font.size': 16})
         pl.rcParams.update({'pdf.fonttype':42})
         for space, space_res in self.main_dict.items():
             if 'fs' in space:
-                for analysis, analysis_res in space_res.items():       
+                if analysis_names == 'all':
+                    analyses = space_res.items()
+                else:
+                    analyses = [item for item in space_res.items() if item[0] in analysis_names] 
+                for analysis, analysis_res in analyses:       
                     for subj, subj_res in analysis_res.items():
                         print(space+" "+analysis+" "+subj)
             
@@ -717,8 +760,8 @@ class visualize_results(object):
                         css_exp_stats = dd(lambda:dd(list))
                         ecc_stats = dd(lambda:dd(list))
                         
-                        pl.figure('css_exp', figsize=(8, 6), frameon=False)
-                        for roi in rois:
+                        pl.figure('css_exp', figsize=(8, 8), frameon=False)
+                        for i, roi in enumerate(rois):
 
                             if 'CSS' in subj_res['Processed Results']['RSq'].keys():                                
                                 model = 'CSS'
@@ -752,14 +795,14 @@ class visualize_results(object):
                                    [ss.mean for ss in css_exp_stats[roi][model]],
                                    yerr=np.array([np.abs(ss.zconfint_mean(alpha=0.05)-ss.mean) for ss in css_exp_stats[roi][model]]).T,
                                    xerr=np.array([np.abs(ss.zconfint_mean(alpha=0.05)-ss.mean) for ss in ecc_stats[roi][model]]).T,
-                                   fmt='s', mec='black', label=roi.replace('custom.',''))#), mfc=roi_colors[roi], ecolor=roi_colors[roi])
+                                   fmt='s', mec='black', label=roi.replace('custom.',''),color=f"C{i+4}")#), mfc=roi_colors[roi], ecolor=roi_colors[roi])
             
                             pl.xlabel('Eccentricity (degrees)')
-                            pl.ylabel('CSS Exponent')
+                            pl.ylabel(subj+' CSS Exponent')
                             pl.legend(loc=0)
                             if save_figures:
                                 pl.savefig('/Users/marcoaqil/PRFMapping/Figures/'+subj+'_'+
-                                           roi.replace('custom.','')+'_css-exp.pdf', dpi=200, bbox_inches='tight')            
+                                           roi.replace('custom.','')+'_css-exp.pdf', dpi=300, bbox_inches='tight')            
         return     
 
              
@@ -788,17 +831,19 @@ class visualize_results(object):
                         params['Norm Param. B'] = 'o'
                         params['Norm Param. D'] = 'o'
                         params['Ratio (B/D)'] = 'o'    
-                        params['AD-BC (nonlinearity?)'] = 'o'
+                        #params['AD-BC (nonlinearity?)'] = 'o'
                         
                         
-                        # symbol={}
-                        # symbol['ABCD_100'] = 'o'
-                        # symbol['ACD_100'] = 's'
-                        # symbol['ABC_100'] = 'D'
+                        symbol={}
+                        symbol['custom.V1'] = 's'
+                        symbol['custom.V2'] = '^'
+                        symbol['custom.V3'] = 'v'
+                        symbol['custom.LO'] = 'D'
+                        symbol['custom.TO'] = 'o'
             
 
                         for param in params:
-                            for model in [model for model in subj_res['Processed Results']['RSq'].keys() if 'Norm_abcd' == model]:
+                            for model in [k for k in self.only_models if 'Norm' in k]:
                                 subj_res['Processed Results']['AD-BC (nonlinearity?)'][model]=np.zeros(subj_res['mask'].shape)
                                 subj_res['Processed Results']['AD-BC (nonlinearity?)'][model][subj_res['mask']] = subj_res['Results'][model][:,3]*subj_res['Results'][model][:,8]- subj_res['Results'][model][:,5]*subj_res['Results'][model][:,7]
                                 
@@ -810,10 +855,17 @@ class visualize_results(object):
                                 x_ticks=[]
                                 x_labels=[] 
                                 
-                                for roi in rois:
-                                    pl.figure(analysis+param+subj+model, figsize=(8, 6), frameon=False)
-                                    #model-specific alpha? or all models same alpha?
-                                    alpha_roi = roi_mask(self.idx_rois[subj][roi], subj_res['Processed Results']['Alpha'][model]>rsq_thresh)#* (subj_res['Processed Results']['RSq']['CSS']>subj_res['Processed Results']['RSq']['Gauss'])
+                                for i,roi in enumerate(rois):
+                                    pl.figure(analysis+param+subj+model, figsize=(8, 8), frameon=False)
+                                    if param == 'Norm Param. B':
+                                        pl.ylim(-5,100)
+                                    elif param == 'Norm Param. D':
+                                        pl.ylim(-5,100)
+                                    elif param == 'Ratio (B/D)':
+                                        pl.ylim(-1,8)
+                                        
+
+                                    alpha_roi = roi_mask(self.idx_rois[subj][roi], subj_res['Processed Results']['Alpha'][model]>rsq_thresh)#* (subj_res['Processed Results']['RSq']['DoG']<subj_res['Processed Results']['RSq']['Gauss'])
                                     
                                     ecc_model_roi = subj_res['Processed Results']['Eccentricity'][model][alpha_roi]
                                     rsq_model_roi = subj_res['Processed Results']['RSq'][model][alpha_roi]
@@ -834,7 +886,8 @@ class visualize_results(object):
                                     WLS = LinearRegression()
                                     WLS.fit(ecc_model_roi.reshape(-1, 1), norm_baselines_roi, sample_weight=rsq_model_roi)
                                     p=pl.plot([ss.mean for ss in ecc_stats[roi][param]],
-                                              WLS.predict(np.array([ss.mean for ss in ecc_stats[roi][param]]).reshape(-1, 1)))#,
+                                              WLS.predict(np.array([ss.mean for ss in ecc_stats[roi][param]]).reshape(-1, 1)),
+                                              color=f"C{i+4}")#,
                                               #color=roi_colors[roi])
                                                 
                                     #print(roi+" "+model+" "+str(WLS.score(ecc_model_roi.reshape(-1, 1), norm_baselines_roi, sample_weight=rsq_model_roi)))
@@ -843,9 +896,17 @@ class visualize_results(object):
                                        [ss.mean for ss in norm_baselines_stats[roi][param]],
                                        yerr=np.array([np.abs(ss.zconfint_mean(alpha=0.05)-ss.mean) for ss in norm_baselines_stats[roi][param]]).T,
                                        xerr=np.array([np.abs(ss.zconfint_mean(alpha=0.05)-ss.mean) for ss in ecc_stats[roi][param]]).T,
-                                       fmt='s',  mec='black', label=roi.replace('custom.',''), color=p[-1].get_color())#, mfc=roi_colors[roi],ecolor=roi_colors[roi])
+                                       fmt=symbol[roi],  mec='black', label=roi.replace('custom.',''), color=p[-1].get_color())#, mfc=roi_colors[roi],ecolor=roi_colors[roi])
                                     
-                                    pl.figure(analysis+param+subj+model+'mean', figsize=(8, 6), frameon=False)
+                                    pl.figure(analysis+param+subj+model+'mean', figsize=(8, 8), frameon=False)
+                                    
+                                    if param == 'Norm Param. B':
+                                        pl.ylim(0,31)
+                                    elif param == 'Norm Param. D':
+                                        pl.ylim(0,31)
+                                    elif param == 'Ratio (B/D)':
+                                        pl.ylim(0,3.1)
+                                        
                                     full_roi_stats = weightstats.DescrStatsW(norm_baselines_roi, weights=rsq_model_roi)
                                     
                                     bar_height = full_roi_stats.mean
@@ -855,17 +916,19 @@ class visualize_results(object):
                                     x_ticks.append(bar_position)
                                     x_labels.append(roi.replace('custom.',''))
                                     bar_position+=0.15
+                                    pl.ylabel(f"{subj} {param}")
                                     
                                     pl.xticks(x_ticks,x_labels)
                                     
-                                    
-                                pl.figure(analysis+param+subj+model, figsize=(8, 6), frameon=False)    
+                                if save_figures:
+                                    pl.savefig(f"/Users/marcoaqil/PRFMapping/Figures/{subj}_mean-{param.replace('/','').replace('.','').replace(' ','_')}.pdf", dpi=300, bbox_inches='tight')
+                                                                        
+                                pl.figure(analysis+param+subj+model, figsize=(8, 8), frameon=False)    
                                 pl.xlabel('Eccentricity (degrees)')
-                                pl.ylabel(param)
+                                pl.ylabel(f"{subj} {param}")
                                 pl.legend(loc=0)
                                 if save_figures:
-                                    pl.savefig('/Users/marcoaqil/PRFMapping/Figures/'+subj+'_'+
-                                               param.replace("/","").replace('.','').replace(' ','_')+'.pdf', dpi=200, bbox_inches='tight')
+                                    pl.savefig(f"/Users/marcoaqil/PRFMapping/Figures/{subj}_ecc-{param.replace('/','').replace('.','').replace(' ','_')}.pdf", dpi=300, bbox_inches='tight')
                                     
         return     
 
@@ -900,43 +963,44 @@ class visualize_results(object):
 
                         for roi in rois:
                             bar_position=last_bar_position+0.1
-                            pl.figure(analysis+subj+' RSq', figsize=(8, 6), frameon=False)
-                            pl.ylabel(subj+' % of Gauss model R-squared')  
-                            pl.ylim((0.24,0.71))
+                            pl.figure(analysis+subj+' RSq', figsize=(8, 8), frameon=False)
+                            pl.ylabel(subj+' R-squared')  
+                            pl.ylim((0.0,0.7))
                             
                             alpha_roi = roi_mask(self.idx_rois[subj][roi], subj_res['Processed Results']['Alpha']['all']>rsq_thresh) #* (subj_res['Processed Results']['RSq']['CSS']>subj_res['Processed Results']['RSq']['Gauss']) * (subj_res['Processed Results']['RSq']['DoG']>subj_res['Processed Results']['RSq']['Gauss'])
                             print(self.idx_rois[subj][roi].shape)
                             print(alpha_roi.sum())
                             
                             
-                            model_list = [k for k in subj_res['Processed Results']['RSq'].keys() if 'Norm_abcd' == k or 'Norm' not in k]
+                            model_list = [k for k in subj_res['Processed Results']['RSq'].keys() if k in self.only_models]
                             model_list.sort()
                             model_list[0], model_list[2] = model_list[2], model_list[0]
                             model_colors = {model:cmap(val) for model,val in zip(model_list,[0,2,1,3])}
                             
-                            # for model in model_list:
-                            #     alpha_roi *= (subj_res['Processed Results']['CCrsq_task-4R'][model]>0.0)
-                                 
+                            #for model in model_list:
+                            #   alpha_roi *= (subj_res['Processed Results']['CCrsq_task-1R'][model]>0.0)
+                            #alpha_roi *= np.nanmax(np.array([subj_res['Processed Results']['CCrsq_task-1S'][model] for model in model_list]), axis=0)>0.0
+                            
                             #print(alpha_roi.sum())     
                             x_ticks.append(bar_position+0.15)
                             x_labels.append(roi.replace('custom.','')+'\n')
                             for model in model_list:
                                                             
-                                model_rsq[roi][model][subj] = (subj_res['Processed Results']['RSq'][model][alpha_roi])#-subj_res['Processed Results']['RSq']['Gauss'][alpha_roi])#*100 / subj_res['Processed Results']['RSq']['Gauss'][alpha_roi]
+                                model_rsq[roi][model][subj] = (subj_res['Processed Results']['CCrsq_task-1R'][model][alpha_roi])#-subj_res['Processed Results']['RSq']['Gauss'][alpha_roi])#*100 / subj_res['Processed Results']['RSq']['Gauss'][alpha_roi]
                                 
                                 group_rsq = np.concatenate(tuple([model_rsq[roi][model][k] for k in model_rsq[roi][model]]))#.flatten()   
                                 group = ''.join([k for k in model_rsq[roi][model]])
-                                #print(group_rsq)
+
                                 bar_height = np.mean(model_rsq[roi][model][subj])
-                                #print(bar_height)
+
                                 bar_err = sem(model_rsq[roi][model][subj])
-                                #print(bar_err)
+
                                 pl.bar(bar_position, bar_height, width=0.1, yerr=bar_err,edgecolor='black', label=model, color=model_colors[model])
                                 
                                 if i+1 == len(analysis_res.keys()):
-                                    pl.figure(analysis+'group RSq', figsize=(8, 6), frameon=False)
-                                    pl.ylabel(group+' % of Gauss model R-squared')  
-                                    pl.ylim((0.24,0.71))
+                                    pl.figure(analysis+'group RSq', figsize=(8, 8), frameon=False)
+                                    pl.ylabel(group+' R-squared')  
+                                    pl.ylim((0,0.7))
                                     bar_height = np.mean(group_rsq)
                                     bar_err = sem(group_rsq)
                                     pl.bar(bar_position, bar_height, width=0.1, yerr=bar_err,edgecolor='black', label=model, color=model_colors[model])
@@ -945,7 +1009,7 @@ class visualize_results(object):
                                     handles, labels = pl.gca().get_legend_handles_labels()
                                     by_label = dict(zip(labels, handles))
                                     pl.legend(by_label.values(), by_label.keys())
-                                    pl.figure(analysis+subj+' RSq', figsize=(8, 6), frameon=False)
+                                    pl.figure(analysis+subj+' RSq', figsize=(8, 8), frameon=False)
                                 
                                 bar_position += 0.1
                               
@@ -1018,7 +1082,7 @@ class visualize_results(object):
 
                             print('---------------')
                         if save_figures:
-                            pl.savefig(f"/Users/marcoaqil/PRFMapping/Figures/{subj}_rsq.pdf", dpi=200, bbox_inches='tight')
+                            pl.savefig(f"/Users/marcoaqil/PRFMapping/Figures/{subj}_rsq.pdf", dpi=300, bbox_inches='tight')
                         print('\n')
                             
         return     
