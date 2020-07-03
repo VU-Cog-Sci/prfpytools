@@ -47,6 +47,8 @@ class visualize_results(object):
     def import_rois_and_flatmaps(self, fs_dir):
         self.idx_rois = dd(dict)
         self.fs_dir = fs_dir
+        self.get_spaces()
+        self.get_subjects(self.main_dict)
         for subj in self.subjects:
             
             if subj not in cortex.db.subjects:
@@ -99,8 +101,7 @@ class visualize_results(object):
                     self.idx_rois[subj][roi], _ = cortex.freesurfer.get_label(subj,
                                                           label=roi,
                                                           fs_dir=self.fs_dir,
-                                                          src_subject=subj,
-                                                          verbose=True)
+                                                          src_subject=subj)
                 except Exception as e:
                     print(e)
                     pass
@@ -155,7 +156,7 @@ class visualize_results(object):
                             
                         ######limits for eccentricity
                         self.ecc_min=0
-                        self.ecc_max=4
+                        self.ecc_max=5
                         ######max prf size (implemented in surround and size plotting functions)
                         #w_max = 90                        
               
@@ -170,7 +171,7 @@ class visualize_results(object):
             
                         #alpha dictionary
                         p_r['Alpha'] = {}          
-                        p_r['Alpha']['all'] = rsq.max(-1) * (tc_stats['Mean']>self.tc_min[subj]) * (ecc.min(-1)<self.ecc_max) * (ecc.max(-1)>self.ecc_min) * (rsq.min(-1)>0)
+                        p_r['Alpha']['all'] = rsq.min(-1) * (tc_stats['Mean']>self.tc_min[subj]) * (ecc.min(-1)<self.ecc_max) * (ecc.max(-1)>self.ecc_min) * (rsq.min(-1)>0)
                         
                         for model in models:
                             p_r['Alpha'][model] = p_r['RSq'][model] * (p_r['Eccentricity'][model]>self.ecc_min) * (p_r['Eccentricity'][model]<self.ecc_max)\
@@ -178,7 +179,7 @@ class visualize_results(object):
                        
         return
 
-    def pycortex_plots(self, rois, rsq_thresh, analysis_names = 'all'):        
+    def pycortex_plots(self, rois, rsq_thresh, analysis_names = 'all', subject_ids='all'):        
           
         for space, space_res in self.main_dict.items():
             if 'fs' in space:
@@ -188,10 +189,15 @@ class visualize_results(object):
                     analyses = space_res.items()
                 else:
                     analyses = [item for item in space_res.items() if item[0] in analysis_names] 
-                for analysis, analysis_res in analyses:    
-                    for subj, subj_res in analysis_res.items():
+                for analysis, analysis_res in analyses:  
+                    if subject_ids == 'all':
+                        subjects = analysis_res.items()
+                    else:
+                        subjects = [item for item in analysis_res.items() if item[0] in subject_ids] 
+                    for subj, subj_res in subjects:
                         
                         if subj not in cortex.db.subjects:
+                            print("subject not present in pycortex database. attempting to import...")
                             cortex.freesurfer.import_subj(subj, freesurfer_subject_dir=self.fs_dir, 
                                   whitematter_surf='smoothwm')
                         
@@ -215,7 +221,7 @@ class visualize_results(object):
                             polar_freeview = np.copy(p_r['Polar Angle']['Norm_abcd'])#np.mean(polar, axis=-1)
                             ecc_freeview = np.copy(p_r['Eccentricity']['Norm_abcd'])#np.mean(ecc, axis=-1)
                                       
-                            alpha_freeview = p_r['RSq']['Norm']* (tc_stats['Mean']>self.tc_min[subj])# rsq.max(-1) * (tc_stats['Mean']>self.tc_min[subj]) * (rsq.min(-1)>0)
+                            alpha_freeview = p_r['RSq']['Norm_abcd']* (tc_stats['Mean']>self.tc_min[subj])# rsq.max(-1) * (tc_stats['Mean']>self.tc_min[subj]) * (rsq.min(-1)>0)
             
                             polar_freeview[alpha_freeview<rsq_thresh] = -10
                             ecc_freeview[alpha_freeview<rsq_thresh] = -10
@@ -339,10 +345,14 @@ class visualize_results(object):
                                                                           vmin=rsq_thresh, vmax=0.6, vmin2=0.05, vmax2=rsq_thresh, cmap='Jet_2D_alpha').raw
                                 self.js_handle_rsq_comp = cortex.webgl.show(ds_rsq_comp, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)
                             
-                            def printer(a,b):
-                                print(f"Vertex index: {b}")
+                            #######PYCORTEX PICKERFUN
+                            lctm, rctm = cortex.utils.get_ctmmap(subj, method='mg2', level=9)
+                            def printer(voxel,hemi,vertex):
                                 for model in models:
-                                    print(f"{model} rsq {p_r['RSq'][model][int(b)]}")
+                                    if hemi == 'left':
+                                        print(f"{model} rsq {p_r['RSq'][model][lctm[int(vertex)]]}")
+                                    else:
+                                        print(f"{model} rsq {p_r['RSq'][model][len(lctm)+rctm[int(vertex)]]}")
                                 return
                             self.js_handle_rsq = cortex.webgl.show(ds_rsq, pickerfun=printer, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True) 
                             
@@ -419,11 +429,11 @@ class visualize_results(object):
                             for model in [model for model in self.only_models if 'Norm' in model]:
 
                                 ds_norm_baselines[f'{model} Param. B'] = cortex.Vertex2D(p_r['Norm Param. B'][model], p_r['Alpha'][model], subject=subj, 
-                                                                             vmin=0, vmax=1, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw                    
+                                                                             vmin=0, vmax=10, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw                    
                                 ds_norm_baselines[f'{model} Param. D'] = cortex.Vertex2D(p_r['Norm Param. D'][model], p_r['Alpha'][model], subject=subj, 
-                                                                             vmin=0, vmax=1, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw
+                                                                             vmin=0, vmax=20, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw
                                 ds_norm_baselines[f'{model} Ratio (B/D)'] = cortex.Vertex2D(p_r['Ratio (B/D)'][model], p_r['Alpha'][model], subject=subj, 
-                                                                             vmin=0, vmax=0.75, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw
+                                                                             vmin=0, vmax=1, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw
                             
                             self.js_handle_norm_baselines = cortex.webgl.show(ds_norm_baselines, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)    
         print('-----')                              
@@ -475,7 +485,7 @@ class visualize_results(object):
                 except:
                     pass
         
-    def ecc_size_roi_plots(self, rois, rsq_thresh, save_figures, analysis_names = 'all'):
+    def quant_plots(self, x_parameter, y_parameter, rois, rsq_thresh, save_figures, analysis_names = 'all', subject_ids='all'):
         
         pl.rcParams.update({'font.size': 16})
         pl.rcParams.update({'pdf.fonttype':42})
@@ -486,12 +496,31 @@ class visualize_results(object):
                 else:
                     analyses = [item for item in space_res.items() if item[0] in analysis_names] 
                 for analysis, analysis_res in analyses:       
-                    for subj, subj_res in analysis_res.items():
+                    if subject_ids == 'all':
+                        subjects = [item for item in analysis_res.items()]
+                    else:
+                        subjects = [item for item in analysis_res.items() if item[0] in subject_ids]
+                    
+                    if len(subjects)>1:
+                        subjects.append(('Group', {}))
+
+                    alpha = dd(lambda:dd(lambda:dd(dict)))
+                    x_par = dd(lambda:dd(lambda:dd(dict)))
+                    y_par = dd(lambda:dd(lambda:dd(dict)))
+                    rsq = dd(lambda:dd(lambda:dd(dict)))
+        
+                    x_par_stats = dd(lambda:dd(lambda:dd(list)))
+                    y_par_stats = dd(lambda:dd(lambda:dd(list)))
+
+                    for subj, subj_res in subjects:
                         print(space+" "+analysis+" "+subj)
-            
+                        x_ticks=[]
+                        x_labels=[]    
+                        bar_position = 0
+                        
                         # binned eccentricity vs other parameters relationships       
             
-                        # model_colors = {'Gauss':'blue','CSS':'orange','DoG':'green','Norm':'red'}
+                        model_colors = {'Gauss':'blue','CSS':'orange','DoG':'green','Norm_abcd':'red'}
                                                 
                         # #model_symbols = {'Gauss':'^','CSS':'o','DoG':'v','Norm':'D'}
                         # roi_colors = dd(lambda:'blue')
@@ -501,112 +530,150 @@ class visualize_results(object):
                         # roi_colors['custom.hV4']='blue'
                         # roi_colors['custom.V3AB']='orange'
                         # #roi_colors['custom.']
-                        symbol={}
-                        symbol['custom.V1'] = 's'
-                        symbol['custom.V2'] = '^'
-                        symbol['custom.V3'] = 'v'
-                        symbol['custom.LO'] = 'D'
-                        symbol['custom.TO'] = 'o'
+                        # symbol={}
+                        # symbol['custom.V1'] = 's'
+                        # symbol['custom.V2'] = '^'
+                        # symbol['custom.V3'] = 'v'
+                        # symbol['custom.LO'] = 'D'
+                        # symbol['custom.TO'] = 'o'
                         
-                        w_max=40
-            
-                        fw_hmax_stats = dd(lambda:dd(list))
-                        ecc_stats = dd(lambda:dd(list))
-            
+                        #w_max=40
+    
                         for roi in rois:
-            
-                            pl.figure(f"{subj} {roi.replace('custom.','')} fw_hmax", figsize=(8, 8), frameon=False)
-           
+                            bar_position += 0.1
+                            x_ticks.append(bar_position+0.05*(len(self.only_models)-1))
+                            x_labels.append(roi.replace('custom.','')+'\n')   
+                            
                             for model in self.only_models:                                
 
                                 #model-specific alpha? or all models same alpha?
-                                alpha_roi = (roi_mask(self.idx_rois[subj][roi], subj_res['Processed Results']['Alpha'][model]>rsq_thresh)) * (subj_res['Processed Results']['Size (fwhmax)'][model]<w_max)
                                 
-                                ecc_model_roi = subj_res['Processed Results']['Eccentricity'][model][alpha_roi]
-                                fwhmax_model_roi = subj_res['Processed Results']['Size (fwhmax)'][model][alpha_roi]
-                                rsq_model_roi = subj_res['Processed Results']['RSq'][model][alpha_roi]
+                                if 'sub' in subj:
+                                    try:
+                                        alpha[subj][model][roi] = (roi_mask(self.idx_rois[subj][roi], subj_res['Processed Results']['Alpha'][model]>rsq_thresh)) #* (subj_res['Processed Results']['Size (fwhmax)'][model]<w_max)
+                                    except Exception as e:
+                                        print(e)
+                                        #if ROI is not defined
+                                        alpha[subj][model][roi] = np.zeros_like(subj_res['Processed Results']['Alpha'][model]).astype('bool')
+                                        pass
+                                        
+                                    x_par[subj][model][roi] = subj_res['Processed Results'][x_parameter][model][alpha[subj][model][roi]]
+                                    y_par[subj][model][roi] = subj_res['Processed Results'][y_parameter][model][alpha[subj][model][roi]]
+                                    rsq[subj][model][roi] = subj_res['Processed Results']['RSq'][model][alpha[subj][model][roi]]
+    
+                                else:
+                                    #group stats
+                                    x_par_group = np.concatenate(tuple([x_par[sid][model][roi] for sid in x_par if 'sub' in sid]))
+                                    
+                                    y_par_group = np.concatenate(tuple([y_par[sid][model][roi] for sid in y_par if 'sub' in sid]))
+                                    rsq_group = np.concatenate(tuple([rsq[sid][model][roi] for sid in rsq if 'sub' in sid]))
+                                    
+                                    x_par[subj][model][roi] = np.copy(x_par_group)
+                                    y_par[subj][model][roi] = np.copy(y_par_group)
+                                    rsq[subj][model][roi] = np.copy(rsq_group)
+                                    
+                                pl.figure(f"{subj} Mean {y_parameter}", figsize=(8, 8), frameon=False)
+                                pl.ylabel(f"{subj} Mean {y_parameter}")
+                                                                           
+                                full_roi_stats = weightstats.DescrStatsW(y_par[subj][model][roi],
+                                                        weights=rsq[subj][model][roi])
                                 
-                                ecc_sorted = np.argsort(ecc_model_roi)
-                                split_ecc_bins = np.array_split(ecc_sorted, 10)
+                                bar_height = full_roi_stats.mean
+                                bar_err = (full_roi_stats.zconfint_mean(alpha=0.05) - bar_height).reshape(2,1)
+                                
+                                pl.bar(bar_position, bar_height, width=0.1, yerr=bar_err, 
+                                       edgecolor='black', label=model, color=model_colors[model])
+                                
+                                bar_position += 0.1
+
+                                pl.xticks(x_ticks,x_labels)
+                                handles, labels = pl.gca().get_legend_handles_labels()
+                                by_label = dict(zip(labels, handles))
+                                pl.legend(by_label.values(), by_label.keys())
+                                if save_figures:
+                                    pl.savefig(f"/Users/marcoaqil/PRFMapping/Figures/{subj} Mean {y_parameter}.pdf", dpi=300, bbox_inches='tight')
+
+                                
+                                ###################
+                                #x vs y param by ROI
+                                pl.figure(f"{subj} {roi.replace('custom.','')} {y_parameter} VS {x_parameter}", figsize=(8, 8), frameon=False)
+                                    
+                                x_par_sorted = np.argsort(x_par[subj][model][roi])
+                                split_x_par_bins = np.array_split(x_par_sorted, 8)
                                
-                                for ecc_quantile in split_ecc_bins:
-                                    fw_hmax_stats[roi][model].append(weightstats.DescrStatsW(fwhmax_model_roi[ecc_quantile],
-                                                                                          weights=rsq_model_roi[ecc_quantile]))
+                                for x_par_quantile in split_x_par_bins:
+                                    y_par_stats[subj][model][roi].append(weightstats.DescrStatsW(y_par[subj][model][roi][x_par_quantile],
+                                                                                          weights=rsq[subj][model][roi][x_par_quantile]))
             
-                                    ecc_stats[roi][model].append(weightstats.DescrStatsW(ecc_model_roi[ecc_quantile],
-                                                                                          weights=rsq_model_roi[ecc_quantile]))
+                                    x_par_stats[subj][model][roi].append(weightstats.DescrStatsW(x_par[subj][model][roi][x_par_quantile],
+                                                                                          weights=rsq[subj][model][roi][x_par_quantile]))
             
-                       
-                                WLS = LinearRegression()
-                                WLS.fit(ecc_model_roi.reshape(-1, 1), fwhmax_model_roi, sample_weight=rsq_model_roi)
+                                try:
+                                    WLS = LinearRegression()
+                                    WLS.fit(x_par[subj][model][roi].reshape(-1, 1), y_par[subj][model][roi], sample_weight=rsq[subj][model][roi])
                                 
-                                p=pl.plot([ss.mean for ss in ecc_stats[roi][model]],
-                                        WLS.predict(np.array([ss.mean for ss in ecc_stats[roi][model]]).reshape(-1, 1)))
+                                    p=pl.plot([ss.mean for ss in x_par_stats[subj][model][roi]],
+                                        WLS.predict(np.array([ss.mean for ss in x_par_stats[subj][model][roi]]).reshape(-1, 1)))
                                         #color=model_colors[model])
                                             
-                                print(roi+" "+model+" "+str(WLS.score(ecc_model_roi.reshape(-1, 1), fwhmax_model_roi, sample_weight=rsq_model_roi)))
-            
-                                pl.errorbar([ss.mean for ss in ecc_stats[roi][model]],
-                                   [ss.mean for ss in fw_hmax_stats[roi][model]],
-                                   yerr=np.array([np.abs(ss.zconfint_mean(alpha=0.05)-ss.mean) for ss in fw_hmax_stats[roi][model]]).T,
-                                   xerr=np.array([np.abs(ss.zconfint_mean(alpha=0.05)-ss.mean) for ss in ecc_stats[roi][model]]).T,
-                                   fmt='s',  mec='black', label=model, color=p[-1].get_color())#, mfc=model_colors[model], ecolor=model_colors[model])
-            
-                            pl.xlabel('Eccentricity (degrees)')
-                            pl.ylabel(f"{subj} {roi.replace('custom.','')} pRF size (degrees)")
+                                    print(roi+" "+model+" "+str(WLS.score(x_par[subj][model][roi].reshape(-1, 1), y_par[subj][model][roi], sample_weight=rsq[subj][model][roi])))
+                                except Exception as e:
+                                    print(e)
+                                    pass
+                                
+                                try:
+                                    pl.errorbar([ss.mean for ss in x_par_stats[subj][model][roi]],
+                                    [ss.mean for ss in y_par_stats[subj][model][roi]],
+                                    yerr=np.array([np.abs(ss.zconfint_mean(alpha=0.05)-ss.mean) for ss in y_par_stats[subj][model][roi]]).T,
+                                    xerr=np.array([np.abs(ss.zconfint_mean(alpha=0.05)-ss.mean) for ss in x_par_stats[subj][model][roi]]).T,
+                                    fmt='s',  mec='black', label=model, color=p[-1].get_color())#, mfc=model_colors[model], ecolor=model_colors[model])
+                                except Exception as e:
+                                    print(e)
+                                    pass
+                            
+                            
+                            pl.xlabel(f"{x_parameter}")
+                            pl.ylabel(f"{subj} {roi.replace('custom.','')} {y_parameter}")
                             pl.legend(loc=0)
                             if save_figures:
-                                pl.savefig('/Users/marcoaqil/PRFMapping/Figures/'+subj+'_'+
-                                           roi.replace('custom.','')+'_fw-hmax.pdf', dpi=300, bbox_inches='tight')
+                                pl.savefig(f"/Users/marcoaqil/PRFMapping/Figures/{subj} {roi.replace('custom.','')} {y_parameter} VS {x_parameter}.pdf", dpi=300, bbox_inches='tight')
 
-                        fw_hmax_stats = dd(lambda:dd(list))
-                        ecc_stats = dd(lambda:dd(list))
+
                                 
                         for model in self.only_models:
-                            pl.figure(f'{subj} {model} fw_hmax', figsize=(8, 8), frameon=False)
-                            pl.ylim(1.8,11.5)
-                            pl.xlim(0.2,4)
+                            pl.figure(f"{subj} {model} {y_parameter} VS {x_parameter}", figsize=(8, 8), frameon=False)
+                            #pl.ylim(1.8,11.5)
+                            #pl.xlim(0.2,4)
                             for i, roi in enumerate(rois):
-                                #model-specific alpha? or all models same alpha?
-                                alpha_roi = roi_mask(self.idx_rois[subj][roi], subj_res['Processed Results']['Alpha'][model]>rsq_thresh)
+                                try:
+                                    WLS = LinearRegression()
+                                    WLS.fit(x_par[subj][model][roi].reshape(-1, 1), y_par[subj][model][roi], sample_weight=rsq[subj][model][roi])
                                 
-                                ecc_model_roi = subj_res['Processed Results']['Eccentricity'][model][alpha_roi]
-                                fwhmax_model_roi = subj_res['Processed Results']['Size (fwhmax)'][model][alpha_roi]
-                                rsq_model_roi = subj_res['Processed Results']['RSq'][model][alpha_roi]
-                                
-                                ecc_sorted = np.argsort(ecc_model_roi)
-                                split_ecc_bins = np.array_split(ecc_sorted, 10)
-                               
-                                for ecc_quantile in split_ecc_bins:
-                                    fw_hmax_stats[roi][model].append(weightstats.DescrStatsW(fwhmax_model_roi[ecc_quantile],
-                                                                                          weights=rsq_model_roi[ecc_quantile]))
-            
-                                    ecc_stats[roi][model].append(weightstats.DescrStatsW(ecc_model_roi[ecc_quantile],
-                                                                                          weights=rsq_model_roi[ecc_quantile]))
-            
-                       
-                                WLS = LinearRegression()
-                                WLS.fit(ecc_model_roi.reshape(-1, 1), fwhmax_model_roi, sample_weight=rsq_model_roi)
-                                print(len([ss.mean for ss in ecc_stats[roi][model]]))
-                                p=pl.plot([ss.mean for ss in ecc_stats[roi][model]],
-                                        WLS.predict(np.array([ss.mean for ss in ecc_stats[roi][model]]).reshape(-1, 1)),
+                                    p=pl.plot([ss.mean for ss in x_par_stats[subj][model][roi]],
+                                        WLS.predict(np.array([ss.mean for ss in x_par_stats[subj][model][roi]]).reshape(-1, 1)),
                                         color=f"C{i+4}")
-                                        #color=roi_colors[roi])
-                                            
-                                print(roi+" "+model+" "+str(WLS.score(ecc_model_roi.reshape(-1, 1), fwhmax_model_roi, sample_weight=rsq_model_roi)))
-            
-                                pl.errorbar([ss.mean for ss in ecc_stats[roi][model]],
-                                   [ss.mean for ss in fw_hmax_stats[roi][model]],
-                                   yerr=np.array([np.abs(ss.zconfint_mean(alpha=0.05)-ss.mean) for ss in fw_hmax_stats[roi][model]]).T,
-                                   xerr=np.array([np.abs(ss.zconfint_mean(alpha=0.05)-ss.mean) for ss in ecc_stats[roi][model]]).T,
-                                   fmt=symbol[roi], mec='black', label=roi.replace('custom.',''), color=p[-1].get_color())#, mfc=roi_colors[roi], ecolor=roi_colors[roi])
-            
-                            pl.xlabel('Eccentricity (degrees)')
-                            pl.ylabel(f"{subj} {model} pRF size (degrees)")
+                                        #color=roi_colors[roi]) 
+                                               
+                                    print(roi+" "+model+" "+str(WLS.score(x_par[subj][model][roi].reshape(-1, 1), y_par[subj][model][roi], sample_weight=rsq[subj][model][roi])))
+                                except Exception as e:
+                                    print(e)
+                                    pass
+                                
+                                try:
+                                    pl.errorbar([ss.mean for ss in x_par_stats[subj][model][roi]],
+                                    [ss.mean for ss in y_par_stats[subj][model][roi]],
+                                    yerr=np.array([np.abs(ss.zconfint_mean(alpha=0.05)-ss.mean) for ss in y_par_stats[subj][model][roi]]).T,
+                                    xerr=np.array([np.abs(ss.zconfint_mean(alpha=0.05)-ss.mean) for ss in x_par_stats[subj][model][roi]]).T,
+                                    fmt='s', mec='black', label=roi.replace('custom.',''), color=p[-1].get_color())#, mfc=roi_colors[roi], ecolor=roi_colors[roi])
+                                except Exception as e:
+                                    print(e)
+                                    pass
+                            pl.xlabel(f"{x_parameter}")
+                            pl.ylabel(f"{subj} {model} {y_parameter}")
                             pl.legend(loc=0)
                             if save_figures:
-                                pl.savefig('/Users/marcoaqil/PRFMapping/Figures/'+subj+'_'+
-                                           model+'_fw-hmax.pdf', dpi=300, bbox_inches='tight')
+                                pl.savefig(f"/Users/marcoaqil/PRFMapping/Figures/{subj} {model} {y_parameter} VS {x_parameter}.pdf", dpi=300, bbox_inches='tight')
+
 
         return
     
@@ -986,11 +1053,8 @@ class visualize_results(object):
                             x_labels.append(roi.replace('custom.','')+'\n')
                             for model in model_list:
                                                             
-                                model_rsq[roi][model][subj] = (subj_res['Processed Results']['CCrsq_task-1R'][model][alpha_roi])#-subj_res['Processed Results']['RSq']['Gauss'][alpha_roi])#*100 / subj_res['Processed Results']['RSq']['Gauss'][alpha_roi]
+                                model_rsq[roi][model][subj] = (subj_res['Processed Results']['RSq'][model][alpha_roi])#-subj_res['Processed Results']['RSq']['Gauss'][alpha_roi])#*100 / subj_res['Processed Results']['RSq']['Gauss'][alpha_roi]
                                 
-                                group_rsq = np.concatenate(tuple([model_rsq[roi][model][k] for k in model_rsq[roi][model]]))#.flatten()   
-                                group = ''.join([k for k in model_rsq[roi][model]])
-
                                 bar_height = np.mean(model_rsq[roi][model][subj])
 
                                 bar_err = sem(model_rsq[roi][model][subj])
@@ -998,6 +1062,9 @@ class visualize_results(object):
                                 pl.bar(bar_position, bar_height, width=0.1, yerr=bar_err,edgecolor='black', label=model, color=model_colors[model])
                                 
                                 if i+1 == len(analysis_res.keys()):
+                                    group_rsq = np.concatenate(tuple([model_rsq[roi][model][k] for k in model_rsq[roi][model]]))#.flatten()   
+                                    group = ''.join([k for k in model_rsq[roi][model]])
+
                                     pl.figure(analysis+'group RSq', figsize=(8, 8), frameon=False)
                                     pl.ylabel(group+' R-squared')  
                                     pl.ylim((0,0.7))

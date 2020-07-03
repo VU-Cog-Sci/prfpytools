@@ -21,7 +21,8 @@ class results(object):
     
     def combine_results(self, results_folder,
                         timecourse_folder=None,
-                        ref_volume_path=None):
+                        ref_volume_path=None,
+                        calculate_CCrsq=True):
         
         an_list = [path for path in os.listdir(results_folder) if 'analysis' in path]
         subjects = [path[:7] for path in an_list]
@@ -60,9 +61,12 @@ class results(object):
   
             r_r = dict()
             r_r_full=dict()
-                        
-            mask = np.load(opj(results_folder,f"{current_an_infos[0]['subj']}_mask_space-{current_an_infos[0]['fitting_space']}{current_an_infos[0]['analysis_time']}.npy"))
-  
+            
+            try:            
+                mask = np.load(opj(results_folder,f"{current_an_infos[0]['subj']}_mask_space-{current_an_infos[0]['fitting_space']}{current_an_infos[0]['analysis_time']}.npy"))
+            except:
+                mask = np.load(opj(results_folder,f"{current_an_infos[0]['subj']}_mask_space-{current_an_infos[0]['fitting_space']}{current_an_infos[0]['previous_analysis_time']}.npy"))
+                
             for i, curr_an_info in enumerate(current_an_infos):
                 if os.path.exists(opj(timecourse_folder,f"{curr_an_info['subj']}_timecourse_space-{curr_an_info['fitting_space']}{curr_an_info['analysis_time']}.npy")):
                     merged_an_info["timecourse_analysis_time"] = curr_an_info["analysis_time"]
@@ -106,7 +110,7 @@ class results(object):
             
             #calculate cross-condition r-squared
             
-            if not merged_an_info["crossvalidate"]:
+            if not merged_an_info["crossvalidate"] and calculate_CCrsq:
                 for task in [tsk for tsk in all_task_names if tsk not in merged_an_info['task_names']]:
                     if task not in prf_stims:
                         prf_stims[task] = create_full_stim(screenshot_paths=[opj(timecourse_folder,f'task-{task}_screenshots')],
@@ -264,6 +268,8 @@ class results(object):
                     if isinstance(v2, np.ndarray) and v2.ndim == 2:
     
                         processed_results['RSq'][k2][mask] = np.copy(v2[:,-1])
+                        processed_results['RSq'][k2][mask][np.all(np.isfinite(v2),axis=-1)] = -1
+                        
                         processed_results['Eccentricity'][k2][mask] = np.sqrt(v2[:,0]**2+v2[:,1]**2)
                         processed_results['Polar Angle'][k2][mask] = np.arctan2(v2[:,1], v2[:,0])
                         processed_results['Amplitude'][k2][mask] = np.copy(v2[:,3])
