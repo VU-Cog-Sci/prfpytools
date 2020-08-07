@@ -10,8 +10,13 @@ import numpy as np
 import matplotlib.pyplot as pl
 import cortex
 import nibabel as nb
+from matplotlib import cm
 from collections import defaultdict as dd
 from copy import deepcopy
+from pathlib import Path
+from utils.postproc_utils import model_wrapper, create_model_rf_wrapper
+from utils.preproc_utils import create_full_stim
+#import seaborn as sns
 
 import time
 from scipy.stats import sem, ks_2samp, ttest_1samp, wilcoxon
@@ -22,12 +27,15 @@ from statsmodels.stats import weightstats
 from sklearn.linear_model import LinearRegression
 from nibabel.freesurfer.io import read_morph_data, write_morph_data
 from utils.preproc_utils import roi_mask
+#from builtins import input
 
 class visualize_results(object):
     def __init__(self, results):
         self.main_dict = deepcopy(results.main_dict) 
         self.get_spaces()
         self.get_subjects(self.main_dict)
+        
+        self.prf_stims = dict()
         
     def get_subjects(self, curr_dict, subject_list = []):
         for k, v in curr_dict.items():
@@ -129,7 +137,7 @@ class visualize_results(object):
                     pass    
         return
 
-    def set_alpha(self, only_models=None):
+    def set_alpha(self, only_models=None, ecc_min=0, ecc_max=5):
         self.only_models=only_models
         self.tc_min = dict()
         for space, space_res in self.main_dict.items():
@@ -141,8 +149,11 @@ class visualize_results(object):
                         p_r = subj_res['Processed Results']
                         models = p_r['RSq'].keys()
                                                 
-
-                        tc_stats = subj_res['Timecourse Stats']
+                        if space != 'fsaverage':
+                            tc_stats = subj_res['Timecourse Stats']
+                        else:
+                            tc_stats=dict()
+                            tc_stats['Mean'] = np.ones_like(p_r['RSq'][only_models[0]])
                        
                         #######Raw bold timecourse vein threshold
                         if subj == 'sub-006':
@@ -155,8 +166,8 @@ class visualize_results(object):
                             self.tc_min[subj] = 0
                             
                         ######limits for eccentricity
-                        self.ecc_min=0
-                        self.ecc_max=5
+                        self.ecc_min=ecc_min
+                        self.ecc_max=ecc_max
                         ######max prf size (implemented in surround and size plotting functions)
                         #w_max = 90                        
               
@@ -179,7 +190,124 @@ class visualize_results(object):
                        
         return
 
+
     def pycortex_plots(self, rois, rsq_thresh, analysis_names = 'all', subject_ids='all'):        
+        
+        self.click=0
+        #######PYCORTEX PICKERFUN
+        #function to plot prf and timecourses when clicking surface vertex in webgl        
+        def clicker_function(voxel,hemi,vertex):
+            print('recovering vertex index...')
+            #translate javascript indeing to python
+            lctm, rctm = cortex.utils.get_ctmmap(subj, method='mg2', level=9)
+            if hemi == 'left':
+                index = lctm[int(vertex)]
+                #print(f"{model} rsq {p_r['RSq'][model][index]}")
+            else:
+                index = len(lctm)+rctm[int(vertex)]
+                #print(f"{model} rsq {p_r['RSq'][model][index]}") 
+           
+            print('recovering data and model timecourses...')
+
+
+            #recover needed information
+            an_info = subj_res['analysis_info']
+            if 'timecourse_folder' not in an_info:
+                an_info['timecourse_folder'] = '/Users/marcoaqil/PRFMapping/PRFMapping-Deriv-hires/prfpy/FS7_results/timecourses/'
+
+            if not hasattr(self, 'prf_stim'):
+                self.prf_stim = create_full_stim(screenshot_paths=[opj(an_info['timecourse_folder'],f'task-{task}_screenshots') for task in an_info['task_names']],
+                            n_pix=an_info['n_pix'],
+                            discard_volumes=an_info['discard_volumes'],
+                            baseline_volumes_begin_end=an_info['baseline_volumes_begin_end'],
+                            dm_edges_clipping=an_info['dm_edges_clipping'],
+                            screen_size_cm=an_info['screen_size_cm'],
+                            screen_distance_cm=an_info['screen_distance_cm'],
+                            TR=an_info['TR'],
+                            task_names=an_info['task_names'])
+
+                
+            tc_paths = [str(path) for path in sorted(Path(an_info['timecourse_folder']).glob(f"{subj}_timecourse_space-{an_info['fitting_space']}_task-*_run-*.npy"))]    
+            mask_paths = [tc_path.replace('timecourse_','mask_') for tc_path in tc_paths]
+            #all_task_names = np.unique(np.array([elem.replace('task-','') for path in tc_paths for elem in path.split('_')  if 'task' in elem]))
+            all_runs = np.unique(np.array([int(elem.replace('run-','').replace('.npy','')) for path in tc_paths for elem in path.split('_')  if 'run' in elem]))
+
+            tc = dict()
+            
+            for task in an_info['task_names']:
+                if task not in self.prf_stims:
+                    self.prf_stims[task] = create_full_stim(screenshot_paths=[opj(an_info['timecourse_folder'],f'task-{task}_screenshots')],
+                            n_pix=an_info['n_pix'],
+                            discard_volumes=an_info['discard_volumes'],
+                            baseline_volumes_begin_end=an_info['baseline_volumes_begin_end'],
+                            dm_edges_clipping=an_info['dm_edges_clipping'],
+                            screen_size_cm=an_info['screen_size_cm'],
+                            screen_distance_cm=an_info['screen_distance_cm'],
+                            TR=an_info['TR'],
+                            task_names=[task])                    
+                    
+                tc_runs=[]
+                
+                for run in all_runs:
+                    mask_run = [np.load(mask_path) for mask_path in mask_paths if task in mask_path and f"run-{run}" in mask_path][0]
+                    masked_idx = np.sum(mask_run[:index])
+                    
+                    tc_runs.append([np.load(tc_path)[masked_idx] for tc_path in tc_paths if task in tc_path and f"run-{run}" in tc_path][0])
+                
+                tc[task] = np.mean(tc_runs, axis=0)
+                tc[task] *= (100/tc[task].mean(-1))[...,np.newaxis]
+                tc[task] += (tc[task].mean(-1)-np.median(tc[task][...,self.prf_stims[task].late_iso_dict[task]], axis=-1))[...,np.newaxis]
+                    
+            tc_full = np.concatenate(tuple([tc[task] for task in tc]), axis=0)
+            
+
+        
+            preds = dict()
+            prfs = dict()
+            for model in self.only_models:
+                gg = model_wrapper(model,
+                                   stimulus=self.prf_stim,
+                                   hrf=an_info['hrf'],
+                                   filter_predictions=an_info['filter_predictions'],
+                                   filter_type=an_info['filter_type'],
+                                   filter_params={x:an_info[x] for x in ["first_modes_to_remove",
+                                                                         "last_modes_to_remove_percent",
+                                                                         "window_length",
+                                                                         "polyorder",
+                                                                         "highpass",
+                                                                         "add_mean"]},
+                                   normalize_RFs=an_info['normalize_RFs'])
+                
+                params = subj_res['Results'][model][np.sum(subj_res['mask'][:index]),:-1]
+                preds[model] = gg.return_prediction(*list(params))
+                prfs[model] = create_model_rf_wrapper(model,self.prf_stim,params,an_info['normalize_RFs'])
+                
+            pl.ion()
+
+            if self.click==0:
+                self.f, self.axes = pl.subplots(1,2,figsize=(10, 5),frameon=False, gridspec_kw={'width_ratios': [4, 1]})
+                
+                self.f.set_tight_layout(True)
+            else:
+                self.axes[0].clear()
+                self.axes[1].clear()
+            
+            self.axes[0].plot(tc_full, label='Data', linestyle = ':', marker='s', markersize=2, color='black', linewidth=1)
+            
+            cmap = cm.get_cmap('tab10')
+            #for model in self.only_models:
+            self.axes[0].plot(preds['Norm_abcd'][0], color=cmap(3), label=f"Norm ({subj_res['Processed Results']['RSq']['Norm_abcd'][index]:.2f})")
+            self.axes[0].legend()
+            
+            self.axes[0].set_title(f"Vertex {index} timecourse")
+            
+            self.axes[1].imshow(prfs['Norm_abcd'][0])
+            self.axes[1].set_title(f"Vertex {index} pRF")
+            
+            self.click+=1
+          
+            return
+
           
         for space, space_res in self.main_dict.items():
             if 'fs' in space:
@@ -204,8 +332,10 @@ class visualize_results(object):
                         p_r = subj_res['Processed Results']
                         models = p_r['RSq'].keys()
                         
-                        tc_stats = subj_res['Timecourse Stats']
-                        mask = subj_res['mask']
+                        if space != 'fsaverage':
+                            tc_stats = subj_res['Timecourse Stats']
+                            mask = subj_res['mask']
+
 
                   
                         if rois != 'all':
@@ -255,17 +385,20 @@ class visualize_results(object):
                         ##START PYCORTEX VISUALIZATIONS                            
                         #data quality/stats cortex visualization 
                         if space == 'fsnative' and self.plot_stats_cortex and not plotted_stats[subj] :
+                            self.js_handle_stats = dict()
+                            
                             mean_ts_vert = cortex.Vertex2D(tc_stats['Mean'], mask*(tc_stats['Mean']>self.tc_min[subj]), subject=subj, cmap='Jet_2D_alpha')
                             var_ts_vert = cortex.Vertex2D(tc_stats['Variance'], mask*(tc_stats['Mean']>self.tc_min[subj]), subject=subj, cmap='Jet_2D_alpha')
                             tsnr_vert = cortex.Vertex2D(tc_stats['TSNR'], mask*(tc_stats['Mean']>self.tc_min[subj]), subject=subj, cmap='Jet_2D_alpha')
             
                             data_stats ={'mean':mean_ts_vert.raw, 'var':var_ts_vert.raw, 'tsnr':tsnr_vert.raw}
             
-                            self.js_handle_stats = cortex.webgl.show(data_stats, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)
+                            self.js_handle_stats[subj] = cortex.webgl.show(data_stats, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)
             
                             plotted_stats[subj] = True
                         
                         if self.plot_rois_cortex and not plotted_rois[subj]:
+                            self.js_handle_rois = dict()
                             
                             ds_rois = {}
                             data = np.zeros_like(mask).astype('int')
@@ -287,7 +420,7 @@ class visualize_results(object):
                             ds_rois['Wang2015Atlas'] = cortex.Vertex2D(data, data.astype('bool'), subj, cmap='Retinotopy_HSV_2x_alpha').raw
                             ds_rois['Custom ROIs'] = cortex.Vertex2D(custom_rois_data, custom_rois_data.astype('bool'), subj, cmap='Retinotopy_HSV_2x_alpha').raw 
                             
-                            self.js_handle_rois = cortex.webgl.show(ds_rois, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)
+                            self.js_handle_rois[subj] = cortex.webgl.show(ds_rois, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)
             
                             plotted_rois[subj] = True
                                                     
@@ -295,14 +428,19 @@ class visualize_results(object):
                             
             
                         if self.plot_rsq_cortex:              
-                            ds_rsq = {}
+                            ds_rsq = dict()
+                            self.js_handle_rsq = dict()
                             
                             best_model = np.argmax([p_r['RSq'][model] for model in ['Gauss','Norm_abcd','CSS','DoG']],axis=0)
 
                             ds_rsq['Best model'] = cortex.Vertex2D(best_model, p_r['Alpha']['all'], subject=subj,
                                                                           vmin2=rsq_thresh, vmax2=0.6, cmap='BROYG_2D').raw 
-                            ds_rsq['vidx'] = cortex.Vertex2D(np.arange(len(best_model)), p_r['Alpha']['all'], subject=subj,
-                                                                          vmin2=-10, vmax2=-1, cmap='Jet_2D_alpha').raw                            
+
+
+                            for model in self.only_models:
+                                ds_rsq[model] = cortex.Vertex2D(p_r['RSq'][model], p_r['Alpha'][model], subject=subj, 
+                                                                vmin=0.1, vmax=0.7, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw
+                                
                             if 'CSS' in models and 'Gauss' in self.only_models:
                                 ds_rsq['CSS - Gauss'] = cortex.Vertex2D(p_r['RSq']['CSS']-p_r['RSq']['Gauss'], p_r['Alpha']['all'], subject=subj,
                                                                           vmin=-0.05, vmax=0.05, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw   
@@ -330,7 +468,8 @@ class visualize_results(object):
                                 
                                 
                             if 'Processed Results' in self.main_dict['T1w'][analysis][subj] and self.compare_volume_surface:
-                                ds_rsq_comp={}
+                                self.js_handle_rsq_comp = dict()
+                                ds_rsq_comp = dict()
                                 volume_rsq = self.main_dict['T1w'][analysis][subj]['Processed Results']['RSq']['Norm']
                                 ref_img = nb.load(self.main_dict['T1w'][analysis][subj]['Results']['ref_img_path'])
                                 
@@ -343,35 +482,30 @@ class visualize_results(object):
                                                                           vmin=rsq_thresh, vmax=0.6, vmin2=0.05, vmax2=rsq_thresh, cmap='Jet_2D_alpha')
                                 ds_rsq_comp['Norm_abcd CV rsq (surface fit)'] = cortex.Vertex2D(p_r['RSq']['Norm_abcd'], p_r['RSq']['Norm_abcd'], subject=subj,
                                                                           vmin=rsq_thresh, vmax=0.6, vmin2=0.05, vmax2=rsq_thresh, cmap='Jet_2D_alpha').raw
-                                self.js_handle_rsq_comp = cortex.webgl.show(ds_rsq_comp, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)
+                                self.js_handle_rsq_comp[subj] = cortex.webgl.show(ds_rsq_comp, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)
                             
-                            #######PYCORTEX PICKERFUN
-                            lctm, rctm = cortex.utils.get_ctmmap(subj, method='mg2', level=9)
-                            def printer(voxel,hemi,vertex):
-                                for model in models:
-                                    if hemi == 'left':
-                                        print(f"{model} rsq {p_r['RSq'][model][lctm[int(vertex)]]}")
-                                    else:
-                                        print(f"{model} rsq {p_r['RSq'][model][len(lctm)+rctm[int(vertex)]]}")
-                                return
-                            self.js_handle_rsq = cortex.webgl.show(ds_rsq, pickerfun=printer, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True) 
+
+                            self.js_handle_rsq[subj] = cortex.webgl.show(ds_rsq, pickerfun=clicker_function, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True) 
                             
                         if self.plot_ecc_cortex:
-                            ds_ecc = {}
+                            ds_ecc = dict()
+                            self.js_handle_ecc = dict()
                             for model in self.only_models:
                                 ds_ecc[model] = cortex.Vertex2D(p_r['Eccentricity'][model], p_r['Alpha'][model], subject=subj, 
-                                                                vmin=self.ecc_min, vmax=self.ecc_max, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_r_2D_alpha').raw
+                                                                vmin=self.ecc_min, vmax=self.ecc_max-1, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_r_2D_alpha').raw
             
-                            self.js_handle_ecc = cortex.webgl.show(ds_ecc, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)
+                            self.js_handle_ecc[subj] = cortex.webgl.show(ds_ecc, pickerfun=clicker_function, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)
             
                         if self.plot_polar_cortex:
-                            ds_polar = {}
+                            ds_polar = dict()
+                            self.js_handle_polar = dict()
                             for model in self.only_models:
                                 ds_polar[model] = cortex.Vertex2D(p_r['Polar Angle'][model], p_r['Alpha'][model], subject=subj, 
                                                                   vmin2=rsq_thresh, vmax2=0.6, cmap='Retinotopy_HSV_2x_alpha').raw
                             
                             if 'Processed Results' in self.main_dict['T1w'][analysis][subj] and self.compare_volume_surface:
-                                ds_polar_comp={}
+                                ds_polar_comp = dict()
+                                self.js_handle_polar_comp = dict()
                                 volume_rsq = self.main_dict['T1w'][analysis][subj]['Processed Results']['RSq']['Norm_abcd']
                                 volume_polar = self.main_dict['T1w'][analysis][subj]['Processed Results']['Polar Angle']['Norm_abcd']
                                 ref_img = nb.load(self.main_dict['T1w'][analysis][subj]['Results']['ref_img_path'])                                
@@ -383,37 +517,42 @@ class visualize_results(object):
                                                                           vmin2=0.05, vmax2=rsq_thresh, cmap='Retinotopy_HSV_2x_alpha')
                                 ds_polar_comp['Norm_abcd CV polar (surface fit)'] = cortex.Vertex2D(p_r['Polar Angle']['Norm_abcd'], p_r['RSq']['Norm_abcd'], subject=subj,
                                                                           vmin2=0.05, vmax2=rsq_thresh, cmap='Retinotopy_HSV_2x_alpha').raw
-                                self.js_handle_polar_comp = cortex.webgl.show(ds_polar_comp, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)
+                                self.js_handle_polar_comp[subj] = cortex.webgl.show(ds_polar_comp, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)
 
                             
-                            self.js_handle_polar = cortex.webgl.show(ds_polar, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)
+                            self.js_handle_polar[subj] = cortex.webgl.show(ds_polar, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)
             
                         if self.plot_size_cortex:
-                            ds_size = {}
+                            ds_size = dict()
+                            self.js_handle_size = dict()
                             for model in self.only_models:
                                 ds_size[model] = cortex.Vertex2D(p_r['Size (fwhmax)'][model], p_r['Alpha'][model], subject=subj, 
                                                                  vmin=0, vmax=6, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw
                   
-                            self.js_handle_size = cortex.webgl.show(ds_size, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)
+                            self.js_handle_size[subj] = cortex.webgl.show(ds_size, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)
             
             
                         if self.plot_amp_cortex:
-                            ds_amp = {}
+                            ds_amp = dict()
+                            self.js_handle_amp = dict()
                             for model in self.only_models:
                                 ds_amp[model] = cortex.Vertex2D(p_r['Amplitude'][model], p_r['Alpha'][model], subject=subj, 
                                                                 vmin=-1, vmax=1, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw
             
-                            self.js_handle_amp = cortex.webgl.show(ds_amp, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)
+                            self.js_handle_amp[subj] = cortex.webgl.show(ds_amp, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)
                             
                         if self.plot_css_exp_cortex and 'CSS' in self.only_models:
-                            ds_css_exp = {}
+                            ds_css_exp = dict()
+                            self.js_handle_css_exp = dict()
                             ds_css_exp['CSS Exponent'] = cortex.Vertex2D(p_r['CSS Exponent']['CSS'], p_r['Alpha']['CSS'], subject=subj, 
                                                                          vmin=0, vmax=1, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw
             
-                            self.js_handle_css_exp = cortex.webgl.show(ds_css_exp, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)
+                            self.js_handle_css_exp[subj] = cortex.webgl.show(ds_css_exp, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)
                             
                         if self.plot_surround_size_cortex:
-                            ds_surround_size = {}
+                            ds_surround_size = dict()
+                            self.js_handle_surround_size = dict()
+                            
                             for model in self.only_models:
                                 if model == 'DoG':
                                     ds_surround_size['DoG'] = cortex.Vertex2D(p_r['Surround Size (fwatmin)']['DoG'], p_r['Alpha']['DoG'], subject=subj, 
@@ -422,20 +561,22 @@ class visualize_results(object):
                                     ds_surround_size[model] = cortex.Vertex2D(p_r['Surround Size (fwatmin)'][model], p_r['Alpha'][model], subject=subj, 
                                                                          vmin=0, vmax=50, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw                    
             
-                            self.js_handle_surround_size = cortex.webgl.show(ds_surround_size, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)    
+                            self.js_handle_surround_size[subj] = cortex.webgl.show(ds_surround_size, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)    
                             
                         if self.plot_norm_baselines_cortex:
-                            ds_norm_baselines = {}
+                            ds_norm_baselines = dict()
+                            self.js_handle_norm_baselines = dict()
+                            
                             for model in [model for model in self.only_models if 'Norm' in model]:
 
                                 ds_norm_baselines[f'{model} Param. B'] = cortex.Vertex2D(p_r['Norm Param. B'][model], p_r['Alpha'][model], subject=subj, 
-                                                                             vmin=0, vmax=10, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw                    
+                                                                             vmin=5, vmax=50, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw                    
                                 ds_norm_baselines[f'{model} Param. D'] = cortex.Vertex2D(p_r['Norm Param. D'][model], p_r['Alpha'][model], subject=subj, 
-                                                                             vmin=0, vmax=20, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw
+                                                                             vmin=15, vmax=90, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw
                                 ds_norm_baselines[f'{model} Ratio (B/D)'] = cortex.Vertex2D(p_r['Ratio (B/D)'][model], p_r['Alpha'][model], subject=subj, 
-                                                                             vmin=0, vmax=1, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw
+                                                                             vmin=0, vmax=1.5, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw
                             
-                            self.js_handle_norm_baselines = cortex.webgl.show(ds_norm_baselines, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)    
+                            self.js_handle_norm_baselines[subj] = cortex.webgl.show(ds_norm_baselines, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)    
         print('-----')                              
         return    
         
@@ -484,13 +625,91 @@ class visualize_results(object):
                     subprocess.call(["convert", "-trim", output_path, output_path])
                 except:
                     pass
+                
+    def project_to_fsaverage(self, models, parameters, analysis_names = 'all', subject_ids='all'):
+        if 'fsaverage' not in self.main_dict:
+            self.main_dict['fsaverage'] = dd(lambda:dd(lambda:dd(lambda:dd(dict))))
         
-    def quant_plots(self, x_parameter, y_parameter, rois, rsq_thresh, save_figures, analysis_names = 'all', subject_ids='all'):
+        if parameters[0] != 'RSq':
+            parameters.insert(0,'RSq')
+            
+        for space, space_res in self.main_dict.items():
+            if 'fsnative' in space:
+                if analysis_names == 'all':
+                    analyses = space_res.items()
+                else:
+                    analyses = [item for item in space_res.items() if item[0] in analysis_names] 
+                for analysis, analysis_res in analyses:       
+                    if subject_ids == 'all':
+                        subjects = [item for item in analysis_res.items()]
+                    else:
+                        subjects = [item for item in analysis_res.items() if item[0] in subject_ids]
+                    
+
+                    for model in models:
+                        fsaverage_rsq = dict()
+                        for parameter in parameters:
+                            
+                            fsaverage_param = dict()
+                            
+                            for subj, subj_res in subjects:
+                                print(space+" "+analysis+" "+subj)
+                                p_r = subj_res['Processed Results']
+                                
+                                lh_c = read_morph_data(opj(self.fs_dir, f"{subj}/surf/lh.curv"))
+                
+                                param = np.copy(p_r[parameter][model])
+                                
+                                lh_file_path = opj(self.fs_dir, f"{subj}/surf/lh.{''.join(filter(str.isalnum, parameter))}_{model}")
+                                rh_file_path = opj(self.fs_dir, f"{subj}/surf/rh.{''.join(filter(str.isalnum, parameter))}_{model}")
+
+                                write_morph_data(lh_file_path, param[:lh_c.shape[0]])
+                                write_morph_data(rh_file_path, param[lh_c.shape[0]:])
+                                
+                                rh_fsaverage_path = f"{rh_file_path.replace(subj,'fsaverage')}_{subj}"
+                                lh_fsaverage_path = f"{lh_file_path.replace(subj,'fsaverage')}_{subj}"
+                                
+                                os.system("export FREESURFER_HOME=/Applications/freesurfer/7.1.0/")
+                                os.system("source $FREESURFER_HOME/SetUpFreeSurfer.sh")
+                                os.system(f"export SUBJECTS_DIR={self.fs_dir}")
+                                os.system(f"mri_surf2surf --srcsubject {subj} --srcsurfval {lh_file_path} --trgsubject fsaverage --trgsurfval {lh_fsaverage_path} --hemi lh --trg_type curv")
+                                os.system(f"mri_surf2surf --srcsubject {subj} --srcsurfval {rh_file_path} --trgsubject fsaverage --trgsurfval {rh_fsaverage_path} --hemi rh --trg_type curv")
+
+                                lh_fsaverage_param = read_morph_data(lh_fsaverage_path)
+                                rh_fsaverage_param = read_morph_data(rh_fsaverage_path)
+                                fsaverage_param[subj] = np.concatenate((lh_fsaverage_param,rh_fsaverage_param))
+                                self.main_dict['fsaverage'][analysis][subj]['Processed Results'][parameter][model] = np.copy(fsaverage_param[subj])
+                                
+                                if parameter == 'RSq':
+                                    fsaverage_rsq[subj] = np.nan_to_num(np.concatenate((lh_fsaverage_param,rh_fsaverage_param)))
+                                    fsaverage_rsq[subj][fsaverage_rsq[subj]<0] = 0
+                                    
+                                    
+                            #fsaverage_group_average = np.ma.average(np.array([fsaverage_param[sid] for sid in fsaverage_param]),
+                            #                                      weights=np.array([fsaverage_rsq[sid] for sid in fsaverage_rsq]),
+                            #                                      axis=0)
+                            fsaverage_group_average = np.mean([fsaverage_param[sid] for sid in fsaverage_param], axis=0)
+                            
+                            for i in range(len(fsaverage_group_average)):
+                                fsaverage_group_average[i] = weightstats.DescrStatsW(np.array([fsaverage_param[sid][i] for sid in fsaverage_param]),
+                                                                                     weights=np.array([fsaverage_rsq[sid][i] for sid in fsaverage_rsq])).mean
+                            
+                            self.main_dict['fsaverage'][analysis]['fsaverage']['Processed Results'][parameter][model] = np.nan_to_num(fsaverage_group_average)
+                            
+                    for model in models:
+                        if 'Norm' in model:
+                            self.main_dict['fsaverage'][analysis]['fsaverage']['Processed Results']['Ratio (B/D)'][model] = self.main_dict['fsaverage'][analysis]['fsaverage']['Processed Results']['Norm Param. B'][model]/self.main_dict['fsaverage'][analysis]['fsaverage']['Processed Results']['Norm Param. D'][model]
+
+                        
+        return
+    
+    
+    def quant_plots(self, x_parameter, y_parameter, rois, rsq_thresh, save_figures, analysis_names = 'all', subject_ids='all', ylim=None):
         
         pl.rcParams.update({'font.size': 16})
         pl.rcParams.update({'pdf.fonttype':42})
         for space, space_res in self.main_dict.items():
-            if 'fs' in space:
+            if 'fsnative' in space:
                 if analysis_names == 'all':
                     analyses = space_res.items()
                 else:
@@ -537,9 +756,9 @@ class visualize_results(object):
                         # symbol['custom.LO'] = 'D'
                         # symbol['custom.TO'] = 'o'
                         
-                        #w_max=40
+                        w_max=40
     
-                        for roi in rois:
+                        for i, roi in enumerate(rois):
                             bar_position += 0.1
                             x_ticks.append(bar_position+0.05*(len(self.only_models)-1))
                             x_labels.append(roi.replace('custom.','')+'\n')   
@@ -551,6 +770,9 @@ class visualize_results(object):
                                 if 'sub' in subj:
                                     try:
                                         alpha[subj][model][roi] = (roi_mask(self.idx_rois[subj][roi], subj_res['Processed Results']['Alpha'][model]>rsq_thresh)) #* (subj_res['Processed Results']['Size (fwhmax)'][model]<w_max)
+                                        if y_parameter == 'Surround Size (fwatmin)':
+                                            alpha[subj][model][roi] *= (subj_res['Processed Results']['Surround Size (fwatmin)'][model]<w_max)
+                                    
                                     except Exception as e:
                                         print(e)
                                         #if ROI is not defined
@@ -558,7 +780,18 @@ class visualize_results(object):
                                         pass
                                         
                                     x_par[subj][model][roi] = subj_res['Processed Results'][x_parameter][model][alpha[subj][model][roi]]
-                                    y_par[subj][model][roi] = subj_res['Processed Results'][y_parameter][model][alpha[subj][model][roi]]
+                                    
+                                    try:
+                                        y_par[subj][model][roi] = subj_res['Processed Results'][y_parameter][model][alpha[subj][model][roi]]
+                                    except Exception as e:
+                                        print(e)
+                                        y_param_model = 'Norm_abcd'#input("y_parameter is not found in x_param model\n"
+                                              #"type alternative model name for y_parameter\n")
+                                        
+                                        y_par[subj][model][roi] = subj_res['Processed Results'][y_parameter][y_param_model][alpha[subj][model][roi]]
+
+                                        pass
+                                    
                                     rsq[subj][model][roi] = subj_res['Processed Results']['RSq'][model][alpha[subj][model][roi]]
     
                                 else:
@@ -573,16 +806,21 @@ class visualize_results(object):
                                     rsq[subj][model][roi] = np.copy(rsq_group)
                                     
                                 pl.figure(f"{subj} Mean {y_parameter}", figsize=(8, 8), frameon=False)
+ 
                                 pl.ylabel(f"{subj} Mean {y_parameter}")
                                                                            
                                 full_roi_stats = weightstats.DescrStatsW(y_par[subj][model][roi],
                                                         weights=rsq[subj][model][roi])
                                 
                                 bar_height = full_roi_stats.mean
-                                bar_err = (full_roi_stats.zconfint_mean(alpha=0.05) - bar_height).reshape(2,1)
-                                
-                                pl.bar(bar_position, bar_height, width=0.1, yerr=bar_err, 
+                                bar_err = np.abs(full_roi_stats.zconfint_mean(alpha=0.05) - bar_height).reshape(2,1)
+
+                                if len(self.only_models)>1:
+                                    pl.bar(bar_position, bar_height, width=0.1, yerr=bar_err, 
                                        edgecolor='black', label=model, color=model_colors[model])
+                                else:
+                                    pl.bar(bar_position, bar_height, width=0.1, yerr=bar_err, 
+                                       edgecolor='black', color=f"C{i+4}")                                        
                                 
                                 bar_position += 0.1
 
@@ -591,13 +829,18 @@ class visualize_results(object):
                                 by_label = dict(zip(labels, handles))
                                 pl.legend(by_label.values(), by_label.keys())
                                 if save_figures:
-                                    pl.savefig(f"/Users/marcoaqil/PRFMapping/Figures/{subj} Mean {y_parameter}.pdf", dpi=300, bbox_inches='tight')
+                                    pl.savefig(f"/Users/marcoaqil/PRFMapping/Figures/{subj} {model} Mean {y_parameter.replace('/','')}.pdf", dpi=300, bbox_inches='tight')
 
                                 
                                 ###################
                                 #x vs y param by ROI
                                 pl.figure(f"{subj} {roi.replace('custom.','')} {y_parameter} VS {x_parameter}", figsize=(8, 8), frameon=False)
-                                    
+                                #pl.gca().set_yscale('log')
+                                #pl.gca().set_xscale('log')
+                                
+                                if ylim != None:
+                                    pl.ylim(ylim[0],ylim[1])
+                                
                                 x_par_sorted = np.argsort(x_par[subj][model][roi])
                                 split_x_par_bins = np.array_split(x_par_sorted, 8)
                                
@@ -611,10 +854,14 @@ class visualize_results(object):
                                 try:
                                     WLS = LinearRegression()
                                     WLS.fit(x_par[subj][model][roi].reshape(-1, 1), y_par[subj][model][roi], sample_weight=rsq[subj][model][roi])
-                                
-                                    p=pl.plot([ss.mean for ss in x_par_stats[subj][model][roi]],
-                                        WLS.predict(np.array([ss.mean for ss in x_par_stats[subj][model][roi]]).reshape(-1, 1)))
-                                        #color=model_colors[model])
+                                    if len(self.only_models)>1:
+                                        p=pl.plot([ss.mean for ss in x_par_stats[subj][model][roi]],
+                                        WLS.predict(np.array([ss.mean for ss in x_par_stats[subj][model][roi]]).reshape(-1, 1)),
+                                        color=model_colors[model])
+                                    else:
+                                        p=pl.plot([ss.mean for ss in x_par_stats[subj][model][roi]],
+                                        WLS.predict(np.array([ss.mean for ss in x_par_stats[subj][model][roi]]).reshape(-1, 1)),
+                                        color=f"C{i+4}")                                        
                                             
                                     print(roi+" "+model+" "+str(WLS.score(x_par[subj][model][roi].reshape(-1, 1), y_par[subj][model][roi], sample_weight=rsq[subj][model][roi])))
                                 except Exception as e:
@@ -622,11 +869,20 @@ class visualize_results(object):
                                     pass
                                 
                                 try:
-                                    pl.errorbar([ss.mean for ss in x_par_stats[subj][model][roi]],
-                                    [ss.mean for ss in y_par_stats[subj][model][roi]],
-                                    yerr=np.array([np.abs(ss.zconfint_mean(alpha=0.05)-ss.mean) for ss in y_par_stats[subj][model][roi]]).T,
-                                    xerr=np.array([np.abs(ss.zconfint_mean(alpha=0.05)-ss.mean) for ss in x_par_stats[subj][model][roi]]).T,
-                                    fmt='s',  mec='black', label=model, color=p[-1].get_color())#, mfc=model_colors[model], ecolor=model_colors[model])
+                                    if len(self.only_models)>1:
+                                        pl.errorbar([ss.mean for ss in x_par_stats[subj][model][roi]],
+                                        [ss.mean for ss in y_par_stats[subj][model][roi]],
+                                        yerr=np.array([np.abs(ss.zconfint_mean(alpha=0.05)-ss.mean) for ss in y_par_stats[subj][model][roi]]).T,
+                                        xerr=np.array([np.abs(ss.zconfint_mean(alpha=0.05)-ss.mean) for ss in x_par_stats[subj][model][roi]]).T,
+                                        fmt='s',  mec='black', label=model, color=p[-1].get_color())#, mfc=model_colors[model], ecolor=model_colors[model])
+                                    else:
+                                        pl.errorbar([ss.mean for ss in x_par_stats[subj][model][roi]],
+                                        [ss.mean for ss in y_par_stats[subj][model][roi]],
+                                        yerr=np.array([np.abs(ss.zconfint_mean(alpha=0.05)-ss.mean) for ss in y_par_stats[subj][model][roi]]).T,
+                                        xerr=np.array([np.abs(ss.zconfint_mean(alpha=0.05)-ss.mean) for ss in x_par_stats[subj][model][roi]]).T,
+                                        fmt='s',  mec='black', label=roi.replace('custom.',''), color=p[-1].get_color())#, mfc=model_colors[model], ecolor=model_colors[model])
+                                   
+                                        
                                 except Exception as e:
                                     print(e)
                                     pass
@@ -636,13 +892,17 @@ class visualize_results(object):
                             pl.ylabel(f"{subj} {roi.replace('custom.','')} {y_parameter}")
                             pl.legend(loc=0)
                             if save_figures:
-                                pl.savefig(f"/Users/marcoaqil/PRFMapping/Figures/{subj} {roi.replace('custom.','')} {y_parameter} VS {x_parameter}.pdf", dpi=300, bbox_inches='tight')
+                                pl.savefig(f"/Users/marcoaqil/PRFMapping/Figures/{subj} {roi.replace('custom.','')} {y_parameter.replace('/','')} VS {x_parameter.replace('/','')}.pdf", dpi=300, bbox_inches='tight')
 
 
                                 
                         for model in self.only_models:
                             pl.figure(f"{subj} {model} {y_parameter} VS {x_parameter}", figsize=(8, 8), frameon=False)
-                            #pl.ylim(1.8,11.5)
+                            #pl.gca().set_yscale('log')
+                            #pl.gca().set_xscale('log')
+                            
+                            if ylim != None:
+                                pl.ylim(ylim[0],ylim[1])
                             #pl.xlim(0.2,4)
                             for i, roi in enumerate(rois):
                                 try:
@@ -672,7 +932,7 @@ class visualize_results(object):
                             pl.ylabel(f"{subj} {model} {y_parameter}")
                             pl.legend(loc=0)
                             if save_figures:
-                                pl.savefig(f"/Users/marcoaqil/PRFMapping/Figures/{subj} {model} {y_parameter} VS {x_parameter}.pdf", dpi=300, bbox_inches='tight')
+                                pl.savefig(f"/Users/marcoaqil/PRFMapping/Figures/{subj} {model} {y_parameter.replace('/','')} VS {x_parameter.replace('/','')}.pdf", dpi=300, bbox_inches='tight')
 
 
         return
@@ -1024,9 +1284,8 @@ class visualize_results(object):
                         # binned eccentricity vs other parameters relationships       
             
                         #model_colors = {'Gauss':'blue','CSS':'orange','DoG':'green','Norm':'red'}
-                        import matplotlib
 
-                        cmap = matplotlib.cm.get_cmap('tab10')
+                        cmap = cm.get_cmap('tab10')
 
                         for roi in rois:
                             bar_position=last_bar_position+0.1

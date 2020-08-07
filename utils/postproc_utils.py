@@ -12,6 +12,7 @@ import matplotlib.image as mpimg
 from copy import deepcopy
 from prfpy.model import Iso2DGaussianModel, Norm_Iso2DGaussianModel, DoG_Iso2DGaussianModel, CSS_Iso2DGaussianModel
 from utils.preproc_utils import create_full_stim
+from prfpy.rf import gauss2D_iso_cart
 
 opj = os.path.join
 
@@ -210,6 +211,8 @@ class results(object):
  
         
         for an, an_res in combined_results.items():
+            an_res['analysis_info']['timecourse_folder'] = timecourse_folder
+            
             subj = an_res['analysis_info']['subj']
             space = an_res['analysis_info']['fitting_space']
             reduced_an_name = an.replace(f"{subj}_",'')
@@ -250,6 +253,7 @@ class results(object):
         return
         
 
+
     
     
     def process_results(self, results_dict, return_norm_profiles=False):
@@ -268,7 +272,7 @@ class results(object):
                     if isinstance(v2, np.ndarray) and v2.ndim == 2:
     
                         processed_results['RSq'][k2][mask] = np.copy(v2[:,-1])
-                        processed_results['RSq'][k2][mask][np.all(np.isfinite(v2),axis=-1)] = -1
+                        processed_results['RSq'][k2][mask][np.all(np.isfinite(v2),axis=-1)] = 0
                         
                         processed_results['Eccentricity'][k2][mask] = np.sqrt(v2[:,0]**2+v2[:,1]**2)
                         processed_results['Polar Angle'][k2][mask] = np.arctan2(v2[:,1], v2[:,0])
@@ -278,13 +282,17 @@ class results(object):
                             processed_results['CSS Exponent'][k2][mask] =  np.copy(v2[:,5])
     
                         if k2 == 'DoG':
+                            processed_results['Surround Amplitude'][k2][mask] = np.copy(v2[:,5])
                             (processed_results['Size (fwhmax)'][k2][mask],
                             processed_results['Surround Size (fwatmin)'][k2][mask]) = fwhmax_fwatmin(k2, v2, normalize_RFs)
+                            processed_results['Suppression Index (full)'][k2][mask] = (v2[:,5] * v2[:,6]**2)/(v2[:,3] * v2[:,2]**2)
     
                         elif 'Norm' in k2:
+                            processed_results['Surround Amplitude'][k2][mask] = np.copy(v2[:,5])
                             processed_results['Norm Param. B'][k2][mask] = np.copy(v2[:,7])
                             processed_results['Norm Param. D'][k2][mask] = np.copy(v2[:,8])
                             processed_results['Ratio (B/D)'][k2][mask] = v2[:,7]/v2[:,8]
+                            processed_results['Suppression Index (full)'][k2][mask] = (v2[:,5] * v2[:,6]**2)/(v2[:,3] * v2[:,2]**2)
     
                             if return_norm_profiles and len(mask.shape)<2:
                                 processed_results['pRF Profiles'][k2] = np.zeros((mask.shape[0],1000))
@@ -322,15 +330,40 @@ def mergedict(li):
             
     return result
 
-def model_wrapper(key,**kwargs):
-    if key == 'Gauss':
+def model_wrapper(model,**kwargs):
+    if model == 'Gauss':
         return Iso2DGaussianModel(**kwargs)
-    elif key == 'DoG':
+    elif model == 'DoG':
         return DoG_Iso2DGaussianModel(**kwargs)
-    elif key == 'CSS':
+    elif model == 'CSS':
         return CSS_Iso2DGaussianModel(**kwargs)
-    elif 'Norm' in key:
+    elif 'Norm' in model:
         return Norm_Iso2DGaussianModel(**kwargs)
+
+def create_model_rf_wrapper(model,stim,params,normalize_RFs=False):
+    prf = params[3]*np.rot90(gauss2D_iso_cart(x=stim.x_coordinates[...,np.newaxis],
+                               y=stim.y_coordinates[...,np.newaxis],
+                               mu=(params[0], params[1]),
+                               sigma=params[2],
+                              normalize_RFs=normalize_RFs).T, axes=(1,2))
+    if model == 'CSS':
+        prf **= params[5]
+    elif model == 'DoG':
+        prf -= params[5]*np.rot90(gauss2D_iso_cart(x=stim.x_coordinates[...,np.newaxis],
+                               y=stim.y_coordinates[...,np.newaxis],
+                               mu=(params[0], params[1]),
+                               sigma=params[6],
+                              normalize_RFs=normalize_RFs).T, axes=(1,2))
+    elif 'Norm' in model:
+        prf += params[7]
+        prf /= (params[5]*np.rot90(gauss2D_iso_cart(x=stim.x_coordinates[...,np.newaxis],
+                               y=stim.y_coordinates[...,np.newaxis],
+                               mu=(params[0], params[1]),
+                               sigma=params[6],
+                              normalize_RFs=normalize_RFs).T, axes=(1,2)) + params[8])
+        prf -= params[7]/params[8]
+
+    return prf
     
 
 def create_retinotopy_colormaps():
