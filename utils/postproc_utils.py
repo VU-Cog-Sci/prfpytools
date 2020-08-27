@@ -13,6 +13,7 @@ from copy import deepcopy
 from prfpy.model import Iso2DGaussianModel, Norm_Iso2DGaussianModel, DoG_Iso2DGaussianModel, CSS_Iso2DGaussianModel
 from utils.preproc_utils import create_full_stim
 from prfpy.rf import gauss2D_iso_cart
+from prfpy.stimulus import PRFStimulus2D
 
 opj = os.path.join
 
@@ -23,7 +24,8 @@ class results(object):
     def combine_results(self, results_folder,
                         timecourse_folder=None,
                         ref_volume_path=None,
-                        calculate_CCrsq=True):
+                        calculate_CCrsq=False,
+                        calculate_noise_ceiling=False):
         
         an_list = [path for path in os.listdir(results_folder) if 'analysis' in path]
         subjects = [path[:7] for path in an_list]
@@ -58,7 +60,7 @@ class results(object):
         #this is to combine multiple iterations (max) and different models fit on the same fold
         for an_name in tqdm(unique_an_names):
             current_an_infos = np.array(an_infos)[np.array(an_names)==an_name]
-            merged_an_info = mergedict(current_an_infos)
+            merged_an_info = mergedict_AND(current_an_infos)
   
             r_r = dict()
             r_r_full=dict()
@@ -108,6 +110,50 @@ class results(object):
             mask_paths = [tc_path.replace('timecourse_','mask_') for tc_path in tc_paths]
             all_task_names = np.unique(np.array([elem.replace('task-','') for path in tc_paths for elem in path.split('_')  if 'task' in elem]))
             all_runs = np.unique(np.array([int(elem.replace('run-','').replace('.npy','')) for path in tc_paths for elem in path.split('_')  if 'run' in elem]))
+            
+            if merged_an_info["crossvalidate"] and calculate_noise_ceiling:
+                prf_stim = create_full_stim(screenshot_paths=[opj(timecourse_folder,f'task-{task}_screenshots') for task in merged_an_info['task_names']],
+                                n_pix=merged_an_info['n_pix'],
+                                discard_volumes=merged_an_info['discard_volumes'],
+                                baseline_volumes_begin_end=merged_an_info['baseline_volumes_begin_end'],
+                                dm_edges_clipping=merged_an_info['dm_edges_clipping'],
+                                screen_size_cm=merged_an_info['screen_size_cm'],
+                                screen_distance_cm=merged_an_info['screen_distance_cm'],
+                                TR=merged_an_info['TR'],
+                                task_names=merged_an_info['task_names'])
+                
+                tc_test = dict()
+                tc_fit = dict()
+           
+                
+                for task in merged_an_info['task_names']:
+                    tc_runs=[]
+                    
+                    for run in all_runs:
+                        mask_run = [np.load(mask_path) for mask_path in mask_paths if task in mask_path and f"run-{run}" in mask_path][0]
+
+                        tc_run = ([np.load(tc_path) for tc_path in tc_paths if task in tc_path and f"run-{run}" in tc_path][0])
+                        
+                        tc_run *= (100/tc_run.mean(-1))[...,np.newaxis]
+                        tc_run += (tc_run.mean(-1)-np.median(tc_run[...,prf_stim.late_iso_dict[task]], axis=-1))[...,np.newaxis]
+                        
+                        tc_runs_unmasked = np.zeros((mask_run.shape[0], tc_run.shape[-1]))
+                        tc_runs_unmasked[mask_run] = np.copy(tc_run)
+                        tc_runs.append(tc_runs_unmasked)
+                                           
+                    
+                    
+                    tc_test[task] = np.mean([tc_runs[i] for i in all_runs if i not in merged_an_info['fit_runs']], axis=0)
+                    tc_fit[task] = np.mean([tc_runs[i] for i in all_runs if i in merged_an_info['fit_runs']], axis=0)                
+
+                
+                tc_all_test = np.concatenate(tuple([tc_test[task] for task in tc_test]), axis=-1)
+                tc_all_fit = np.concatenate(tuple([tc_fit[task] for task in tc_fit]), axis=-1)
+                
+                noise_ceiling = 1-np.sum((tc_all_test-tc_all_fit)**2, axis=-1)/(tc_all_test.shape[-1]*tc_all_test.var(-1))
+                
+                r_r_full[f"Noise Ceiling (RSq)"] = np.copy(noise_ceiling)
+                
             
             #calculate cross-condition r-squared
             
@@ -191,7 +237,7 @@ class results(object):
             current_fold_infos = [unique_an_results[fold]['analysis_info'] for fold in folds if key in fold]
             for res in unique_an_results[folds[0]]:
                 if 'info' in res:
-                    combined_results[key+'_fit-runs-5050CVmedian'][res] = mergedict(current_fold_infos)
+                    combined_results[key+'_fit-runs-5050CVmedian'][res] = mergedict_AND(current_fold_infos)
                 elif 'mask' in res:
                     combined_results[key+'_fit-runs-5050CVmedian'][res] = np.product([unique_an_results[fold][res] for fold in folds if key in fold], axis=0).astype('bool')
                 else:
@@ -263,6 +309,13 @@ class results(object):
             elif 'Results' in v and 'Processed Results' not in v:
                 mask = v['mask']
                 normalize_RFs = v['analysis_info']['normalize_RFs']
+                #for suppression index computation
+                prf_stim = PRFStimulus2D(screen_size_cm=v['analysis_info']['screen_size_cm'],
+                             screen_distance_cm=v['analysis_info']['screen_distance_cm'],
+                             design_matrix=np.zeros((v['analysis_info']['n_pix'],v['analysis_info']['n_pix'],10)),
+                             TR=1.0)
+                
+                aperture = ((prf_stim.x_coordinates**2+prf_stim.y_coordinates**2)**0.5 < (prf_stim.screen_size_degrees/2))
     
                 #store processed results in nested default dictionary
                 processed_results = dd(lambda:dd(lambda:np.zeros(mask.shape)))
@@ -286,6 +339,8 @@ class results(object):
                             (processed_results['Size (fwhmax)'][k2][mask],
                             processed_results['Surround Size (fwatmin)'][k2][mask]) = fwhmax_fwatmin(k2, v2, normalize_RFs)
                             processed_results['Suppression Index (full)'][k2][mask] = (v2[:,5] * v2[:,6]**2)/(v2[:,3] * v2[:,2]**2)
+                            
+                            processed_results['Suppression Index'][k2][mask] = suppression_index(prf_stim, aperture, v2, normalize_RFs)
     
                         elif 'Norm' in k2:
                             processed_results['Surround Amplitude'][k2][mask] = np.copy(v2[:,5])
@@ -293,6 +348,9 @@ class results(object):
                             processed_results['Norm Param. D'][k2][mask] = np.copy(v2[:,8])
                             processed_results['Ratio (B/D)'][k2][mask] = v2[:,7]/v2[:,8]
                             processed_results['Suppression Index (full)'][k2][mask] = (v2[:,5] * v2[:,6]**2)/(v2[:,3] * v2[:,2]**2)
+                            
+                            processed_results['Suppression Index'][k2][mask] = suppression_index(prf_stim, aperture, v2, normalize_RFs)
+                            
     
                             if return_norm_profiles and len(mask.shape)<2:
                                 processed_results['pRF Profiles'][k2] = np.zeros((mask.shape[0],1000))
@@ -309,8 +367,11 @@ class results(object):
 
                         ####copy beta and cross-cond rsq to processed results
                             #####################
-                    elif isinstance(v2, np.ndarray) and v2.ndim == 1:
+                    elif isinstance(v2, np.ndarray) and v2.ndim == 1 and 'model' in k2:
                         processed_results[k2.split('_model-')[0]][k2.split('_model-')[1]][mask] = np.copy(v2)
+                        
+                    elif isinstance(v2, np.ndarray) and v2.ndim == 1 and 'Noise Ceiling' in k2:
+                        processed_results['Noise Ceiling'][k2][mask] = np.copy(v2)
 
 
                         
@@ -319,9 +380,33 @@ class results(object):
         return
 
 
+# def mergedict_mean(dict1):
+#     """
+#     mean type merger (take mean of common dictionary elements)
+#     """
+#     mean_dict = 
+#     for k, v in dict1.items():
+#         if (isinstance(dict1[k], dict) or isinstance(dict1[k], dd)):
+            
+#             mergedict_mean(dict1[k])
+#         else:
+            
+            
+def mergedict_OR(dict1, dict2):
+    """
+    Logical OR type merger (update or add elements of dictionaries)
+    """
+    for k, v in dict2.items():
+        if k in dict1 and (isinstance(dict1[k], dict) or isinstance(dict1[k], dd)):
+            mergedict_OR(dict1[k], dict2[k])
+        else:
+            dict1[k] = dict2[k]
 
 
-def mergedict(li):
+def mergedict_AND(li):
+    """
+    Logical AND type merger (only keep common elements of dictionaries)
+    """
     result = deepcopy(li[0])
     for element in li:
         for key in element:
@@ -364,7 +449,24 @@ def create_model_rf_wrapper(model,stim,params,normalize_RFs=False):
         prf -= params[7]/params[8]
 
     return prf
+
+def suppression_index(stim, aperture, params, normalize_RFs=False):
+    prf = params[:,3][...,np.newaxis,np.newaxis]*np.rot90(gauss2D_iso_cart(x=stim.x_coordinates[...,np.newaxis],
+                               y=stim.y_coordinates[...,np.newaxis],
+                               mu=(params[:,0], params[:,1]),
+                               sigma=params[:,2],
+                              normalize_RFs=normalize_RFs).T, axes=(1,2))
     
+    srf = params[:,5][...,np.newaxis,np.newaxis]*np.rot90(gauss2D_iso_cart(x=stim.x_coordinates[...,np.newaxis],
+                               y=stim.y_coordinates[...,np.newaxis],
+                               mu=(params[:,0], params[:,1]),
+                               sigma=params[:,6],
+                              normalize_RFs=normalize_RFs).T, axes=(1,2))
+  
+    prf[:,~aperture] = 0
+    srf[:,~aperture] = 0
+ 
+    return srf.sum(axis=(1,2)) / prf.sum(axis=(1,2))   
 
 def create_retinotopy_colormaps():
     hue, alpha = np.meshgrid(np.linspace(
