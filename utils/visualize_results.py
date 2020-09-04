@@ -19,7 +19,7 @@ from utils.preproc_utils import create_full_stim
 #import seaborn as sns
 
 import time
-from scipy.stats import sem, ks_2samp, ttest_1samp, wilcoxon, pearsonr
+from scipy.stats import sem, ks_2samp, ttest_1samp, wilcoxon, pearsonr, ttest_ind, ttest_rel
 
 opj = os.path.join
 
@@ -839,13 +839,10 @@ class visualize_results(object):
     
     def quant_plots(self, x_parameter, y_parameter, rois, rsq_thresh, save_figures, 
                     analysis_names = 'all', subject_ids='all', ylim=None,
-                    x_param_model=None):
+                    x_param_model=None, violin=False, scatter=False, diff_gauss=False,
+                    means_only=False, stats_on_plot=False):
         """
-
-        Note: when plotting two different model parameters as function of each other,
-        (e.g. CSS exponent as function of Norm param D)
-        use the x_param_model argument to select appropriately the model from 
-        which the x parameter is taken.
+        
 
         Parameters
         ----------
@@ -867,16 +864,41 @@ class visualize_results(object):
             DESCRIPTION. The default is None.
         x_param_model : TYPE, optional
             DESCRIPTION. The default is None.
+        violin : TYPE, optional
+            DESCRIPTION. The default is False.
+        scatter : TYPE, optional
+            DESCRIPTION. The default is False.
+        diff_gauss : TYPE, optional
+            DESCRIPTION. The default is False.
+        means_only : bool, optional
+            whether to only plot the means/distribs of y parameter, without y as function of x. The default is False.
+        stats_on_plot : TYPE, optional
+            DESCRIPTION. The default is False.
 
         Returns
         -------
-        None.
+        mid : TYPE
+            DESCRIPTION.
 
         """
-        pl.rcParams.update({'font.size': 20})
+       
+        pl.rcParams.update({'font.size': 22})
         pl.rcParams.update({'pdf.fonttype':42})
+        pl.rcParams.update({'figure.max_open_warning': 0})
+        pl.rcParams['axes.spines.right'] = False
+        pl.rcParams['axes.spines.top'] = False
+
         for space, space_res in self.main_dict.items():
             if 'fsnative' in space:
+                
+                #upsampling correction: fsnative has approximately 3 times as many datapoints as original
+                upsampling_corr_factor = 3
+                #surrounds larger than this are excluded from surround size calculations
+                w_max=40
+                #bar or violin width
+                bar_or_violin_width = 0.3
+                
+                        
                 if analysis_names == 'all':
                     analyses = [item for item in space_res.items()]
                 else:
@@ -916,20 +938,9 @@ class visualize_results(object):
             
                         model_colors = {'Gauss':'blue','CSS':'orange','DoG':'green','Norm_abcd':'red'}
                                                 
-                        
-                        w_max=40
+
     
-                        for i, roi in enumerate(rois):
-                            if i>0:
-                                bar_position += 0.2
-                                
-                            label_position = bar_position+0.05*(len(self.only_models)-1)                     
-                            if 'hV4' in roi:
-                                label_position+=0.1
-                                
-                            x_ticks.append(label_position)
-                            x_labels.append(roi.replace('custom.','')+'\n')   
-                            
+                        for i, roi in enumerate(rois):                              
                             for model in self.only_models:                                
 
                                 
@@ -990,9 +1001,14 @@ class visualize_results(object):
                                             
                                             #remove nans and infinities
                                             alpha[analysis][subj][model][roi] *= np.isfinite(subj_res['Processed Results'][x_parameter][model])                                    
-                                            alpha[analysis][subj][model][roi] *= np.isfinite(subj_res['Processed Results'][y_parameter][model])    
+                                            alpha[analysis][subj][model][roi] *= np.isfinite(subj_res['Processed Results'][y_parameter][model])
                                             
-                                            y_par[analysis][subj][model][roi] = (subj_res['Processed Results'][y_parameter][model][alpha[analysis][subj][model][roi]])#-subj_res['Processed Results'][y_parameter]['Gauss'][alpha[analysis][subj][model][roi]]
+                                            if diff_gauss:
+                                                y_par[analysis][subj][model][roi] = (subj_res['Processed Results'][y_parameter][model][alpha[analysis][subj][model][roi]])-subj_res['Processed Results'][y_parameter]['Gauss'][alpha[analysis][subj][model][roi]]
+                                            else:
+                                                y_par[analysis][subj][model][roi] = (subj_res['Processed Results'][y_parameter][model][alpha[analysis][subj][model][roi]])
+                                            
+                                            
                                             x_par[analysis][subj][model][roi] = subj_res['Processed Results'][x_parameter][model][alpha[analysis][subj][model][roi]]
                                             
                                             #set negative ccrsq and rsq to zero
@@ -1047,7 +1063,19 @@ class visualize_results(object):
                                     rsq[analysis][subj][model][roi] = np.hstack(tuple([rsq[an][subj][model][roi] for an in ans]))
                                     
 
-                                    
+                        for i, roi in enumerate(rois):
+                            if i>0:
+                                bar_position += (2*bar_or_violin_width)
+                                
+                            label_position = bar_position+(0.5*bar_or_violin_width)*(len(self.only_models)-1)                     
+                            if 'hV4' in roi and len(self.only_models)>1:
+                                label_position+=bar_or_violin_width
+                                
+                            x_ticks.append(label_position)
+                            x_labels.append(roi.replace('custom.','')+'\n')   
+                            
+                            for model in self.only_models:    
+                                
                                     
                                 pl.figure(f"{analysis} {subj} Mean {y_parameter}", figsize=(8, 8), frameon=False)
  
@@ -1060,16 +1088,216 @@ class visualize_results(object):
                                                         weights=rsq[analysis][subj][model][roi])
                                 
                                 bar_height = full_roi_stats.mean
-                                bar_err = np.abs(full_roi_stats.zconfint_mean(alpha=0.05) - bar_height).reshape(2,1)
+                                bar_err = np.abs(full_roi_stats.zconfint_mean(alpha=0.05/upsampling_corr_factor) - bar_height).reshape(2,1)
+                                
 
                                 if len(self.only_models)>1:
-                                    pl.bar(bar_position, bar_height, width=0.1, yerr=bar_err, 
-                                       edgecolor='black', label=model, color=model_colors[model])
+                                    if violin:
+                                        viol_plot = pl.violinplot(y_par[analysis][subj][model][roi], [bar_position],
+                                                      widths=[bar_or_violin_width], showextrema=False, showmeans=True, showmedians=True)
+                                        
+                                        for viol in viol_plot['bodies']:
+                                            viol.set_facecolor(model_colors[model])
+                                            viol.set_edgecolor('black')
+                                            viol.set_alpha(1.0)
+                                            
+                                        viol_plot['cmeans'].set_color('black')
+                                        viol_plot['cmedians'].set_color('white')
+                                        
+                                        # bp = pl.boxplot(y_par[analysis][subj][model][roi], positions=[bar_position], showfliers=False, showmeans=True,
+                                        #                 widths=bar_or_violin_width, meanline=True, patch_artist=True)
+                                        # for box in bp['boxes']:
+                                        #     # change outline color
+                                        #     box.set(color='black')
+                                        #     # change fill color
+                                        #     box.set(facecolor = model_colors[model])
+                                        
+                                        # ## change color and linewidth of the whiskers
+                                        # for whisker in bp['whiskers']:
+                                        #     whisker.set(color=model_colors[model])
+                                        
+                                        # ## change color and linewidth of the caps
+                                        # for cap in bp['caps']:
+                                        #     cap.set(color='black')
+                                        
+                                        # ## change color and linewidth of the medians
+                                        # for median in bp['medians']:
+                                        #     median.set(color='white')
+                                            
+                                        # for mean in bp['means']:
+                                        #     mean.set(color='black')
+                                            
+                                            
+                                        bar_height = y_par[analysis][subj][model][roi].max()
+                                    else:
+                                        
+                                        pl.bar(bar_position, bar_height, width=bar_or_violin_width, yerr=bar_err, 
+                                               edgecolor='black', label=model, color=model_colors[model])
+                                    
+
+                                    
+                                    
+                                    
+                                    if stats_on_plot:
+                                        if diff_gauss:
+                                            base_model = 'Gauss'
+                                        else:
+                                            base_model = [m for m in self.only_models if 'Norm' in m][0]
+
+                                        
+                                        #do model comparison stats only once, at the last model
+                                        if self.only_models.index(model) == (len(self.only_models)-1):
+
+                                            if violin:
+                                                text_height = np.max([y_par[analysis][subj][m][roi].max() for m in self.only_models])
+                                            else:
+                                                text_height = np.max([y_par[analysis][subj][m][roi].mean()+sem(y_par[analysis][subj][m][roi])*upsampling_corr_factor for m in self.only_models])
+                                            
+                                            y1, y2 = pl.gca().get_window_extent().get_points()[:, 1]
+                                            window_size_points = y2-y1
+                                            
+                                            if ylim!=None:
+                                                axis_height = ylim[1]-ylim[0]
+                                                #16 is font size
+                                                text_distance = 1.5*(16*axis_height)/window_size_points
+                                            else:
+                                                axis_height = np.max([[y_par[analysis][subj][m][r].mean()+sem(y_par[analysis][subj][m][r])*upsampling_corr_factor for m in self.only_models] for r in rois])-\
+                                                                np.min([[y_par[analysis][subj][m][r].mean()-sem(y_par[analysis][subj][m][r])*upsampling_corr_factor for m in self.only_models] for r in rois])
+                                                #a bit more distance since axis_height is an approximation
+                                                text_distance = 2*(16*axis_height)/window_size_points
+     
+                                            
+
+
+                                            for mod in [m for m in self.only_models if base_model != m]:
+                                                
+                                                
+                                                diff = y_par[analysis][subj][base_model][roi] - y_par[analysis][subj][mod][roi]
+                                                
+                                                pvals = []
+                                                
+                                                for ccc in range(100000):                                         
+                                                                                                               
+                                                    #if ccc<50:
+                                                    #    pl.figure(f"null distribs {analysis} {subj} {mod} {roi}")
+                                                    #    pl.hist(null_distrib, bins=50, color=f"C{i+4}")
+                                                    
+                                                    
+                                                    #correct for upsampling
+                                                    samp_idx = np.random.randint(0, len(diff), int(len(diff)/upsampling_corr_factor))
+
+                                                    observ = diff[samp_idx]
+                                                    
+                                                    null_distrib = np.sign(np.random.rand(len(diff[samp_idx]))-0.5)*diff[samp_idx]
+                                                    
+                                                    if diff_gauss:
+                                                        #test whether other models improve on gauss
+                                                        pvals.append(null_distrib.mean() <= observ.mean())
+                                                    else:
+                                                        #test whether norm improves over other models
+                                                        pvals.append(null_distrib.mean() >= observ.mean())
+                                                        
+                                                    #pvals.append(wilcoxon(observ, null_distrib, alternative='greater')[1])
+                                                    #pvals.append(ks_2samp(observ, null_distrib, alternative='less')[1])
+    
+                                                #pl.figure(f"{analysis} {subj} Mean {y_parameter}", figsize=(8, 8), frameon=False) 
+                                                        
+                                                    
+                                                pval = np.mean(pvals) 
+                                                print(f"{mod} pval: {pval}")
+                                                
+                                                pval_str = ""
+                                                
+                                                #compute p values
+                                                if pval<0.01:
+                                                    if diff_gauss:
+                                                        text_color = model_colors[mod]
+                                                    else:
+                                                        text_color = model_colors[base_model]
+                                                    pval_str+="*"
+                                                    if pval<1e-4:
+                                                        pval_str+="*"
+                                                        if pval<1e-6:
+                                                            pval_str+="*"
+                                                elif pval>0.99:
+                                                    if diff_gauss:
+                                                        text_color = model_colors[base_model]        
+                                                    else:
+                                                        text_color = model_colors[mod]                                                    
+                                                    pval_str+="*"
+                                                    if pval>(1-1e-4):
+                                                        pval_str+="*"
+                                                        if pval>(1-1e-6):
+                                                            pval_str+="*"                                                    
+
+
+                                                def plot_comparison_bracket():
+                                                    #dh = text_distance
+                                                    
+                                                    barh = text_distance/2
+                                                    y = max(ly, ry) + barh
+                                                    #barx = [lx, lx, rx, rx]
+                                                    #bary = [y, y+barh, y+barh, y]
+                                                    mid = ((lx+rx)/2, y+0.5*barh)
+                                                    
+                                                    #pl.plot(barx, bary, c='black')
+                                                    pl.plot([lx,lx], [y,y+barh], c=c_left)
+                                                    pl.plot([rx,rx], [y,y+barh], c=c_right)
+                                                    pl.plot([lx,rx],[y+barh, y+barh], c='black')
+                                                    return mid
+
+                                                if mod == 'CSS':
+                                                    if diff_gauss:
+                                                        css_text_pos = text_height+1.5*text_distance
+                                                        c_left = 'blue'
+                                                        c_right = 'orange'
+                                                        lx, ly = bar_position-3*bar_or_violin_width, css_text_pos
+                                                        rx, ry = bar_position-bar_or_violin_width, css_text_pos
+                                                    else:
+                                                        css_text_pos = text_height
+                                                        c_left = 'orange'
+                                                        c_right = 'red'                                                    
+                                                        lx, ly = bar_position-bar_or_violin_width, css_text_pos
+                                                        rx, ry = bar_position, css_text_pos
+                                                        
+                                                    
+                                                    
+                                                elif mod == 'DoG':
+                                                    if diff_gauss:
+                                                        dog_text_pos = text_height
+                                                        c_left = 'blue'
+                                                        c_right = 'green'
+                                                        lx, ly = bar_position-3*bar_or_violin_width, dog_text_pos
+                                                        rx, ry = bar_position-2*bar_or_violin_width, dog_text_pos
+                                                    else:
+                                                        dog_text_pos = text_height+1.5*text_distance     
+                                                        c_left = 'green'
+                                                        c_right = 'red'
+                                                        lx, ly = bar_position-2*bar_or_violin_width, dog_text_pos
+                                                        rx, ry = bar_position, dog_text_pos                                                        
+                                                                                                     
+                                                    
+                                                    
+                                                elif mod == 'Gauss' or 'Norm' in mod:
+                                                    c_left = 'blue'
+                                                    c_right = 'red'
+                                                    lx, ly = bar_position-3*bar_or_violin_width, text_height+3*text_distance  
+                                                    rx, ry = bar_position, text_height+3*text_distance                                                    
+                                                    
+                                                mid = plot_comparison_bracket()
+                                                    
+                                                pl.text(*mid, pval_str, fontsize=16, color=text_color, weight = 'bold', ha='center', va='bottom')
+
+                                                
+                                                
+
+                                            
+                                    
                                 else:
-                                    pl.bar(bar_position, bar_height, width=0.1, yerr=bar_err, 
+                                    pl.bar(bar_position, bar_height, width=bar_or_violin_width, yerr=bar_err, 
                                        edgecolor='black', color=f"C{i+4}")                                        
                                 
-                                bar_position += 0.1
+                                bar_position += bar_or_violin_width
 
                                 pl.xticks(x_ticks,x_labels)
                                 handles, labels = pl.gca().get_legend_handles_labels()
@@ -1085,7 +1313,9 @@ class visualize_results(object):
                                     else:                      
                                         pl.savefig(f"/Users/marcoaqil/PRFMapping/Figures/{subj} {model} Mean {y_parameter.replace('/','')}.pdf", dpi=300, bbox_inches='tight')
 
-                                
+                        
+                        if not means_only:
+                            for i, roi in enumerate(rois):
                                 ###################
                                 #x vs y param by ROI
                                 pl.figure(f"{analysis} {subj} {roi.replace('custom.','')} {y_parameter} VS {x_parameter}", figsize=(8, 8), frameon=False)
@@ -1095,152 +1325,155 @@ class visualize_results(object):
                                 if ylim != None:
                                     pl.ylim(ylim[0],ylim[1])
                                     
-                                    
-                                #bin stats
-                                x_par_sorted = np.argsort(x_par[analysis][subj][model][roi])
-                                split_x_par_bins = np.array_split(x_par_sorted, 8) #8
-                               
-                                for x_par_quantile in split_x_par_bins:
-                                    y_par_stats[analysis][subj][model][roi].append(weightstats.DescrStatsW(y_par[analysis][subj][model][roi][x_par_quantile],
-                                                                                          weights=rsq[analysis][subj][model][roi][x_par_quantile]))
-            
-                                    x_par_stats[analysis][subj][model][roi].append(weightstats.DescrStatsW(x_par[analysis][subj][model][roi][x_par_quantile],
-                                                                                          weights=rsq[analysis][subj][model][roi][x_par_quantile]))
-                                    
-                                scatter = False
-                                if not scatter:                
+                                for model in self.only_models:
+                                    #bin stats
+                                    x_par_sorted = np.argsort(x_par[analysis][subj][model][roi])
+                                    split_x_par_bins = np.array_split(x_par_sorted, 8) #8
+                                   
+                                    for x_par_quantile in split_x_par_bins:
+                                        #ddof_correction_quantile = ddof_corr*np.sum(rsq[analysis][subj][model][roi][x_par_quantile])
+                                        
+                                        y_par_stats[analysis][subj][model][roi].append(weightstats.DescrStatsW(y_par[analysis][subj][model][roi][x_par_quantile],
+                                                                                              weights=rsq[analysis][subj][model][roi][x_par_quantile]))
+                
+                                        x_par_stats[analysis][subj][model][roi].append(weightstats.DescrStatsW(x_par[analysis][subj][model][roi][x_par_quantile],
+                                                                                              weights=rsq[analysis][subj][model][roi][x_par_quantile]))
+                                        
+    
+                                    if not scatter:                
+                                        try:
+                                            WLS = LinearRegression()
+                                            WLS.fit(x_par[analysis][subj][model][roi].reshape(-1, 1), y_par[analysis][subj][model][roi], sample_weight=rsq[analysis][subj][model][roi])
+                                            if len(self.only_models)>1:
+                                                p=pl.plot([ss.mean for ss in x_par_stats[analysis][subj][model][roi]],
+                                                WLS.predict(np.array([ss.mean for ss in x_par_stats[analysis][subj][model][roi]]).reshape(-1, 1)),
+                                                color=model_colors[model])
+                                            else:
+                                                p=pl.plot([ss.mean for ss in x_par_stats[analysis][subj][model][roi]],
+                                                WLS.predict(np.array([ss.mean for ss in x_par_stats[analysis][subj][model][roi]]).reshape(-1, 1)),
+                                                color=f"C{i+4}")                                        
+                                                    
+                                            print(roi+" "+model+" "+str(WLS.score(x_par[analysis][subj][model][roi].reshape(-1, 1), y_par[analysis][subj][model][roi], sample_weight=rsq[analysis][subj][model][roi])))
+                                        except Exception as e:
+                                            print(e)
+                                            pass
+                                        
+                                        try:
+                                            if len(self.only_models)>1:
+                                                pl.errorbar([ss.mean for ss in x_par_stats[analysis][subj][model][roi]],
+                                                [ss.mean for ss in y_par_stats[analysis][subj][model][roi]],
+                                                yerr=np.array([np.abs(ss.zconfint_mean(alpha=0.05/upsampling_corr_factor)-ss.mean) for ss in y_par_stats[analysis][subj][model][roi]]).T,
+                                                xerr=np.array([np.abs(ss.zconfint_mean(alpha=0.05/upsampling_corr_factor)-ss.mean) for ss in x_par_stats[analysis][subj][model][roi]]).T,
+                                                fmt='s',  mec='black', label=model, color=p[-1].get_color())#, mfc=model_colors[model], ecolor=model_colors[model])
+                                            else:
+                                                pl.errorbar([ss.mean for ss in x_par_stats[analysis][subj][model][roi]],
+                                                [ss.mean for ss in y_par_stats[analysis][subj][model][roi]],
+                                                yerr=np.array([np.abs(ss.zconfint_mean(alpha=0.05/upsampling_corr_factor)-ss.mean) for ss in y_par_stats[analysis][subj][model][roi]]).T,
+                                                xerr=np.array([np.abs(ss.zconfint_mean(alpha=0.05/upsampling_corr_factor)-ss.mean) for ss in x_par_stats[analysis][subj][model][roi]]).T,
+                                                fmt='s',  mec='black', label=roi.replace('custom.',''), color=p[-1].get_color())#, mfc=model_colors[model], ecolor=model_colors[model])
+                                           
+                                                
+                                        except Exception as e:
+                                            print(e)
+                                            pass
+                                    else:
+                                        try:
+                                            if len(self.only_models)>1:
+                                                p=pl.scatter(x_par[analysis][subj][model][roi], y_par[analysis][subj][model][roi], marker='o', s=1,
+                                                color=model_colors[model], label=model)
+                                            else:
+                                                p=pl.scatter(x_par[analysis][subj][model][roi], y_par[analysis][subj][model][roi], marker='o', s=1,
+                                                color=f"C{i+4}", label=roi.replace('custom.',''))  
+                                        except Exception as e:
+                                            print(e)
+                                            pass                            
+                            
+                                pl.xlabel(f"{x_parameter}")
+                                pl.ylabel(f"{subj} {roi.replace('custom.','')} {y_parameter}")
+                                pl.legend(loc=0)
+                                if save_figures:
+                                    if len(analyses)>1:
+                                        os.makedirs(f"/Users/marcoaqil/PRFMapping/Figures/{analysis}", exist_ok=True)
+                                        pl.savefig(f"/Users/marcoaqil/PRFMapping/Figures/{analysis}/{subj} {roi.replace('custom.','')} {y_parameter.replace('/','')} VS {x_parameter.replace('/','')}.pdf", dpi=300, bbox_inches='tight')
+                                                          
+                                    else:                                 
+                                        pl.savefig(f"/Users/marcoaqil/PRFMapping/Figures/{subj} {roi.replace('custom.','')} {y_parameter.replace('/','')} VS {x_parameter.replace('/','')}.pdf", dpi=300, bbox_inches='tight')
+
+
+                        ########params by model
+                        if not means_only:        
+                            for model in self.only_models:
+                                pl.figure(f"{analysis} {subj} {model} {y_parameter} VS {x_parameter}", figsize=(8, 8), frameon=False)
+                                #pl.gca().set_yscale('log')
+                                #pl.gca().set_xscale('log')
+                                
+                                if ylim != None:
+                                    pl.ylim(ylim[0],ylim[1])
+                                #pl.xlim(0.2,4)
+                                for i, roi in enumerate(rois):
                                     try:
                                         WLS = LinearRegression()
                                         WLS.fit(x_par[analysis][subj][model][roi].reshape(-1, 1), y_par[analysis][subj][model][roi], sample_weight=rsq[analysis][subj][model][roi])
-                                        if len(self.only_models)>1:
-                                            p=pl.plot([ss.mean for ss in x_par_stats[analysis][subj][model][roi]],
-                                            WLS.predict(np.array([ss.mean for ss in x_par_stats[analysis][subj][model][roi]]).reshape(-1, 1)),
-                                            color=model_colors[model])
-                                        else:
-                                            p=pl.plot([ss.mean for ss in x_par_stats[analysis][subj][model][roi]],
-                                            WLS.predict(np.array([ss.mean for ss in x_par_stats[analysis][subj][model][roi]]).reshape(-1, 1)),
-                                            color=f"C{i+4}")                                        
-                                                
-                                        print(roi+" "+model+" "+str(WLS.score(x_par[analysis][subj][model][roi].reshape(-1, 1), y_par[analysis][subj][model][roi], sample_weight=rsq[analysis][subj][model][roi])))
-                                    except Exception as e:
-                                        print(e)
-                                        pass
-                                    
-                                    try:
-                                        if len(self.only_models)>1:
-                                            pl.errorbar([ss.mean for ss in x_par_stats[analysis][subj][model][roi]],
-                                            [ss.mean for ss in y_par_stats[analysis][subj][model][roi]],
-                                            yerr=np.array([np.abs(ss.zconfint_mean(alpha=0.05)-ss.mean) for ss in y_par_stats[analysis][subj][model][roi]]).T,
-                                            xerr=np.array([np.abs(ss.zconfint_mean(alpha=0.05)-ss.mean) for ss in x_par_stats[analysis][subj][model][roi]]).T,
-                                            fmt='s',  mec='black', label=model, color=p[-1].get_color())#, mfc=model_colors[model], ecolor=model_colors[model])
-                                        else:
-                                            pl.errorbar([ss.mean for ss in x_par_stats[analysis][subj][model][roi]],
-                                            [ss.mean for ss in y_par_stats[analysis][subj][model][roi]],
-                                            yerr=np.array([np.abs(ss.zconfint_mean(alpha=0.05)-ss.mean) for ss in y_par_stats[analysis][subj][model][roi]]).T,
-                                            xerr=np.array([np.abs(ss.zconfint_mean(alpha=0.05)-ss.mean) for ss in x_par_stats[analysis][subj][model][roi]]).T,
-                                            fmt='s',  mec='black', label=roi.replace('custom.',''), color=p[-1].get_color())#, mfc=model_colors[model], ecolor=model_colors[model])
-                                       
+                                        
+                                        bootstrap_fits = []
+                                        for c in range(100):
                                             
+                                            sample = np.random.randint(0, len(x_par[analysis][subj][model][roi]), int(0.9*len(x_par[analysis][subj][model][roi])))
+                                            
+                                            WLS_bootstrap = LinearRegression()
+                                            WLS_bootstrap.fit(x_par[analysis][subj][model][roi][sample].reshape(-1, 1), y_par[analysis][subj][model][roi][sample], sample_weight=rsq[analysis][subj][model][roi][sample])
+                                            
+                                            bootstrap_fits.append(WLS_bootstrap.predict(np.array([ss.mean for ss in x_par_stats[analysis][subj][model][roi]]).reshape(-1, 1)))
+                                    
+                                        p=pl.plot([ss.mean for ss in x_par_stats[analysis][subj][model][roi]],
+                                            WLS.predict(np.array([ss.mean for ss in x_par_stats[analysis][subj][model][roi]]).reshape(-1, 1)),
+                                            color=f"C{i+4}", label=roi.replace('custom.',''))
+                                            #color=roi_colors[roi]) 
+                                                                          
+                                                   
+                                        print(f"{roi} {model} WLS score {WLS.score(x_par[analysis][subj][model][roi].reshape(-1, 1), y_par[analysis][subj][model][roi], sample_weight=rsq[analysis][subj][model][roi])}")
                                     except Exception as e:
                                         print(e)
                                         pass
-                                else:
+                                    
                                     try:
-                                        if len(self.only_models)>1:
-                                            p=pl.scatter(x_par[analysis][subj][model][roi], y_par[analysis][subj][model][roi], marker='o', s=1,
-                                            color=model_colors[model], label=model)
-                                        else:
-                                            p=pl.scatter(x_par[analysis][subj][model][roi], y_par[analysis][subj][model][roi], marker='o', s=1,
-                                            color=f"C{i+4}", label=roi.replace('custom.',''))  
+                                        #conf interval shading
+                                        pl.fill_between([ss.mean for ss in x_par_stats[analysis][subj][model][roi]],
+                                                        np.min(bootstrap_fits, axis=0),
+                                                        np.max(bootstrap_fits, axis=0),
+                                                        alpha=0.2, color=p[-1].get_color(), label=roi.replace('custom.',''))
+                                        
+                                        #data points with errors
+                                        # pl.errorbar([ss.mean for ss in x_par_stats[analysis][subj][model][roi]],
+                                        # [ss.mean for ss in y_par_stats[analysis][subj][model][roi]],
+                                        # yerr=np.array([np.abs(ss.zconfint_mean(alpha=0.05)-ss.mean) for ss in y_par_stats[analysis][subj][model][roi]]).T,
+                                        # xerr=np.array([np.abs(ss.zconfint_mean(alpha=0.05)-ss.mean) for ss in x_par_stats[analysis][subj][model][roi]]).T,
+                                        # fmt='s', mec='black', label=roi.replace('custom.',''), color=p[-1].get_color())#, mfc=roi_colors[roi], ecolor=roi_colors[roi])
                                     except Exception as e:
                                         print(e)
-                                        pass                            
-                            
-                            pl.xlabel(f"{x_parameter}")
-                            pl.ylabel(f"{subj} {roi.replace('custom.','')} {y_parameter}")
-                            pl.legend(loc=0)
-                            if save_figures:
-                                if len(analyses)>1:
-                                    os.makedirs(f"/Users/marcoaqil/PRFMapping/Figures/{analysis}", exist_ok=True)
-                                    pl.savefig(f"/Users/marcoaqil/PRFMapping/Figures/{analysis}/{subj} {roi.replace('custom.','')} {y_parameter.replace('/','')} VS {x_parameter.replace('/','')}.pdf", dpi=300, bbox_inches='tight')
-                                                      
-                                else:                                 
-                                    pl.savefig(f"/Users/marcoaqil/PRFMapping/Figures/{subj} {roi.replace('custom.','')} {y_parameter.replace('/','')} VS {x_parameter.replace('/','')}.pdf", dpi=300, bbox_inches='tight')
-
-
-                                
-                        for model in self.only_models:
-                            pl.figure(f"{analysis} {subj} {model} {y_parameter} VS {x_parameter}", figsize=(8, 8), frameon=False)
-                            #pl.gca().set_yscale('log')
-                            #pl.gca().set_xscale('log')
-                            
-                            if ylim != None:
-                                pl.ylim(ylim[0],ylim[1])
-                            #pl.xlim(0.2,4)
-                            for i, roi in enumerate(rois):
-                                try:
-                                    WLS = LinearRegression()
-                                    WLS.fit(x_par[analysis][subj][model][roi].reshape(-1, 1), y_par[analysis][subj][model][roi], sample_weight=rsq[analysis][subj][model][roi])
+                                        pass
+                                pl.xlabel(f"{x_parameter}")
+                                pl.ylabel(f"{subj} {model} {y_parameter}")
+                                handles, labels = pl.gca().get_legend_handles_labels()
+                                #this is to merge multiple labels
+                                #by_label = dict(zip(labels, handles))
+    
+                                legend_dict = dd(list)
+                                for cc, label in enumerate(labels):
+                                    legend_dict[label].append(handles[cc])
                                     
-                                    bootstrap_fits = []
-                                    for c in range(100):
-                                        
-                                        sample = np.random.randint(0, len(x_par[analysis][subj][model][roi]), int(0.9*len(x_par[analysis][subj][model][roi])))
-                                        
-                                        WLS_bootstrap = LinearRegression()
-                                        WLS_bootstrap.fit(x_par[analysis][subj][model][roi][sample].reshape(-1, 1), y_par[analysis][subj][model][roi][sample], sample_weight=rsq[analysis][subj][model][roi][sample])
-                                        
-                                        bootstrap_fits.append(WLS_bootstrap.predict(np.array([ss.mean for ss in x_par_stats[analysis][subj][model][roi]]).reshape(-1, 1)))
-                                
-                                    p=pl.plot([ss.mean for ss in x_par_stats[analysis][subj][model][roi]],
-                                        WLS.predict(np.array([ss.mean for ss in x_par_stats[analysis][subj][model][roi]]).reshape(-1, 1)),
-                                        color=f"C{i+4}", label=roi.replace('custom.',''))
-                                        #color=roi_colors[roi]) 
-                                                                      
-                                               
-                                    print(roi+" "+model+" "+str(WLS.score(x_par[analysis][subj][model][roi].reshape(-1, 1), y_par[analysis][subj][model][roi], sample_weight=rsq[analysis][subj][model][roi])))
-                                except Exception as e:
-                                    print(e)
-                                    pass
-                                
-                                try:
-                                    #conf interval shading
-                                    pl.fill_between([ss.mean for ss in x_par_stats[analysis][subj][model][roi]],
-                                                    np.min(bootstrap_fits, axis=0),
-                                                    np.max(bootstrap_fits, axis=0),
-                                                    alpha=0.2, color=p[-1].get_color(), label=roi.replace('custom.',''))
-                                    
-                                    #data points with errors
-                                    # pl.errorbar([ss.mean for ss in x_par_stats[analysis][subj][model][roi]],
-                                    # [ss.mean for ss in y_par_stats[analysis][subj][model][roi]],
-                                    # yerr=np.array([np.abs(ss.zconfint_mean(alpha=0.05)-ss.mean) for ss in y_par_stats[analysis][subj][model][roi]]).T,
-                                    # xerr=np.array([np.abs(ss.zconfint_mean(alpha=0.05)-ss.mean) for ss in x_par_stats[analysis][subj][model][roi]]).T,
-                                    # fmt='s', mec='black', label=roi.replace('custom.',''), color=p[-1].get_color())#, mfc=roi_colors[roi], ecolor=roi_colors[roi])
-                                except Exception as e:
-                                    print(e)
-                                    pass
-                            pl.xlabel(f"{x_parameter}")
-                            pl.ylabel(f"{subj} {model} {y_parameter}")
-                            handles, labels = pl.gca().get_legend_handles_labels()
-                            #this is to merge multiple labels
-                            #by_label = dict(zip(labels, handles))
-
-                            legend_dict = dd(list)
-                            for cc, label in enumerate(labels):
-                                legend_dict[label].append(handles[cc])
-                                
-                            for label in legend_dict:
-                                legend_dict[label] = tuple(legend_dict[label])
-
-                            pl.legend([legend_dict[label] for label in legend_dict], legend_dict.keys())                      
-
-                            if save_figures:
-                                if len(analyses)>1:
-                                    os.makedirs(f"/Users/marcoaqil/PRFMapping/Figures/{analysis}", exist_ok=True)
-                                    pl.savefig(f"/Users/marcoaqil/PRFMapping/Figures/{analysis}/{subj} {model} {y_parameter.replace('/','')} VS {x_parameter.replace('/','')}.pdf", dpi=300, bbox_inches='tight')
-                                                      
-                                else:                                 
-                                    pl.savefig(f"/Users/marcoaqil/PRFMapping/Figures/{subj} {model} {y_parameter.replace('/','')} VS {x_parameter.replace('/','')}.pdf", dpi=300, bbox_inches='tight')
+                                for label in legend_dict:
+                                    legend_dict[label] = tuple(legend_dict[label])
+    
+                                pl.legend([legend_dict[label] for label in legend_dict], legend_dict.keys())                      
+    
+                                if save_figures:
+                                    if len(analyses)>1:
+                                        os.makedirs(f"/Users/marcoaqil/PRFMapping/Figures/{analysis}", exist_ok=True)
+                                        pl.savefig(f"/Users/marcoaqil/PRFMapping/Figures/{analysis}/{subj} {model} {y_parameter.replace('/','')} VS {x_parameter.replace('/','')}.pdf", dpi=300, bbox_inches='tight')
+                                                          
+                                    else:                                 
+                                        pl.savefig(f"/Users/marcoaqil/PRFMapping/Figures/{subj} {model} {y_parameter.replace('/','')} VS {x_parameter.replace('/','')}.pdf", dpi=300, bbox_inches='tight')
 
 
         return
