@@ -415,8 +415,8 @@ if param_bounds:
 
 # norm grid params
 if norm_model_variant == "abcd":
-    surround_amplitude_grid=np.array([0,0.05,0.2,1], dtype='float32')
-    surround_size_grid=np.array([3,6,10,20], dtype='float32')
+    surround_amplitude_grid=np.array([0.01,0.1,1,10], dtype='float32')
+    surround_size_grid=np.array([5,8,12,18], dtype='float32')
     neural_baseline_grid=np.array([0,1,10,100], dtype='float32')
     surround_baseline_grid=np.array([0.1,1.0,10.0,100.0], dtype='float32')
     
@@ -457,10 +457,11 @@ elif norm_model_variant == "ab":
 
 
 if param_bounds and fix_bold_baseline:
-    gauss_bounds[4] = (100,100)
-    css_bounds[4] = (100,100)
-    dog_bounds[4] = (100,100)
     norm_bounds[4] = (norm_bold_baseline,norm_bold_baseline)
+    gauss_bounds[4] = (0,0)
+    css_bounds[4] = (0,0)
+    dog_bounds[4] = (0,0)
+
 
 
 #second bound set to zero to avoid potential negative hrf-response given by the disp. derivative
