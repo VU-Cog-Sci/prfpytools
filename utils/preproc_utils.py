@@ -5,6 +5,7 @@ import nibabel as nb
 from collections import defaultdict as dd
 from pathlib import Path
 import matplotlib.image as mpimg
+from scipy.stats import zscore
 
 opj = os.path.join
 
@@ -272,6 +273,10 @@ def prepare_data(subj,
             if crossvalidate:
                 tc_full_iso_nonzerovar_test = 100*(tc_full_iso_test[mask] / tc_mean_test[mask,np.newaxis])
                 iso_full_test = 100*(iso_full_test/tc_mean_test)
+        elif data_scaling in ["zsc", "z-score"]:
+            tc_full_iso_nonzerovar = zscore(tc_full_iso[mask], axis=-1)
+            if crossvalidate:
+                tc_full_iso_nonzerovar_test = zscore(tc_full_iso_test[mask], axis=-1)   
         elif data_scaling == None:
             tc_full_iso_nonzerovar = tc_full_iso[mask]
             if crossvalidate:

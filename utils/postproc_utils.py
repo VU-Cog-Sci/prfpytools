@@ -330,12 +330,14 @@ class results(object):
                         processed_results['Eccentricity'][k2][mask] = np.sqrt(v2[:,0]**2+v2[:,1]**2)
                         processed_results['Polar Angle'][k2][mask] = np.arctan2(v2[:,1], v2[:,0])
                         processed_results['Amplitude'][k2][mask] = np.copy(v2[:,3])
+                        processed_results['Size (sigma_1)'][k2][mask] = np.copy(v2[:,2])
     
                         if k2 == 'CSS':
                             processed_results['CSS Exponent'][k2][mask] =  np.copy(v2[:,5])
     
                         if k2 == 'DoG':
                             processed_results['Surround Amplitude'][k2][mask] = np.copy(v2[:,5])
+                            processed_results['Size (sigma_2)'][k2][mask] = np.copy(v2[:,6])
                             (processed_results['Size (fwhmax)'][k2][mask],
                             processed_results['Surround Size (fwatmin)'][k2][mask]) = fwhmax_fwatmin(k2, v2, normalize_RFs)
                             processed_results['Suppression Index (full)'][k2][mask] = (v2[:,5] * v2[:,6]**2)/(v2[:,3] * v2[:,2]**2)
@@ -344,6 +346,7 @@ class results(object):
     
                         elif 'Norm' in k2:
                             processed_results['Surround Amplitude'][k2][mask] = np.copy(v2[:,5])
+                            processed_results['Size (sigma_2)'][k2][mask] = np.copy(v2[:,6])                            
                             processed_results['Norm Param. B'][k2][mask] = np.copy(v2[:,7])
                             processed_results['Norm Param. D'][k2][mask] = np.copy(v2[:,8])
                             processed_results['Ratio (B/D)'][k2][mask] = v2[:,7]/v2[:,8]
@@ -587,4 +590,14 @@ def fwhmax_fwatmin(model, params, normalize_RFs=False, return_profiles=False):
         return result
             
                                 
-        
+def colorbar(mappable):
+    from mpl_toolkits.axes_grid1 import make_axes_locatable
+    import matplotlib.pyplot as plt
+    last_axes = plt.gca()
+    ax = mappable.axes
+    fig = ax.figure
+    divider = make_axes_locatable(ax)
+    cax = divider.append_axes("right", size="5%", pad=0.05)
+    cbar = fig.colorbar(mappable, cax=cax)
+    plt.sca(last_axes)
+    return cbar        
