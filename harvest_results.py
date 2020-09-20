@@ -15,9 +15,9 @@ import sys
 from datetime import datetime
 from shutil import copyfile as cp
 
-subj = sys.argv[1]
-analysis_settings = sys.argv[2]
 
+analysis_settings = sys.argv[1]
+subj = sys.argv[2]
 
 with open(analysis_settings) as f:
     analysis_info = yaml.safe_load(f)
