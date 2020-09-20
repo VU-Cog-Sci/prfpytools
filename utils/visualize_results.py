@@ -11,20 +11,23 @@ import matplotlib.pyplot as pl
 import cortex
 import nibabel as nb
 from matplotlib import cm
+from mpl_toolkits.mplot3d import Axes3D
 from collections import defaultdict as dd
 from copy import deepcopy
+import itertools
 from pathlib import Path
-from utils.postproc_utils import model_wrapper, create_model_rf_wrapper
+from utils.postproc_utils import model_wrapper, create_model_rf_wrapper, colorbar
 from utils.preproc_utils import create_full_stim
 #import seaborn as sns
 
 import time
-from scipy.stats import sem, ks_2samp, ttest_1samp, wilcoxon, pearsonr, ttest_ind, ttest_rel
+from scipy.stats import sem, ks_2samp, ttest_1samp, wilcoxon, pearsonr, ttest_ind, ttest_rel, zscore
 
 opj = os.path.join
 
 from statsmodels.stats import weightstats
 from sklearn.linear_model import LinearRegression
+from sklearn.decomposition import PCA, KernelPCA
 from sklearn.metrics import mean_squared_error
 from nibabel.freesurfer.io import read_morph_data, write_morph_data
 from utils.preproc_utils import roi_mask
@@ -42,11 +45,12 @@ class visualize_results(object):
         
     def get_subjects(self, curr_dict, subject_list = []):
         for k, v in curr_dict.items():
-            if 'sub-' not in k:# and isinstance(v, (dict,dd)):
-                self.get_subjects(v, subject_list)
-            else:
-                if k not in subject_list:
-                    subject_list.append(k)
+            if 'fsaverage' not in k:
+                if 'sub-' not in k:# and isinstance(v, (dict,dd)):
+                    self.get_subjects(v, subject_list)
+                else:
+                    if k not in subject_list:
+                        subject_list.append(k)
         
         self.subjects = subject_list
         return
@@ -347,14 +351,20 @@ class visualize_results(object):
                         #vertex_info+=f"Rsq {model} weighted resid tc: {1-np.sum(((preds[model]-preds['Gauss'])*(preds[model]-tc_full_fit))**2)/(tc_full_fit.var(-1)*tc_full_fit.shape[-1]):.4f}\n"
                     
                 prfs[model] = create_model_rf_wrapper(model,self.prf_stim,params,an_info['normalize_RFs'])
+                
+                for key in subj_res['Processed Results']:
+                    if model in subj_res['Processed Results'][key]:
+                        vertex_info+=f"{key} {model} {subj_res['Processed Results'][key][model][index]:.8f}\n"
+                
                 vertex_info+="\n"
                 
             pl.ion()
 
             if self.click==0:
-                self.f, self.axes = pl.subplots(2,2,figsize=(10, 10),frameon=False, gridspec_kw={'width_ratios': [8, 2], 'height_ratios': [1,1]})
+                self.f, self.axes = pl.subplots(2,2,figsize=(10, 15),frameon=False, gridspec_kw={'width_ratios': [8, 2], 'height_ratios': [1,1]})
                 self.f.set_tight_layout(True)
             else:
+                self.cbar.remove()
                 for ax1 in self.axes:
                     for ax2 in ax1: 
                         ax2.clear()
@@ -394,28 +404,34 @@ class visualize_results(object):
    
             
             if np.any(['Norm' in model for model in self.only_models]) or 'DoG' in self.only_models:
-                if ((subj_res['Processed Results']['RSq']['DoG'][index]-subj_res['Processed Results']['RSq']['Gauss'][index]) > 0.05) or ((subj_res['Processed Results']['RSq']['Norm_abcd'][index]-subj_res['Processed Results']['RSq']['CSS'][index]) > 0.05):
-                    surround_effect = np.min([preds[model] for model in preds if 'Norm' in model or 'DoG' in model],axis=0)
-                    surround_effect[surround_effect>0] = preds['Gauss'][surround_effect>0]
-                    self.axes[0,0].fill_between(tseconds,
-                                                 surround_effect, 
-                                     preds['Gauss'], label='Surround suppression', alpha=0.2, color='gray')
+                try:
+                    if ((subj_res['Processed Results']['RSq']['DoG'][index]-subj_res['Processed Results']['RSq']['Gauss'][index]) > 0.05) or ((subj_res['Processed Results']['RSq']['Norm_abcd'][index]-subj_res['Processed Results']['RSq']['CSS'][index]) > 0.05):
+                        surround_effect = np.min([preds[model] for model in preds if 'Norm' in model or 'DoG' in model],axis=0)
+                        surround_effect[surround_effect>0] = preds['Gauss'][surround_effect>0]
+                        self.axes[0,0].fill_between(tseconds,
+                                                     surround_effect, 
+                                         preds['Gauss'], label='Surround suppression', alpha=0.2, color='gray')
+                except:
+                    pass
 
           
             self.axes[0,0].legend(ncol=3, fontsize=8, loc=9)
             #self.axes[0,0].set_ylim(-3.5,6.5)
-            self.axes[0,0].set_xlim(0,330)
+            self.axes[0,0].set_xlim(0,tseconds.max())
             #self.axes[0,0].set_ylabel('% signal change')
             self.axes[0,0].set_title(f"Vertex {index} timecourse")
             
             if prfs['Norm_abcd'][0].min() < 0:
-                self.axes[0,1].imshow(prfs['Norm_abcd'][0], cmap='RdBu_r', vmin=prfs['Norm_abcd'][0].min(), vmax=-prfs['Norm_abcd'][0].min())
+                im = self.axes[0,1].imshow(prfs['Norm_abcd'][0], cmap='RdBu_r', vmin=prfs['Norm_abcd'][0].min(), vmax=-prfs['Norm_abcd'][0].min())
             else:
-                self.axes[0,1].imshow(prfs['Norm_abcd'][0], cmap='RdBu_r', vmax=prfs['Norm_abcd'][0].max(), vmin=-prfs['Norm_abcd'][0].max())
+                im = self.axes[0,1].imshow(prfs['Norm_abcd'][0], cmap='RdBu_r', vmax=prfs['Norm_abcd'][0].max(), vmin=-prfs['Norm_abcd'][0].max())
                 
+            self.cbar = colorbar(im)
+            self.axes[0,1].set_title(f"pRF")
             
-            self.axes[0,1].set_title(f"Vertex {index} pRF")
+            #self.cbar = self.f.colorbar(im, ax=self.axes[0,1], use_gridspec=True)
             
+            self.axes[0,1].axis('on')            
             self.axes[1,0].axis('off')
             self.axes[1,1].axis('off')
             self.axes[1,0].text(0,1,vertex_info, fontsize=10)
@@ -641,9 +657,11 @@ class visualize_results(object):
                             ds_size = dict()
                             
                             for model in self.only_models:
-                                ds_size[model] = cortex.Vertex2D(p_r['Size (fwhmax)'][model], p_r['Alpha'][model], subject=subj, 
+                                ds_size[f"{model} fwhmax"] = cortex.Vertex2D(p_r['Size (fwhmax)'][model], p_r['Alpha'][model], subject=subj, 
                                                                  vmin=0, vmax=6, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw
-                  
+                                ds_size[f"{model} sigma_1"] = cortex.Vertex2D(p_r['Size (sigma_1)'][model], p_r['Alpha'][model], subject=subj, 
+                                                                 vmin=0, vmax=6, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw
+                                
                             self.js_handle_dict[space][analysis][subj]['js_handle_size'] = cortex.webgl.show(ds_size, pickerfun=clicker_function, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)
             
             
@@ -670,12 +688,16 @@ class visualize_results(object):
                             
                             for model in self.only_models:
                                 if model == 'DoG':
-                                    ds_surround_size['DoG'] = cortex.Vertex2D(p_r['Surround Size (fwatmin)']['DoG'], p_r['Alpha']['DoG'], subject=subj, 
+                                    ds_surround_size[f'DoG fwatmin'] = cortex.Vertex2D(p_r['Surround Size (fwatmin)']['DoG'], p_r['Alpha']['DoG'], subject=subj, 
+                                                                         vmin=0, vmax=50, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw
+                                    ds_surround_size[f'DoG sigma_2'] = cortex.Vertex2D(p_r['Size (sigma_2)']['DoG'], p_r['Alpha']['DoG'], subject=subj, 
                                                                          vmin=0, vmax=50, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw
                                 elif 'Norm' in model:
-                                    ds_surround_size[model] = cortex.Vertex2D(p_r['Surround Size (fwatmin)'][model], p_r['Alpha'][model], subject=subj, 
+                                    ds_surround_size[f"{model} fwatmin"] = cortex.Vertex2D(p_r['Surround Size (fwatmin)'][model], p_r['Alpha'][model], subject=subj, 
                                                                          vmin=0, vmax=50, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw                    
-            
+                                    ds_surround_size[f"{model} sigma_2"] = cortex.Vertex2D(p_r['Size (sigma_2)'][model], p_r['Alpha'][model], subject=subj, 
+                                                                         vmin=0, vmax=10, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw    
+                                    
                             self.js_handle_dict[space][analysis][subj]['js_handle_surround_size'] = cortex.webgl.show(ds_surround_size, pickerfun=clicker_function, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)    
 
                         if self.plot_suppression_index_cortex:
@@ -703,11 +725,11 @@ class visualize_results(object):
                             for model in [model for model in self.only_models if 'Norm' in model]:
 
                                 ds_norm_baselines[f'{model} Param. B'] = cortex.Vertex2D(p_r['Norm Param. B'][model], p_r['Alpha'][model], subject=subj, 
-                                                                             vmin=5, vmax=50, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw                    
+                                                                             vmin=5, vmax=100, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw                    
                                 ds_norm_baselines[f'{model} Param. D'] = cortex.Vertex2D(p_r['Norm Param. D'][model], p_r['Alpha'][model], subject=subj, 
-                                                                             vmin=15, vmax=90, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw
+                                                                             vmin=5, vmax=100, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw
                                 ds_norm_baselines[f'{model} Ratio (B/D)'] = cortex.Vertex2D(p_r['Ratio (B/D)'][model], p_r['Alpha'][model], subject=subj, 
-                                                                             vmin=0, vmax=1.5, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw
+                                                                             vmin=0, vmax=5, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw
                             
                             self.js_handle_dict[space][analysis][subj]['js_handle_norm_baselines'] = cortex.webgl.show(ds_norm_baselines, pickerfun=clicker_function, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)    
         print('-----')                              
@@ -813,33 +835,39 @@ class visualize_results(object):
                                 fsaverage_param[subj] = np.concatenate((lh_fsaverage_param,rh_fsaverage_param))
                                 self.main_dict['fsaverage'][analysis][subj]['Processed Results'][parameter][model] = np.copy(fsaverage_param[subj])
                                 
-                                if parameter == 'RSq':
-                                    fsaverage_rsq[subj] = np.nan_to_num(np.concatenate((lh_fsaverage_param,rh_fsaverage_param)))
-                                    fsaverage_rsq[subj][fsaverage_rsq[subj]<0] = 0
+                                #if parameter == 'RSq':
+                                #    fsaverage_rsq[subj] = np.nan_to_num(np.concatenate((lh_fsaverage_param,rh_fsaverage_param)))
+                                #    fsaverage_rsq[subj][fsaverage_rsq[subj]<0] = 0
                                     
                                     
                             #fsaverage_group_average = np.ma.average(np.array([fsaverage_param[sid] for sid in fsaverage_param]),
                             #                                      weights=np.array([fsaverage_rsq[sid] for sid in fsaverage_rsq]),
                             #                                      axis=0)
-                            fsaverage_group_average = np.mean([fsaverage_param[sid] for sid in fsaverage_param], axis=0)
+                            fsaverage_group_average = np.nanmean([fsaverage_param[sid] for sid in fsaverage_param], axis=0)
                             
-                            for i in range(len(fsaverage_group_average)):
-                                fsaverage_group_average[i] = weightstats.DescrStatsW(np.array([fsaverage_param[sid][i] for sid in fsaverage_param]),
-                                                                                     weights=np.array([fsaverage_rsq[sid][i] for sid in fsaverage_rsq])).mean
+                            # for i in range(len(fsaverage_group_average)):
+                            #     fsaverage_group_average[i] = weightstats.DescrStatsW(np.array([fsaverage_param[sid][i] for sid in fsaverage_param]),
+                            #                                                          weights=np.array([fsaverage_rsq[sid][i] for sid in fsaverage_rsq])).mean
                             
-                            self.main_dict['fsaverage'][analysis]['fsaverage']['Processed Results'][parameter][model] = np.nan_to_num(fsaverage_group_average)
+                            self.main_dict['fsaverage'][analysis]['fsaverage']['Processed Results'][parameter][model] = np.copy(fsaverage_group_average)
+ 
+
                             
                     for model in models:
                         if 'Norm' in model:
                             self.main_dict['fsaverage'][analysis]['fsaverage']['Processed Results']['Ratio (B/D)'][model] = self.main_dict['fsaverage'][analysis]['fsaverage']['Processed Results']['Norm Param. B'][model]/self.main_dict['fsaverage'][analysis]['fsaverage']['Processed Results']['Norm Param. D'][model]
 
+                for model in models:
+                    for parameter in parameters:
+                        self.main_dict['fsaverage']['Mean analysis']['fsaverage']['Processed Results'][parameter][model] = np.nanmean([self.main_dict['fsaverage'][an[0]]['fsaverage']['Processed Results'][parameter][model] for an in analyses], axis=0)
+                        
                         
         return
     
     
     def quant_plots(self, x_parameter, y_parameter, rois, rsq_thresh, save_figures, 
-                    analysis_names = 'all', subject_ids='all', ylim=None,
-                    x_param_model=None, violin=False, scatter=False, diff_gauss=False,
+                    analysis_names = 'all', subject_ids='all', ylim={}, xlim={},
+                    x_param_model=None, violin=False, scatter=False, diff_gauss=False, diff_gauss_x=False,
                     means_only=False, stats_on_plot=False):
         """
         
@@ -887,6 +915,8 @@ class visualize_results(object):
         pl.rcParams.update({'figure.max_open_warning': 0})
         pl.rcParams['axes.spines.right'] = False
         pl.rcParams['axes.spines.top'] = False
+        
+        cmap_rois = cm.get_cmap('nipy_spectral')(np.linspace(0.0, 0.9, 9)[::-1]) #change 9 to len(rois) if needed
 
         for space, space_res in self.main_dict.items():
             if 'fsnative' in space:
@@ -894,9 +924,13 @@ class visualize_results(object):
                 #upsampling correction: fsnative has approximately 3 times as many datapoints as original
                 upsampling_corr_factor = 3
                 #surrounds larger than this are excluded from surround size calculations
-                w_max=40
+                w_max=60
+                #remove absurd suppression index values
+                supp_max=1000
                 #bar or violin width
                 bar_or_violin_width = 0.3
+                #css max
+                css_max=1
                 
                         
                 if analysis_names == 'all':
@@ -914,7 +948,8 @@ class visualize_results(object):
                 rsq = dd(lambda:dd(lambda:dd(lambda:dd(dict))))
     
                 x_par_stats = dd(lambda:dd(lambda:dd(lambda:dd(list))))
-                y_par_stats = dd(lambda:dd(lambda:dd(lambda:dd(list))))                
+                y_par_stats = dd(lambda:dd(lambda:dd(lambda:dd(list))))
+                bootstrap_fits = dd(lambda:dd(lambda:dd(lambda:dd(list))))
                 
                 
                 for analysis, analysis_res in analyses:       
@@ -955,12 +990,7 @@ class visualize_results(object):
                                                 #otherwise model specific alpha
                                                 alpha[analysis][subj][model][roi] = (roi_mask(self.idx_rois[subj][roi], subj_res['Processed Results']['Alpha'][model]>rsq_thresh)) #* (subj_res['Processed Results']['Size (fwhmax)'][model]<w_max)
                                                 
-                                                
-                                            if y_parameter == 'Surround Size (fwatmin)':
-                                                #exclude too large surround (no surround)
-                                                alpha[analysis][subj][model][roi] *= (subj_res['Processed Results']['Surround Size (fwatmin)'][model]<w_max)
-                                            
-                                        
+       
                                         else:
                                             #if ROI is not defined
                                             #if Brain use all available vertices
@@ -973,50 +1003,69 @@ class visualize_results(object):
                                             elif roi == 'all':
                                                 if 'rsq' in y_parameter.lower():
                                                     #comparing same vertices for model performance
-                                                    alpha[analysis][subj][model][roi] = (roi_mask(np.concatenate(tuple([self.idx_rois[subj][r] for r in rois if 'custom' in r])), subj_res['Processed Results']['Alpha']['all']>rsq_thresh)) #* (subj_res['Processed Results']['Size (fwhmax)'][model]<w_max)
+                                                    alpha[analysis][subj][model][roi] = (roi_mask(np.concatenate(tuple([self.idx_rois[subj][r] for r in self.idx_rois[subj] if 'custom' in r])), subj_res['Processed Results']['Alpha']['all']>rsq_thresh)) #* (subj_res['Processed Results']['Size (fwhmax)'][model]<w_max)
                 
                                                 else:
                                                     #otherwise model specific alpha
-                                                    alpha[analysis][subj][model][roi] = (roi_mask(np.concatenate(tuple([self.idx_rois[subj][roi] for roi in rois])), subj_res['Processed Results']['Alpha'][model]>rsq_thresh)) #* (subj_res['Processed Results']['Size (fwhmax)'][model]<w_max)
+                                                    alpha[analysis][subj][model][roi] = (roi_mask(np.concatenate(tuple([self.idx_rois[subj][r] for r in self.idx_rois[subj] if 'custom' in r])), subj_res['Processed Results']['Alpha'][model]>rsq_thresh)) #* (subj_res['Processed Results']['Size (fwhmax)'][model]<w_max)
                  
                                             else:
                                                 #, otherwise none
                                                 print("undefined ROI")
                                                 alpha[analysis][subj][model][roi] = np.zeros_like(subj_res['Processed Results']['Alpha'][model]).astype('bool')
+
+                                        
+                                        if y_parameter == 'Surround Size (fwatmin)' or x_parameter == 'Surround Size (fwatmin)':# and model == 'DoG':
+                                            #exclude too large surround (no surround)
+                                            alpha[analysis][subj][model][roi] *= (subj_res['Processed Results']['Surround Size (fwatmin)'][model]<w_max)
+                                        if 'Suppression' in y_parameter:
+                                            #exclude nonsensical suppression index values
+                                            alpha[analysis][subj][model][roi] *= (subj_res['Processed Results'][y_parameter][model]<supp_max)                                            
+                                        if 'Suppression' in x_parameter:
+                                            #exclude nonsensical suppression index values
+                                            alpha[analysis][subj][model][roi] *= (subj_res['Processed Results'][x_parameter][model]<supp_max)
+                                        if 'CSS Exponent' in x_parameter:
+                                            alpha[analysis][subj][model][roi] *= (subj_res['Processed Results'][x_parameter][x_param_model]<css_max)
                                                 
          
                                         #if 'ccrsq' in y_parameter.lower():
                                         #    alpha[analysis][subj][model][roi] *= (subj_res['Processed Results'][y_parameter][model]>0)
+                                            
+                                        alpha[analysis][subj][model][roi] *= np.isfinite(subj_res['Processed Results'][y_parameter][model])
                                        
                                         if x_param_model != None:
                                             
                                             alpha[analysis][subj][model][roi] *= np.isfinite(subj_res['Processed Results'][x_parameter][x_param_model])
-                                            alpha[analysis][subj][model][roi] *= np.isfinite(subj_res['Processed Results'][y_parameter][model]) 
                                             
-                                            y_par[analysis][subj][model][roi] = subj_res['Processed Results'][y_parameter][model][alpha[analysis][subj][model][roi]]
                                             x_par[analysis][subj][model][roi] = subj_res['Processed Results'][x_parameter][x_param_model][alpha[analysis][subj][model][roi]]                                          
                                         
                                         
                                         else:
-                                            
                                             #remove nans and infinities
                                             alpha[analysis][subj][model][roi] *= np.isfinite(subj_res['Processed Results'][x_parameter][model])                                    
-                                            alpha[analysis][subj][model][roi] *= np.isfinite(subj_res['Processed Results'][y_parameter][model])
-                                            
-                                            if diff_gauss:
-                                                y_par[analysis][subj][model][roi] = (subj_res['Processed Results'][y_parameter][model][alpha[analysis][subj][model][roi]])-subj_res['Processed Results'][y_parameter]['Gauss'][alpha[analysis][subj][model][roi]]
-                                            else:
-                                                y_par[analysis][subj][model][roi] = (subj_res['Processed Results'][y_parameter][model][alpha[analysis][subj][model][roi]])
-                                            
-                                            
+
                                             x_par[analysis][subj][model][roi] = subj_res['Processed Results'][x_parameter][model][alpha[analysis][subj][model][roi]]
+
+                                        y_par[analysis][subj][model][roi] = (subj_res['Processed Results'][y_parameter][model][alpha[analysis][subj][model][roi]])
+                                            
+                                        if diff_gauss:
+                                            y_par[analysis][subj][model][roi] -= subj_res['Processed Results'][y_parameter]['Gauss'][alpha[analysis][subj][model][roi]]
+                                        
+                                        if diff_gauss_x:
+                                            x_par[analysis][subj][model][roi] -= subj_res['Processed Results'][x_parameter]['Gauss'][alpha[analysis][subj][model][roi]]
+                                        
+                                            
+                                            
+                                                
+                                            
+                                            
                                             
                                             #set negative ccrsq and rsq to zero
                                             #if 'ccrsq' in y_parameter.lower():
                                             #    y_par[analysis][subj][model][roi][y_par[analysis][subj][model][roi]<0] = 0
                                             
                                             
-    
+                                        
     
                                         #r - squared weighting
                                         
@@ -1042,6 +1091,13 @@ class visualize_results(object):
                                                 
                                                 rsq[analysis][subj][model][roi] += rsq_x_param
                                                 rsq[analysis][subj][model][roi] /= 2
+                                        
+                                        #x_par[analysis][subj][model][roi] =  zscore(x_par[analysis][subj][model][roi])
+                                        #y_par[analysis][subj][model][roi] = zscore(y_par[analysis][subj][model][roi])
+                                        #rsq[analysis][subj][model][roi]
+                                                
+                                        
+                                        
         
                                     else:
                                         #group stats
@@ -1075,57 +1131,64 @@ class visualize_results(object):
                             x_labels.append(roi.replace('custom.','')+'\n')   
                             
                             for model in self.only_models:    
-                                
-                                    
+                                                                
                                 pl.figure(f"{analysis} {subj} Mean {y_parameter}", figsize=(8, 8), frameon=False)
- 
-                                pl.ylabel(f"{subj} Mean {y_parameter}")
                                 
-                                if ylim != None:
-                                    pl.ylim(ylim[0],ylim[1])
+                                if 'Eccentricity' in y_parameter or 'Size' in y_parameter:
+                                    pl.ylabel(f"{subj} Mean {y_parameter} (°)")
+                                elif 'B/D' in y_parameter:
+                                    pl.ylabel(f"{subj} Mean {y_parameter} (% signal change)")
+                                else:
+                                    pl.ylabel(f"{subj} Mean {y_parameter}")
+                                    
+                                if 'Mean' in xlim:
+                                    pl.xlim(xlim['Mean'])
+                                    
+                                if 'Mean' in ylim:
+                                    pl.ylim(ylim['Mean'])
                                                                            
                                 full_roi_stats = weightstats.DescrStatsW(y_par[analysis][subj][model][roi],
                                                         weights=rsq[analysis][subj][model][roi])
                                 
                                 bar_height = full_roi_stats.mean
-                                bar_err = np.abs(full_roi_stats.zconfint_mean(alpha=0.05/upsampling_corr_factor) - bar_height).reshape(2,1)
+                                bar_err = np.abs(full_roi_stats.zconfint_mean(alpha=0.01/upsampling_corr_factor) - bar_height).reshape(2,1)
                                 
 
                                 if len(self.only_models)>1:
                                     if violin:
-                                        viol_plot = pl.violinplot(y_par[analysis][subj][model][roi], [bar_position],
-                                                      widths=[bar_or_violin_width], showextrema=False, showmeans=True, showmedians=True)
+                                        # viol_plot = pl.violinplot(y_par[analysis][subj][model][roi], [bar_position],
+                                        #               widths=[bar_or_violin_width], showextrema=False, showmeans=True, showmedians=True)
                                         
-                                        for viol in viol_plot['bodies']:
-                                            viol.set_facecolor(model_colors[model])
-                                            viol.set_edgecolor('black')
-                                            viol.set_alpha(1.0)
+                                        # for viol in viol_plot['bodies']:
+                                        #     viol.set_facecolor(model_colors[model])
+                                        #     viol.set_edgecolor('black')
+                                        #     viol.set_alpha(1.0)
                                             
-                                        viol_plot['cmeans'].set_color('black')
-                                        viol_plot['cmedians'].set_color('white')
+                                        # viol_plot['cmeans'].set_color('black')
+                                        # viol_plot['cmedians'].set_color('white')
                                         
-                                        # bp = pl.boxplot(y_par[analysis][subj][model][roi], positions=[bar_position], showfliers=False, showmeans=True,
-                                        #                 widths=bar_or_violin_width, meanline=True, patch_artist=True)
-                                        # for box in bp['boxes']:
-                                        #     # change outline color
-                                        #     box.set(color='black')
-                                        #     # change fill color
-                                        #     box.set(facecolor = model_colors[model])
+                                        bp = pl.boxplot(y_par[analysis][subj][model][roi], positions=[bar_position], showfliers=False, showmeans=True,
+                                                        widths=bar_or_violin_width, meanline=True, patch_artist=True)
+                                        for box in bp['boxes']:
+                                            # change outline color
+                                            box.set(color='black')
+                                            # change fill color
+                                            box.set(facecolor = model_colors[model])
                                         
-                                        # ## change color and linewidth of the whiskers
-                                        # for whisker in bp['whiskers']:
-                                        #     whisker.set(color=model_colors[model])
+                                        ## change color and linewidth of the whiskers
+                                        for whisker in bp['whiskers']:
+                                            whisker.set(color=model_colors[model])
                                         
-                                        # ## change color and linewidth of the caps
-                                        # for cap in bp['caps']:
-                                        #     cap.set(color='black')
+                                        ## change color and linewidth of the caps
+                                        for cap in bp['caps']:
+                                            cap.set(color='black')
                                         
-                                        # ## change color and linewidth of the medians
-                                        # for median in bp['medians']:
-                                        #     median.set(color='white')
+                                        ## change color and linewidth of the medians
+                                        for median in bp['medians']:
+                                            median.set(color='white')
                                             
-                                        # for mean in bp['means']:
-                                        #     mean.set(color='black')
+                                        for mean in bp['means']:
+                                            mean.set(color='black')
                                             
                                             
                                         bar_height = y_par[analysis][subj][model][roi].max()
@@ -1156,8 +1219,8 @@ class visualize_results(object):
                                             y1, y2 = pl.gca().get_window_extent().get_points()[:, 1]
                                             window_size_points = y2-y1
                                             
-                                            if ylim!=None:
-                                                axis_height = ylim[1]-ylim[0]
+                                            if 'Mean' in ylim:
+                                                axis_height = ylim['Mean'][1]-ylim['Mean'][0]
                                                 #16 is font size
                                                 text_distance = 1.5*(16*axis_height)/window_size_points
                                             else:
@@ -1180,7 +1243,7 @@ class visualize_results(object):
                                                                                                                
                                                     #if ccc<50:
                                                     #    pl.figure(f"null distribs {analysis} {subj} {mod} {roi}")
-                                                    #    pl.hist(null_distrib, bins=50, color=f"C{i+4}")
+                                                    #    pl.hist(null_distrib, bins=50, color=cmap_rois[i])
                                                     
                                                     
                                                     #correct for upsampling
@@ -1287,23 +1350,61 @@ class visualize_results(object):
                                                 mid = plot_comparison_bracket()
                                                     
                                                 pl.text(*mid, pval_str, fontsize=16, color=text_color, weight = 'bold', ha='center', va='bottom')
-
-                                                
-                                                
-
-                                            
+                               
                                     
                                 else:
-                                    pl.bar(bar_position, bar_height, width=bar_or_violin_width, yerr=bar_err, 
-                                       edgecolor='black', color=f"C{i+4}")                                        
+                                    if violin:
+                                        try:
+                                            # viol_plot = pl.violinplot(y_par[analysis][subj][model][roi], [bar_position],
+                                            #               widths=[bar_or_violin_width], showextrema=False, showmeans=True, showmedians=True)
+                                            
+                                            # for viol in viol_plot['bodies']:
+                                            #     viol.set_facecolor(cmap_rois[i])
+                                            #     viol.set_edgecolor('black')
+                                            #     viol.set_alpha(1.0)
+                                                
+                                            # viol_plot['cmeans'].set_color('black')
+                                            # viol_plot['cmedians'].set_color('white')
+
+                                            bp = pl.boxplot(y_par[analysis][subj][model][roi], positions=[bar_position], showfliers=False, showmeans=True,
+                                                            widths=bar_or_violin_width, meanline=True, patch_artist=True)
+                                            for box in bp['boxes']:
+                                                # change outline color
+                                                box.set(color='black')
+                                                # change fill color
+                                                box.set(facecolor = cmap_rois[i])
+                                            
+                                            ## change color and linewidth of the whiskers
+                                            for whisker in bp['whiskers']:
+                                                whisker.set(color=model_colors[model])
+                                            
+                                            ## change color and linewidth of the caps
+                                            for cap in bp['caps']:
+                                                cap.set(color='black')
+                                            
+                                            ## change color and linewidth of the medians
+                                            for median in bp['medians']:
+                                                median.set(color='white')
+                                                
+                                            for mean in bp['means']:
+                                                mean.set(color='black')                                            
+                                            
+                                            
+                                        except:
+                                            pass
+                                                    
+                                    else:
+                                        pl.bar(bar_position, bar_height, width=bar_or_violin_width, yerr=bar_err, 
+                                               edgecolor='black', color=cmap_rois[i])                                        
                                 
                                 bar_position += bar_or_violin_width
 
                                 pl.xticks(x_ticks,x_labels)
-                                handles, labels = pl.gca().get_legend_handles_labels()
-                                by_label = dict(zip(labels, handles))
-                                if len(self.only_models) == 1:
-                                    pl.legend(by_label.values(), by_label.keys())
+                                
+                                # handles, labels = pl.gca().get_legend_handles_labels()
+                                # by_label = dict(zip(labels, handles))
+                                # if len(self.only_models) == 1:
+                                #     pl.legend(by_label.values(), by_label.keys())
                                     
                                 if save_figures:
                                     if len(analyses)>1:
@@ -1322,36 +1423,68 @@ class visualize_results(object):
                                 #pl.gca().set_yscale('log')
                                 #pl.gca().set_xscale('log')
                                 
-                                if ylim != None:
-                                    pl.ylim(ylim[0],ylim[1])
+                                if roi in ylim:
+                                    pl.ylim(ylim[roi])
+                                if roi in xlim:
+                                    pl.xlim(xlim[roi])
                                     
                                 for model in self.only_models:
-                                    #bin stats
+                                    #bin stats 
                                     x_par_sorted = np.argsort(x_par[analysis][subj][model][roi])
-                                    split_x_par_bins = np.array_split(x_par_sorted, 8) #8
-                                   
-                                    for x_par_quantile in split_x_par_bins:
-                                        #ddof_correction_quantile = ddof_corr*np.sum(rsq[analysis][subj][model][roi][x_par_quantile])
-                                        
-                                        y_par_stats[analysis][subj][model][roi].append(weightstats.DescrStatsW(y_par[analysis][subj][model][roi][x_par_quantile],
-                                                                                              weights=rsq[analysis][subj][model][roi][x_par_quantile]))
-                
-                                        x_par_stats[analysis][subj][model][roi].append(weightstats.DescrStatsW(x_par[analysis][subj][model][roi][x_par_quantile],
-                                                                                              weights=rsq[analysis][subj][model][roi][x_par_quantile]))
-                                        
+                                    
+                                    
+                                    try:
+                                        #equally spaced bins
+                                        #x_par_range = np.linspace(np.quantile(x_par[analysis][subj][model][roi], 0.05), np.quantile(x_par[analysis][subj][model][roi], 0.95), 8)
+                                        #split_x_par_bins = np.array_split(x_par_sorted, [np.nanargmin(np.abs(el-np.sort(x_par[analysis][subj][model][roi]))) for el in x_par_range])
+
+                                        #equally sized bins
+                                        split_x_par_bins = np.array_split(x_par_sorted, 8)
+                                    
+                                    
+                                        for x_par_quantile in split_x_par_bins:
+                                            #ddof_correction_quantile = ddof_corr*np.sum(rsq[analysis][subj][model][roi][x_par_quantile])
+                                            
+                                            y_par_stats[analysis][subj][model][roi].append(weightstats.DescrStatsW(y_par[analysis][subj][model][roi][x_par_quantile],
+                                                                                                  weights=rsq[analysis][subj][model][roi][x_par_quantile]))
+                    
+                                            x_par_stats[analysis][subj][model][roi].append(weightstats.DescrStatsW(x_par[analysis][subj][model][roi][x_par_quantile],
+                                                                                                  weights=rsq[analysis][subj][model][roi][x_par_quantile]))
+                                    except:
+                                        pass    
     
                                     if not scatter:                
                                         try:
                                             WLS = LinearRegression()
                                             WLS.fit(x_par[analysis][subj][model][roi].reshape(-1, 1), y_par[analysis][subj][model][roi], sample_weight=rsq[analysis][subj][model][roi])
+
+
+                                            for c in range(200):
+                                                
+                                                sample = np.random.randint(0, len(x_par[analysis][subj][model][roi]), int(len(x_par[analysis][subj][model][roi])/upsampling_corr_factor))
+                                                
+                                                WLS_bootstrap = LinearRegression()
+                                                WLS_bootstrap.fit(x_par[analysis][subj][model][roi][sample].reshape(-1, 1), y_par[analysis][subj][model][roi][sample], sample_weight=rsq[analysis][subj][model][roi][sample])
+                                                
+                                                bootstrap_fits[analysis][subj][model][roi].append(WLS_bootstrap.predict(np.array([ss.mean for ss in x_par_stats[analysis][subj][model][roi]]).reshape(-1, 1)))
+                                        
+
                                             if len(self.only_models)>1:
-                                                p=pl.plot([ss.mean for ss in x_par_stats[analysis][subj][model][roi]],
-                                                WLS.predict(np.array([ss.mean for ss in x_par_stats[analysis][subj][model][roi]]).reshape(-1, 1)),
-                                                color=model_colors[model])
+                                                current_color = model_colors[model]
+                                                current_label = model
                                             else:
-                                                p=pl.plot([ss.mean for ss in x_par_stats[analysis][subj][model][roi]],
+                                                current_color = cmap_rois[i]
+                                                current_label = roi.replace('custom.','')
+                                                
+                                            pl.plot([ss.mean for ss in x_par_stats[analysis][subj][model][roi]],
                                                 WLS.predict(np.array([ss.mean for ss in x_par_stats[analysis][subj][model][roi]]).reshape(-1, 1)),
-                                                color=f"C{i+4}")                                        
+                                                color=current_color, label=current_label)
+                                      
+                                            #conf interval shading
+                                            pl.fill_between([ss.mean for ss in x_par_stats[analysis][subj][model][roi]],
+                                                        np.min(bootstrap_fits[analysis][subj][model][roi], axis=0),
+                                                        np.max(bootstrap_fits[analysis][subj][model][roi], axis=0),
+                                                        alpha=0.2, color=current_color, label=current_label)
                                                     
                                             print(roi+" "+model+" "+str(WLS.score(x_par[analysis][subj][model][roi].reshape(-1, 1), y_par[analysis][subj][model][roi], sample_weight=rsq[analysis][subj][model][roi])))
                                         except Exception as e:
@@ -1359,18 +1492,13 @@ class visualize_results(object):
                                             pass
                                         
                                         try:
-                                            if len(self.only_models)>1:
-                                                pl.errorbar([ss.mean for ss in x_par_stats[analysis][subj][model][roi]],
+
+                                            pl.errorbar([ss.mean for ss in x_par_stats[analysis][subj][model][roi]],
                                                 [ss.mean for ss in y_par_stats[analysis][subj][model][roi]],
-                                                yerr=np.array([np.abs(ss.zconfint_mean(alpha=0.05/upsampling_corr_factor)-ss.mean) for ss in y_par_stats[analysis][subj][model][roi]]).T,
-                                                xerr=np.array([np.abs(ss.zconfint_mean(alpha=0.05/upsampling_corr_factor)-ss.mean) for ss in x_par_stats[analysis][subj][model][roi]]).T,
-                                                fmt='s',  mec='black', label=model, color=p[-1].get_color())#, mfc=model_colors[model], ecolor=model_colors[model])
-                                            else:
-                                                pl.errorbar([ss.mean for ss in x_par_stats[analysis][subj][model][roi]],
-                                                [ss.mean for ss in y_par_stats[analysis][subj][model][roi]],
-                                                yerr=np.array([np.abs(ss.zconfint_mean(alpha=0.05/upsampling_corr_factor)-ss.mean) for ss in y_par_stats[analysis][subj][model][roi]]).T,
-                                                xerr=np.array([np.abs(ss.zconfint_mean(alpha=0.05/upsampling_corr_factor)-ss.mean) for ss in x_par_stats[analysis][subj][model][roi]]).T,
-                                                fmt='s',  mec='black', label=roi.replace('custom.',''), color=p[-1].get_color())#, mfc=model_colors[model], ecolor=model_colors[model])
+                                                yerr=np.array([np.abs(ss.zconfint_mean(alpha=0.01/upsampling_corr_factor)-ss.mean) for ss in y_par_stats[analysis][subj][model][roi]]).T,
+                                                xerr=np.array([np.abs(ss.zconfint_mean(alpha=0.01/upsampling_corr_factor)-ss.mean) for ss in x_par_stats[analysis][subj][model][roi]]).T,
+                                                fmt='s',  mec='black', label=current_label, color=current_color)#, mfc=model_colors[model], ecolor=model_colors[model])
+
                                            
                                                 
                                         except Exception as e:
@@ -1379,18 +1507,45 @@ class visualize_results(object):
                                     else:
                                         try:
                                             if len(self.only_models)>1:
-                                                p=pl.scatter(x_par[analysis][subj][model][roi], y_par[analysis][subj][model][roi], marker='o', s=1,
-                                                color=model_colors[model], label=model)
+                                                current_color = model_colors[model]
+                                                current_label = model
                                             else:
-                                                p=pl.scatter(x_par[analysis][subj][model][roi], y_par[analysis][subj][model][roi], marker='o', s=1,
-                                                color=f"C{i+4}", label=roi.replace('custom.',''))  
+                                                current_color = cmap_rois[i]
+                                                current_label = roi.replace('custom.','')
+                                                
+                                            pl.scatter(x_par[analysis][subj][model][roi], y_par[analysis][subj][model][roi], marker='o', s=1,
+                                                color=current_color, label=current_label)
+
                                         except Exception as e:
                                             print(e)
                                             pass                            
                             
-                                pl.xlabel(f"{x_parameter}")
-                                pl.ylabel(f"{subj} {roi.replace('custom.','')} {y_parameter}")
-                                pl.legend(loc=0)
+
+                                if 'Eccentricity' in x_parameter or 'Size' in x_parameter:
+                                    pl.xlabel(f"{x_parameter} (°)")
+                                elif 'B/D' in x_parameter:
+                                    pl.xlabel(f"{x_parameter} (% signal change)")                                
+                                else:
+                                    pl.xlabel(f"{x_parameter}")    
+                                
+                                if 'Eccentricity' in y_parameter or 'Size' in y_parameter:
+                                    pl.ylabel(f"{subj} {roi.replace('custom.','')} {y_parameter} (°)")
+                                elif 'B/D' in y_parameter:
+                                    pl.ylabel(f"{subj} {roi.replace('custom.','')} {y_parameter} (% signal change)")
+                                else:
+                                    pl.ylabel(f"{subj} {roi.replace('custom.','')} {y_parameter}")
+                                
+                                handles, labels = pl.gca().get_legend_handles_labels()
+    
+                                # legend_dict = dd(list)
+                                # for cc, label in enumerate(labels):
+                                #     legend_dict[label].append(handles[cc])
+                                    
+                                # for label in legend_dict:
+                                #     legend_dict[label] = tuple(legend_dict[label])
+    
+                                # pl.legend([legend_dict[label] for label in legend_dict], legend_dict.keys())  
+                                    
                                 if save_figures:
                                     if len(analyses)>1:
                                         os.makedirs(f"/Users/marcoaqil/PRFMapping/Figures/{analysis}", exist_ok=True)
@@ -1400,72 +1555,97 @@ class visualize_results(object):
                                         pl.savefig(f"/Users/marcoaqil/PRFMapping/Figures/{subj} {roi.replace('custom.','')} {y_parameter.replace('/','')} VS {x_parameter.replace('/','')}.pdf", dpi=300, bbox_inches='tight')
 
 
-                        ########params by model
+                        ########params by model (all rois)
                         if not means_only:        
                             for model in self.only_models:
+                                
                                 pl.figure(f"{analysis} {subj} {model} {y_parameter} VS {x_parameter}", figsize=(8, 8), frameon=False)
                                 #pl.gca().set_yscale('log')
                                 #pl.gca().set_xscale('log')
                                 
-                                if ylim != None:
-                                    pl.ylim(ylim[0],ylim[1])
-                                #pl.xlim(0.2,4)
+                                if model in ylim:
+                                    pl.ylim(ylim[model])
+                                if model in xlim:
+                                    pl.xlim(xlim[model])
+                                    
                                 for i, roi in enumerate(rois):
-                                    try:
-                                        WLS = LinearRegression()
-                                        WLS.fit(x_par[analysis][subj][model][roi].reshape(-1, 1), y_par[analysis][subj][model][roi], sample_weight=rsq[analysis][subj][model][roi])
+                                    if not scatter:
+                                        try:
+                                            WLS = LinearRegression()
+                                            WLS.fit(x_par[analysis][subj][model][roi].reshape(-1, 1), y_par[analysis][subj][model][roi], sample_weight=rsq[analysis][subj][model][roi])
+                                            #WLS.fit(np.array([ss.mean for ss in x_par_stats[analysis][subj][model][roi]]).reshape(-1, 1), np.log(np.array([ss.mean for ss in y_par_stats[analysis][subj][model][roi]]).reshape(-1, 1)))
+                                            
+                                            current_color = cmap_rois[i]
+                                            current_label = roi.replace('custom.','')
+                                                    
+                                            pl.plot([ss.mean for ss in x_par_stats[analysis][subj][model][roi]],
+                                                WLS.predict(np.array([ss.mean for ss in x_par_stats[analysis][subj][model][roi]]).reshape(-1, 1)),
+                                                color=current_color, label=current_label)
+                                                #color=roi_colors[roi]) 
+                                                                              
+                                                       
+                                            print(f"{roi} {model} WLS score {WLS.score(x_par[analysis][subj][model][roi].reshape(-1, 1), y_par[analysis][subj][model][roi], sample_weight=rsq[analysis][subj][model][roi])}")
+                                        except Exception as e:
+                                            print(e)
+                                            pass
                                         
-                                        bootstrap_fits = []
-                                        for c in range(100):
+                                        try:
+                                            #conf interval shading
+                                            pl.fill_between([ss.mean for ss in x_par_stats[analysis][subj][model][roi]],
+                                                            np.min(bootstrap_fits[analysis][subj][model][roi], axis=0),
+                                                            np.max(bootstrap_fits[analysis][subj][model][roi], axis=0),
+                                                            alpha=0.2, color=current_color, label=current_label)
                                             
-                                            sample = np.random.randint(0, len(x_par[analysis][subj][model][roi]), int(0.9*len(x_par[analysis][subj][model][roi])))
-                                            
-                                            WLS_bootstrap = LinearRegression()
-                                            WLS_bootstrap.fit(x_par[analysis][subj][model][roi][sample].reshape(-1, 1), y_par[analysis][subj][model][roi][sample], sample_weight=rsq[analysis][subj][model][roi][sample])
-                                            
-                                            bootstrap_fits.append(WLS_bootstrap.predict(np.array([ss.mean for ss in x_par_stats[analysis][subj][model][roi]]).reshape(-1, 1)))
-                                    
-                                        p=pl.plot([ss.mean for ss in x_par_stats[analysis][subj][model][roi]],
-                                            WLS.predict(np.array([ss.mean for ss in x_par_stats[analysis][subj][model][roi]]).reshape(-1, 1)),
-                                            color=f"C{i+4}", label=roi.replace('custom.',''))
-                                            #color=roi_colors[roi]) 
-                                                                          
-                                                   
-                                        print(f"{roi} {model} WLS score {WLS.score(x_par[analysis][subj][model][roi].reshape(-1, 1), y_par[analysis][subj][model][roi], sample_weight=rsq[analysis][subj][model][roi])}")
-                                    except Exception as e:
-                                        print(e)
-                                        pass
-                                    
-                                    try:
-                                        #conf interval shading
-                                        pl.fill_between([ss.mean for ss in x_par_stats[analysis][subj][model][roi]],
-                                                        np.min(bootstrap_fits, axis=0),
-                                                        np.max(bootstrap_fits, axis=0),
-                                                        alpha=0.2, color=p[-1].get_color(), label=roi.replace('custom.',''))
+                                            #data points with errors
+                                            pl.errorbar([ss.mean for ss in x_par_stats[analysis][subj][model][roi]],
+                                            [ss.mean for ss in y_par_stats[analysis][subj][model][roi]],
+                                            yerr=np.array([np.abs(ss.zconfint_mean(alpha=0.01/upsampling_corr_factor)-ss.mean) for ss in y_par_stats[analysis][subj][model][roi]]).T,
+                                            xerr=np.array([np.abs(ss.zconfint_mean(alpha=0.01/upsampling_corr_factor)-ss.mean) for ss in x_par_stats[analysis][subj][model][roi]]).T,
+                                            fmt='s', mec='black', label=current_label, color=current_color)#, mfc=roi_colors[roi], ecolor=roi_colors[roi])
+                                        except Exception as e:
+                                            print(e)
+                                            pass
+                                    else:
                                         
-                                        #data points with errors
-                                        # pl.errorbar([ss.mean for ss in x_par_stats[analysis][subj][model][roi]],
-                                        # [ss.mean for ss in y_par_stats[analysis][subj][model][roi]],
-                                        # yerr=np.array([np.abs(ss.zconfint_mean(alpha=0.05)-ss.mean) for ss in y_par_stats[analysis][subj][model][roi]]).T,
-                                        # xerr=np.array([np.abs(ss.zconfint_mean(alpha=0.05)-ss.mean) for ss in x_par_stats[analysis][subj][model][roi]]).T,
-                                        # fmt='s', mec='black', label=roi.replace('custom.',''), color=p[-1].get_color())#, mfc=roi_colors[roi], ecolor=roi_colors[roi])
-                                    except Exception as e:
-                                        print(e)
-                                        pass
-                                pl.xlabel(f"{x_parameter}")
-                                pl.ylabel(f"{subj} {model} {y_parameter}")
-                                handles, labels = pl.gca().get_legend_handles_labels()
-                                #this is to merge multiple labels
-                                #by_label = dict(zip(labels, handles))
+                                        try:
     
-                                legend_dict = dd(list)
-                                for cc, label in enumerate(labels):
-                                    legend_dict[label].append(handles[cc])
+                                            current_color = cmap_rois[i]
+                                            current_label = roi.replace('custom.','')
+                                                
+                                            pl.scatter(x_par[analysis][subj][model][roi], y_par[analysis][subj][model][roi], marker='o', s=1,
+                                                color=current_color, label=current_label)
+    
+                                        except Exception as e:
+                                            print(e)
+                                            pass       
                                     
-                                for label in legend_dict:
-                                    legend_dict[label] = tuple(legend_dict[label])
+                                
+                                
+                                if 'Eccentricity' in x_parameter or 'Size' in x_parameter:
+                                    pl.xlabel(f"{x_parameter} (°)")
+                                elif 'B/D' in x_parameter:
+                                    pl.xlabel(f"{x_parameter} (% signal change)")   
+                                else:
+                                    pl.xlabel(f"{x_parameter}")
+                                    
+                                
+                                if 'Eccentricity' in y_parameter or 'Size' in y_parameter:
+                                    pl.ylabel(f"{subj} {model} {y_parameter} (°)")
+                                elif 'B/D' in y_parameter:
+                                    pl.ylabel(f"{subj} {model} {y_parameter} (% signal change)")   
+                                else:
+                                    pl.ylabel(f"{subj} {model} {y_parameter}")
+                                    
+                                # handles, labels = pl.gca().get_legend_handles_labels()
     
-                                pl.legend([legend_dict[label] for label in legend_dict], legend_dict.keys())                      
+                                # legend_dict = dd(list)
+                                # for cc, label in enumerate(labels):
+                                #     legend_dict[label].append(handles[cc])
+                                    
+                                # for label in legend_dict:
+                                #     legend_dict[label] = tuple(legend_dict[label])
+    
+                                # pl.legend([legend_dict[label] for label in legend_dict], legend_dict.keys())                      
     
                                 if save_figures:
                                     if len(analyses)>1:
@@ -1478,495 +1658,227 @@ class visualize_results(object):
 
         return
     
-    
-    def ecc_surround_roi_plots(self, rois, rsq_thresh, save_figures, analysis_names = 'all'):
-        
-        pl.rcParams.update({'font.size': 16})
-        pl.rcParams.update({'pdf.fonttype':42})
-        for space, space_res in self.main_dict.items():
-            if 'fs' in space:
-                if analysis_names == 'all':
-                    analyses = space_res.items()
-                else:
-                    analyses = [item for item in space_res.items() if item[0] in analysis_names] 
-                for analysis, analysis_res in analyses:       
-                    for subj, subj_res in analysis_res.items():
-                        print(space+" "+analysis+" "+subj)
-            
-                        # binned eccentricity vs other parameters relationships       
-            
-                        # model_colors = {'Gauss':'blue','CSS':'orange','DoG':'green','Norm':'red'}
-                                                
-                        # #model_symbols = {'Gauss':'^','CSS':'o','DoG':'v','Norm':'D'}
-                        # roi_colors = dd(lambda:'blue')
-                        # roi_colors['custom.V1']= 'black'
-                        # roi_colors['custom.V2']= 'red'
-                        # roi_colors['custom.V3']= 'pink'
+    def multidim_analysis(self, parameters, rois, rsq_thresh, save_figures, 
+                    analysis_names = 'all', subject_ids='all'):
 
-                        # #model_symbols = {'Gauss':'^','CSS':'o','DoG':'v','Norm':'D'}
-                        # roi_colors = dd(lambda:'blue')
-                        # roi_colors['custom.V1']= 'black'
-                        # roi_colors['custom.V2']= 'red'
-                        # roi_colors['custom.V3']= 'pink'
-                        # roi_colors['custom.hV4']='blue'
-                        # roi_colors['custom.V3AB']='orange'
-                        # #roi_colors['custom.']
-                        # symbol={}
-                        # symbol['custom.V1'] = 's'
-                        # symbol['custom.V2'] = '^'
-                        # symbol['custom.V3'] = 'v'
-                        # symbol['custom.LO'] = 'D'
-                        # symbol['custom.TO'] = 'o'
-                        
-                        fw_atmin_stats = dd(lambda:dd(list))
-                        ecc_stats = dd(lambda:dd(list))
-                        
-                        #exclude surrounds sizes larger than this (no surround)
-                        w_max=60
-            
-                        for roi in rois:
-            
-                            pl.figure(subj+roi+' fw_atmin', figsize=(8, 8), frameon=False)
-           
-                            for model in [k for k in subj_res['Processed Results']['Surround Size (fwatmin)'].keys() if k in self.only_models]:
-            
-                                #model-specific alpha? or all models same alpha?
-                                alpha_roi = roi_mask(self.idx_rois[subj][roi], subj_res['Processed Results']['Alpha'][model]>rsq_thresh) * (subj_res['Processed Results']['Surround Size (fwatmin)'][model]<w_max)
-                                
-                                ecc_model_roi = subj_res['Processed Results']['Eccentricity'][model][alpha_roi]
-                                fwatmin_model_roi = subj_res['Processed Results']['Surround Size (fwatmin)'][model][alpha_roi]
-                                rsq_model_roi = subj_res['Processed Results']['RSq'][model][alpha_roi]
-                                
-                                ecc_sorted = np.argsort(ecc_model_roi)
-                                split_ecc_bins = np.array_split(ecc_sorted, 10)
-                               
-                                for ecc_quantile in split_ecc_bins:
-                                    fw_atmin_stats[roi][model].append(weightstats.DescrStatsW(fwatmin_model_roi[ecc_quantile],
-                                                                                          weights=rsq_model_roi[ecc_quantile]))
-            
-                                    ecc_stats[roi][model].append(weightstats.DescrStatsW(ecc_model_roi[ecc_quantile],
-                                                                                          weights=rsq_model_roi[ecc_quantile]))
-            
-                       
-                                WLS = LinearRegression()
-                                WLS.fit(ecc_model_roi.reshape(-1, 1), fwatmin_model_roi, sample_weight=rsq_model_roi)
-                                p=pl.plot([ss.mean for ss in ecc_stats[roi][model]],
-                                        WLS.predict(np.array([ss.mean for ss in ecc_stats[roi][model]]).reshape(-1, 1)))
-                                        #,color=model_colors[model])
-                                            
-                                print(roi+" "+model+" "+str(WLS.score(ecc_model_roi.reshape(-1, 1), fwatmin_model_roi, sample_weight=rsq_model_roi)))
-            
-                                pl.errorbar([ss.mean for ss in ecc_stats[roi][model]],
-                                   [ss.mean for ss in fw_atmin_stats[roi][model]],
-                                   yerr=np.array([np.abs(ss.zconfint_mean(alpha=0.05)-ss.mean) for ss in fw_atmin_stats[roi][model]]).T,
-                                   xerr=np.array([np.abs(ss.zconfint_mean(alpha=0.05)-ss.mean) for ss in ecc_stats[roi][model]]).T,
-                                   fmt='s',  mec='black', label=model,color=p[-1].get_color())#, mfc=model_colors[model],ecolor=model_colors[model])
-            
-                            pl.xlabel('Eccentricity (degrees)')
-                            pl.ylabel(f"{subj} {roi.replace('custom.','')} pRF Surround Size (degrees)")
-                            pl.legend(loc=0)
-                            if save_figures:
-                                pl.savefig('/Users/marcoaqil/PRFMapping/Figures/'+subj+'_'+
-                                           roi.replace('custom.','')+'_fw-atmin.pdf', dpi=300, bbox_inches='tight')
-
-
-                        fw_atmin_stats = dd(lambda:dd(list))
-                        ecc_stats = dd(lambda:dd(list))
-                                
-                        for model in [k for k in subj_res['Processed Results']['Surround Size (fwatmin)'].keys() if k in self.only_models]:
-                            pl.figure(subj+model+' fw_atmin', figsize=(8, 8), frameon=False)
-                            for i, roi in enumerate(rois):
-                                #model-specific alpha? or all models same alpha?
-                                alpha_roi = roi_mask(self.idx_rois[subj][roi], subj_res['Processed Results']['Alpha'][model]>rsq_thresh) * (subj_res['Processed Results']['Surround Size (fwatmin)'][model]<w_max)
-                                
-                                ecc_model_roi = subj_res['Processed Results']['Eccentricity'][model][alpha_roi]
-                                fwatmin_model_roi = subj_res['Processed Results']['Surround Size (fwatmin)'][model][alpha_roi]
-                                rsq_model_roi = subj_res['Processed Results']['RSq'][model][alpha_roi]
-                                
-                                ecc_sorted = np.argsort(ecc_model_roi)
-                                split_ecc_bins = np.array_split(ecc_sorted, 10)
-                               
-                                for ecc_quantile in split_ecc_bins:
-                                    fw_atmin_stats[roi][model].append(weightstats.DescrStatsW(fwatmin_model_roi[ecc_quantile],
-                                                                                          weights=rsq_model_roi[ecc_quantile]))
-            
-                                    ecc_stats[roi][model].append(weightstats.DescrStatsW(ecc_model_roi[ecc_quantile],
-                                                                                          weights=rsq_model_roi[ecc_quantile]))
-            
-                       
-                                WLS = LinearRegression()
-                                WLS.fit(ecc_model_roi.reshape(-1, 1), fwatmin_model_roi, sample_weight=rsq_model_roi)
-                                p=pl.plot([ss.mean for ss in ecc_stats[roi][model]],
-                                        WLS.predict(np.array([ss.mean for ss in ecc_stats[roi][model]]).reshape(-1, 1)),
-                                        color=f"C{i+4}")#,
-                                        #color=roi_colors[roi])
-                                            
-                                print(roi+" "+model+" "+str(WLS.score(ecc_model_roi.reshape(-1, 1), fwatmin_model_roi, sample_weight=rsq_model_roi)))
-            
-                                pl.errorbar([ss.mean for ss in ecc_stats[roi][model]],
-                                   [ss.mean for ss in fw_atmin_stats[roi][model]],
-                                   yerr=np.array([np.abs(ss.zconfint_mean(alpha=0.05)-ss.mean) for ss in fw_atmin_stats[roi][model]]).T,
-                                   xerr=np.array([np.abs(ss.zconfint_mean(alpha=0.05)-ss.mean) for ss in ecc_stats[roi][model]]).T,
-                                   fmt='s', mec='black', label=roi.replace('custom.',''),color=p[-1].get_color())#, mfc=roi_colors[roi], ecolor=roi_colors[roi])
-            
-                            pl.xlabel('Eccentricity (degrees)')
-                            pl.ylabel(f'{subj} {model} pRF Surround Size (degrees)')
-                            pl.legend(loc=0)
-                            if save_figures:
-                                pl.savefig('/Users/marcoaqil/PRFMapping/Figures/'+subj+'_'+
-                                           model+'_fw-atmin.pdf', dpi=300, bbox_inches='tight')            
-            
-        return     
 
        
-    def ecc_css_exp_roi_plots(self, rois, rsq_thresh, save_figures, analysis_names = 'all'):
+        pl.rcParams.update({'font.size': 10})
+        pl.rcParams.update({'pdf.fonttype':42})
+        pl.rcParams.update({'figure.max_open_warning': 0})
+        pl.rcParams['axes.spines.right'] = True
+        pl.rcParams['axes.spines.top'] = True
         
-        pl.rcParams.update({'font.size': 16})
-        pl.rcParams.update({'pdf.fonttype':42})
+        cmap_rois = cm.get_cmap('nipy_spectral')(np.linspace(0.0, 0.9, len([r for r in rois if 'custom' in r]))[::-1])
+
         for space, space_res in self.main_dict.items():
-            if 'fs' in space:
+            if 'fsnative' in space:
+                
+                #upsampling correction: fsnative has approximately 3 times as many datapoints as original
+                upsampling_corr_factor = 3
+                
+                dimensions = []
+                        
                 if analysis_names == 'all':
-                    analyses = space_res.items()
+                    analyses = [item for item in space_res.items()]
                 else:
                     analyses = [item for item in space_res.items() if item[0] in analysis_names] 
-                for analysis, analysis_res in analyses:       
-                    for subj, subj_res in analysis_res.items():
-                        print(space+" "+analysis+" "+subj)
-            
-                        # binned eccentricity vs other parameters relationships       
-            
-                        # roi_colors = dd(lambda:'blue')
-                        # roi_colors['custom.V1']= 'black'
-                        # roi_colors['custom.V2']= 'red'
-                        # roi_colors['custom.V3']= 'pink'
-            
-                        css_exp_stats = dd(lambda:dd(list))
-                        ecc_stats = dd(lambda:dd(list))
-                        
-                        pl.figure('css_exp', figsize=(8, 8), frameon=False)
-                        for i, roi in enumerate(rois):
-
-                            if 'CSS' in subj_res['Processed Results']['RSq'].keys():                                
-                                model = 'CSS'
-                                #model-specific alpha? or all models same alpha?
-                                alpha_roi = roi_mask(self.idx_rois[subj][roi], subj_res['Processed Results']['Alpha'][model]>rsq_thresh)
-                                
-                                ecc_model_roi = subj_res['Processed Results']['Eccentricity'][model][alpha_roi]
-                                css_exp_roi = subj_res['Processed Results']['CSS Exponent'][model][alpha_roi]
-                                rsq_model_roi = subj_res['Processed Results']['RSq'][model][alpha_roi]
-                                
-                                ecc_sorted = np.argsort(ecc_model_roi)
-                                split_ecc_bins = np.array_split(ecc_sorted, 10)
-                               
-                                for ecc_quantile in split_ecc_bins:
-                                    css_exp_stats[roi][model].append(weightstats.DescrStatsW(css_exp_roi[ecc_quantile],
-                                                                                          weights=rsq_model_roi[ecc_quantile]))
-            
-                                    ecc_stats[roi][model].append(weightstats.DescrStatsW(ecc_model_roi[ecc_quantile],
-                                                                                          weights=rsq_model_roi[ecc_quantile]))
-            
-                       
-                                # WLS = LinearRegression()
-                                # WLS.fit(ecc_model_roi.reshape(-1, 1), css_exp_roi, sample_weight=rsq_model_roi)
-                                # pl.plot([ss.mean for ss in ecc_stats[roi][model]],
-                                #         WLS.predict(np.array([ss.mean for ss in ecc_stats[roi][model]]).reshape(-1, 1)),
-                                #         color=roi_colors[roi])
-                                            
-                                # print(roi+" "+model+" "+str(WLS.score(ecc_model_roi.reshape(-1, 1), css_exp_roi, sample_weight=rsq_model_roi)))
-            
-                                pl.errorbar([ss.mean for ss in ecc_stats[roi][model]],
-                                   [ss.mean for ss in css_exp_stats[roi][model]],
-                                   yerr=np.array([np.abs(ss.zconfint_mean(alpha=0.05)-ss.mean) for ss in css_exp_stats[roi][model]]).T,
-                                   xerr=np.array([np.abs(ss.zconfint_mean(alpha=0.05)-ss.mean) for ss in ecc_stats[roi][model]]).T,
-                                   fmt='s', mec='black', label=roi.replace('custom.',''),color=f"C{i+4}")#), mfc=roi_colors[roi], ecolor=roi_colors[roi])
-            
-                            pl.xlabel('Eccentricity (degrees)')
-                            pl.ylabel(subj+' CSS Exponent')
-                            pl.legend(loc=0)
-                            if save_figures:
-                                pl.savefig('/Users/marcoaqil/PRFMapping/Figures/'+subj+'_'+
-                                           roi.replace('custom.','')+'_css-exp.pdf', dpi=300, bbox_inches='tight')            
-        return     
-
-             
-    def ecc_norm_baselines_roi_plots(self, rois, rsq_thresh, save_figures, analysis_names='all'):
-        
-        pl.rcParams.update({'font.size': 16})
-        pl.rcParams.update({'pdf.fonttype':42})
-        for space, space_res in self.main_dict.items():
-            if 'fs' in space:
-                if analysis_names == 'all':
-                    analyses = space_res.items()
-                else:
-                    analyses = [item for item in space_res.items() if item[0] in analysis_names] 
-                for analysis, analysis_res in analyses:         
-                    for subj, subj_res in analysis_res.items():
-                        print(space+" "+analysis+" "+subj)
-            
-                        # binned eccentricity vs other parameters relationships       
-            
-                        # roi_colors = dd(lambda:'blue')
-                        # roi_colors['custom.V1']= 'black'
-                        # roi_colors['custom.V2']= 'red'
-                        # roi_colors['custom.V3']= 'pink'
-                        
-                        params = {}
-                        params['Norm Param. B'] = 'o'
-                        params['Norm Param. D'] = 'o'
-                        params['Ratio (B/D)'] = 'o'    
-                        #params['AD-BC (nonlinearity?)'] = 'o'
-                        
-                        
-                        symbol={}
-                        symbol['custom.V1'] = 's'
-                        symbol['custom.V2'] = '^'
-                        symbol['custom.V3'] = 'v'
-                        symbol['custom.LO'] = 'D'
-                        symbol['custom.TO'] = 'o'
-            
-
-                        for param in params:
-                            for model in [k for k in self.only_models if 'Norm' in k]:
-                                subj_res['Processed Results']['AD-BC (nonlinearity?)'][model]=np.zeros(subj_res['mask'].shape)
-                                subj_res['Processed Results']['AD-BC (nonlinearity?)'][model][subj_res['mask']] = subj_res['Results'][model][:,3]*subj_res['Results'][model][:,8]- subj_res['Results'][model][:,5]*subj_res['Results'][model][:,7]
-                                
-                                
-                                ecc_stats = dd(lambda:dd(list)) 
-                                norm_baselines_stats = dd(lambda:dd(list))
-                                
-                                bar_position = 0
-                                x_ticks=[]
-                                x_labels=[] 
-                                
-                                for i,roi in enumerate(rois):
-                                    pl.figure(analysis+param+subj+model, figsize=(8, 8), frameon=False)
-                                    if param == 'Norm Param. B':
-                                        pl.ylim(-5,100)
-                                    elif param == 'Norm Param. D':
-                                        pl.ylim(-5,100)
-                                    elif param == 'Ratio (B/D)':
-                                        pl.ylim(-1,8)
-                                        
-
-                                    alpha_roi = roi_mask(self.idx_rois[subj][roi], subj_res['Processed Results']['Alpha'][model]>rsq_thresh)#* (subj_res['Processed Results']['RSq']['DoG']<subj_res['Processed Results']['RSq']['Gauss'])
-                                    
-                                    ecc_model_roi = subj_res['Processed Results']['Eccentricity'][model][alpha_roi]
-                                    rsq_model_roi = subj_res['Processed Results']['RSq'][model][alpha_roi]
-                                    
-                                    ecc_sorted = np.argsort(ecc_model_roi)
-                                    split_ecc_bins = np.array_split(ecc_sorted, 8)
-                                    
-                                    norm_baselines_roi = subj_res['Processed Results'][param][model][alpha_roi]
-                                   
-                                    for ecc_quantile in split_ecc_bins:
-                                        norm_baselines_stats[roi][param].append(weightstats.DescrStatsW(norm_baselines_roi[ecc_quantile],
-                                                                                              weights=rsq_model_roi[ecc_quantile]))
-                
-                                        ecc_stats[roi][param].append(weightstats.DescrStatsW(ecc_model_roi[ecc_quantile],
-                                                                                              weights=rsq_model_roi[ecc_quantile]))
-                
-                           
-                                    WLS = LinearRegression()
-                                    WLS.fit(ecc_model_roi.reshape(-1, 1), norm_baselines_roi, sample_weight=rsq_model_roi)
-                                    p=pl.plot([ss.mean for ss in ecc_stats[roi][param]],
-                                              WLS.predict(np.array([ss.mean for ss in ecc_stats[roi][param]]).reshape(-1, 1)),
-                                              color=f"C{i+4}")#,
-                                              #color=roi_colors[roi])
-                                                
-                                    #print(roi+" "+model+" "+str(WLS.score(ecc_model_roi.reshape(-1, 1), norm_baselines_roi, sample_weight=rsq_model_roi)))
-                
-                                    pl.errorbar([ss.mean for ss in ecc_stats[roi][param]],
-                                       [ss.mean for ss in norm_baselines_stats[roi][param]],
-                                       yerr=np.array([np.abs(ss.zconfint_mean(alpha=0.05)-ss.mean) for ss in norm_baselines_stats[roi][param]]).T,
-                                       xerr=np.array([np.abs(ss.zconfint_mean(alpha=0.05)-ss.mean) for ss in ecc_stats[roi][param]]).T,
-                                       fmt=symbol[roi],  mec='black', label=roi.replace('custom.',''), color=p[-1].get_color())#, mfc=roi_colors[roi],ecolor=roi_colors[roi])
-                                    
-                                    pl.figure(analysis+param+subj+model+'mean', figsize=(8, 8), frameon=False)
-                                    
-                                    if param == 'Norm Param. B':
-                                        pl.ylim(0,31)
-                                    elif param == 'Norm Param. D':
-                                        pl.ylim(0,31)
-                                    elif param == 'Ratio (B/D)':
-                                        pl.ylim(0,3.1)
-                                        
-                                    full_roi_stats = weightstats.DescrStatsW(norm_baselines_roi, weights=rsq_model_roi)
-                                    
-                                    bar_height = full_roi_stats.mean
-                                    bar_err = np.array(np.abs(full_roi_stats.zconfint_mean(alpha=0.05)-bar_height)).reshape((-1,1))
-
-                                    pl.bar(bar_position, bar_height, width=0.1, yerr=bar_err,edgecolor='black',color=p[-1].get_color())#
-                                    x_ticks.append(bar_position)
-                                    x_labels.append(roi.replace('custom.',''))
-                                    bar_position+=0.15
-                                    pl.ylabel(f"{subj} {param}")
-                                    
-                                    pl.xticks(x_ticks,x_labels)
-                                    
-                                if save_figures:
-                                    pl.savefig(f"/Users/marcoaqil/PRFMapping/Figures/{subj}_mean-{param.replace('/','').replace('.','').replace(' ','_')}.pdf", dpi=300, bbox_inches='tight')
-                                                                        
-                                pl.figure(analysis+param+subj+model, figsize=(8, 8), frameon=False)    
-                                pl.xlabel('Eccentricity (degrees)')
-                                pl.ylabel(f"{subj} {param}")
-                                pl.legend(loc=0)
-                                if save_figures:
-                                    pl.savefig(f"/Users/marcoaqil/PRFMapping/Figures/{subj}_ecc-{param.replace('/','').replace('.','').replace(' ','_')}.pdf", dpi=300, bbox_inches='tight')
-                                    
-        return     
-
-                                   
-    def rsq_roi_plots(self, rois, rsq_thresh, save_figures, analysis_names='all', plot_hist=False, print_stats=False):
-
-        pl.rcParams.update({'font.size': 16})
-        pl.rcParams.update({'pdf.fonttype':42})
-        pl.rc('figure', facecolor='w')
-        for space, space_res in self.main_dict.items():
-            if 'fs' in space:
-                if analysis_names == 'all':
-                    analyses = space_res.items()
-                else:
-                    analyses = [item for item in space_res.items() if item[0] in analysis_names] 
-                for analysis, analysis_res in analyses:
-                    model_rsq=dd(lambda:dd(dict))
                     
-                    for i, (subj, subj_res) in enumerate(analysis_res.items()):
+                if len(analyses)>1:
+                    analyses.append(('Analyses mean', {sub:{} for sub in analyses[0][1]}))
+                    
+
+                alpha = dd(lambda:dd(lambda:dd(dict)))
+                multidim_param_array = dd(lambda:dd(lambda:dd(list)))
+                dimensions = dd(lambda:dd(lambda:dd(list)))
+                   
+                
+                for analysis, analysis_res in analyses:       
+                    if subject_ids == 'all':
+                        subjects = [item for item in analysis_res.items()]
+                    else:
+                        subjects = [item for item in analysis_res.items() if item[0] in subject_ids]
+                    
+                    if len(subjects)>1:
+                        subjects.append(('Group', {}))
+
+                    for subj, subj_res in subjects:
                         print(space+" "+analysis+" "+subj)
-                        x_ticks=[]
-                        x_labels=[]    
-                        bar_position = 0
-                        last_bar_position = 0#dd(lambda:0)
-            
+
+                        
                         # binned eccentricity vs other parameters relationships       
             
-                        #model_colors = {'Gauss':'blue','CSS':'orange','DoG':'green','Norm':'red'}
+                        model_colors = {'Gauss':'blue','CSS':'orange','DoG':'green','Norm_abcd':'red'}                                                
+    
+                        for i, roi in enumerate(rois):                              
+                            if 'mean' not in analysis:
+                                if 'sub' in subj:
+                                    for param in parameters:                                
 
-                        cmap = cm.get_cmap('tab10')
+                                        if roi in self.idx_rois[subj]:
 
-                        for roi in rois:
-                            bar_position=last_bar_position+0.1
-                            pl.figure(analysis+subj+' RSq', figsize=(8, 8), frameon=False)
-                            pl.ylabel(subj+' R-squared')  
-                            pl.ylim((0.0,0.7))
-                            
-                            alpha_roi = roi_mask(self.idx_rois[subj][roi], subj_res['Processed Results']['Alpha']['all']>rsq_thresh) #* (subj_res['Processed Results']['RSq']['CSS']>subj_res['Processed Results']['RSq']['Gauss']) * (subj_res['Processed Results']['RSq']['DoG']>subj_res['Processed Results']['RSq']['Gauss'])
-                            print(self.idx_rois[subj][roi].shape)
-                            print(alpha_roi.sum())
-                            
-                            
-                            model_list = [k for k in subj_res['Processed Results']['RSq'].keys() if k in self.only_models]
-                            model_list.sort()
-                            model_list[0], model_list[2] = model_list[2], model_list[0]
-                            model_colors = {model:cmap(val) for model,val in zip(model_list,[0,2,1,3])}
-                            
-                            #for model in model_list:
-                            #   alpha_roi *= (subj_res['Processed Results']['CCrsq_task-1R'][model]>0.0)
-                            #alpha_roi *= np.nanmax(np.array([subj_res['Processed Results']['CCrsq_task-1S'][model] for model in model_list]), axis=0)>0.0
-                            
-                            #print(alpha_roi.sum())     
-                            x_ticks.append(bar_position+0.15)
-                            x_labels.append(roi.replace('custom.','')+'\n')
-                            for model in model_list:
-                                                            
-                                model_rsq[roi][model][subj] = (subj_res['Processed Results']['RSq'][model][alpha_roi])#-subj_res['Processed Results']['RSq']['Gauss'][alpha_roi])#*100 / subj_res['Processed Results']['RSq']['Gauss'][alpha_roi]
-                                
-                                bar_height = np.mean(model_rsq[roi][model][subj])
-
-                                bar_err = sem(model_rsq[roi][model][subj])
-
-                                pl.bar(bar_position, bar_height, width=0.1, yerr=bar_err,edgecolor='black', label=model, color=model_colors[model])
-                                
-                                if i+1 == len(analysis_res.keys()):
-                                    group_rsq = np.concatenate(tuple([model_rsq[roi][model][k] for k in model_rsq[roi][model]]))#.flatten()   
-                                    group = ''.join([k for k in model_rsq[roi][model]])
-
-                                    pl.figure(analysis+'group RSq', figsize=(8, 8), frameon=False)
-                                    pl.ylabel(group+' R-squared')  
-                                    pl.ylim((0,0.7))
-                                    bar_height = np.mean(group_rsq)
-                                    bar_err = sem(group_rsq)
-                                    pl.bar(bar_position, bar_height, width=0.1, yerr=bar_err,edgecolor='black', label=model, color=model_colors[model])
-                                
-                                    pl.xticks(x_ticks,x_labels)
-                                    handles, labels = pl.gca().get_legend_handles_labels()
-                                    by_label = dict(zip(labels, handles))
-                                    pl.legend(by_label.values(), by_label.keys())
-                                    pl.figure(analysis+subj+' RSq', figsize=(8, 8), frameon=False)
-                                
-                                bar_position += 0.1
-                              
-
-                            last_bar_position = bar_position
-                            pl.xticks(x_ticks,x_labels)
-                            handles, labels = pl.gca().get_legend_handles_labels()
-                            by_label = dict(zip(labels, handles))
-                            pl.legend(by_label.values(), by_label.keys())
-                            
-                            if print_stats:
-                             
-                                if 'CSS' in model_list and 'DoG' in model_list:
-                                    for model in [model for model in model_list if 'Norm' in model]:
-                                        surround_voxels = subj_res['Processed Results']['RSq']['DoG'][alpha_roi]>subj_res['Processed Results']['RSq']['Gauss'][alpha_roi]
-                                        nonlinear_voxels = subj_res['Processed Results']['RSq']['CSS'][alpha_roi]>subj_res['Processed Results']['RSq']['Gauss'][alpha_roi]
-                                        
-                                        print(analysis+' '+roi)
-                                        print(f"{roi} voxels above {rsq_thresh} threshold within stimulus eccentricity: {np.sum(alpha_roi)} out of {len(self.idx_rois[subj][roi])}")
-                                        
-                                        print(f"{model}-CSS in {roi} surround voxels: {ks_2samp(subj_res['Processed Results']['RSq'][model][alpha_roi][surround_voxels],subj_res['Processed Results']['RSq']['CSS'][alpha_roi][surround_voxels])}")
-                                        print(f"{model}-DoG in {roi} nonlinear voxels: {ks_2samp(subj_res['Processed Results']['RSq'][model][alpha_roi][nonlinear_voxels],subj_res['Processed Results']['RSq']['DoG'][alpha_roi][nonlinear_voxels])}")
-                                        
-                                        norm_css_surrvox = subj_res['Processed Results']['RSq'][model][alpha_roi][surround_voxels]-subj_res['Processed Results']['RSq']['CSS'][alpha_roi][surround_voxels]
-                                        norm_dog_nonlvox = subj_res['Processed Results']['RSq'][model][alpha_roi][nonlinear_voxels]-subj_res['Processed Results']['RSq']['DoG'][alpha_roi][nonlinear_voxels]
-                                        norm_css_nonlvox = subj_res['Processed Results']['RSq'][model][alpha_roi][nonlinear_voxels]-subj_res['Processed Results']['RSq']['CSS'][alpha_roi][nonlinear_voxels]
-                                        norm_dog_surrvox = subj_res['Processed Results']['RSq'][model][alpha_roi][surround_voxels]-subj_res['Processed Results']['RSq']['DoG'][alpha_roi][surround_voxels]
-                                        
-                                        # if noise_ceiling is not None:
-                                        #     norm_css_surrvox /= noise_ceiling[alpha_roi][surround_voxels]
-                                        #     norm_dog_nonlvox /= noise_ceiling[alpha_roi][nonlinear_voxels]
-                                        #     norm_css_nonlvox /= noise_ceiling[alpha_roi][nonlinear_voxels]
-                                        #     norm_dog_surrvox /= noise_ceiling[alpha_roi][surround_voxels]
+                                            #comparing same vertices
+                                            alpha[analysis][subj][roi] = (roi_mask(self.idx_rois[subj][roi], subj_res['Processed Results']['Alpha']['all']>rsq_thresh)) #* (subj_res['Processed Results']['Size (fwhmax)'][model]<w_max)
                                             
-                                        print(f"{model}-CSS in {roi} surround voxels: {ttest_1samp(norm_css_surrvox,0)}")
-                                        print(f"{model}-DoG in {roi} nonlinear voxels: {ttest_1samp(norm_dog_nonlvox,0)}")
                                         
-                                        print(f"{model}-CSS in {roi} surround voxels: {wilcoxon(norm_css_surrvox)}")
-                                        print(f"{model}-DoG in {roi} nonlinear voxels: {wilcoxon(norm_dog_nonlvox)}")
-                                                                                      
-                                        print(f"{model}-CSS in {roi} surround voxels: {np.mean(norm_css_surrvox)}")
-                                        print(f"{model}-DoG in {roi} nonlinear voxels: {np.mean(norm_dog_nonlvox)}")
-                                    
-                                if plot_hist:
-                                    fig, axs = pl.subplots(2, 2, sharey=True, sharex=True)
-                                    fig.suptitle(roi.replace('custom.',''))
-                                    axs[0,0].set_xlabel('Norm-CSS')
-                                    axs[0,0].set_ylabel('Number of vertices')
-                                    axs[0,1].set_xlabel('Norm-CSS') 
-                                    axs[0,0].set_title('Surround vertices')
-                                    axs[0,1].set_title('Nonlinear vertices')
-                                    
-                                    h1 = axs[0,0].hist(norm_css_surrvox,bins=100)
-                                    h2 = axs[0,1].hist(norm_css_nonlvox,bins=100)
-                                    
+                                        else:
+                                            #if ROI is not defined
+                                            #if Brain use all available vertices
+                                            if roi == 'Brain':
+                                                alpha[analysis][subj][roi] = (subj_res['Processed Results']['Alpha']['all'])>rsq_thresh
+                                            #if all, combine all other rois
+                                            elif roi == 'all':
+                                                alpha[analysis][subj][roi] = (roi_mask(np.concatenate(tuple([self.idx_rois[subj][r] for r in rois if ('custom' in r and r in self.idx_rois[subj])])), subj_res['Processed Results']['Alpha']['all']>rsq_thresh)) #* (subj_res['Processed Results']['Size (fwhmax)'][model]<w_max)
+                                                
+                                            else:
+                                                #, otherwise none
+                                                print("undefined ROI")
+                                                alpha[analysis][subj][roi] = np.zeros_like(subj_res['Processed Results']['Alpha']['all']).astype('bool')
+                                                
+                                                
+                                        
+                                        for model in self.only_models:
+                                            if model in subj_res['Processed Results'][param] and alpha[analysis][subj][roi].sum()>0:
+                                                alpha[analysis][subj][roi] *= np.isfinite(subj_res['Processed Results'][param][model])
 
-                                    axs[1,0].set_xlabel('Norm-DoG')
-                                    axs[1,0].set_ylabel('Number of vertices')
-                                    axs[1,1].set_xlabel('Norm-DoG') 
+                                                # param_max = subj_res['Processed Results'][param][model][alpha[analysis][subj][roi]].mean()+3*np.std(subj_res['Processed Results'][param][model][alpha[analysis][subj][roi]])
+                                                # param_min = subj_res['Processed Results'][param][model][alpha[analysis][subj][roi]].mean()-3*np.std(subj_res['Processed Results'][param][model][alpha[analysis][subj][roi]])
+                                                
+                                                
+                                                # alpha[analysis][subj][roi] *= (subj_res['Processed Results'][param][model]<param_max)
+                                                # alpha[analysis][subj][roi] *= (subj_res['Processed Results'][param][model]>param_min)
+                                                # print(f"max min {param} {param_max} {param_min} {np.var(subj_res['Processed Results'][param][model][alpha[analysis][subj][roi]])}")
+                                                
+                                                
+                        for i, roi in enumerate(rois):                              
+                            if 'mean' not in analysis:
+                                if 'sub' in subj:
+                                    for param in parameters:                                           
+                                        
+                                        for model in self.only_models:
+                                            if model in subj_res['Processed Results'][param]:                       
+                                                dimensions[analysis][subj][roi].append(f"{param} {model}")
+                                                #if param == 'Surround Amplitude':
+                                                #    multidim_param_array[analysis][subj][roi].append(subj_res['Processed Results']['Surround Amplitude']['Norm_abcd']/subj_res['Processed Results']['Amplitude']['Norm_abcd'])
+                                                    
+                                                multidim_param_array[analysis][subj][roi].append(subj_res['Processed Results'][param][model][alpha[analysis][subj][roi]])
+                                                
+                                                
+                                                
+                                    multidim_param_array[analysis][subj][roi] = zscore(np.array([x for _,x in sorted(zip(dimensions[analysis][subj][roi],multidim_param_array[analysis][subj][roi]))]), axis=1)
+                                    #multidim_param_array[analysis][subj][roi] = np.array([x for _,x in sorted(zip(dimensions[analysis][subj][roi],multidim_param_array[analysis][subj][roi]))])
+                                    print(multidim_param_array[analysis][subj][roi].shape)
                                     
-                                    h3 = axs[1,0].hist(norm_dog_surrvox,bins=100)
-                                    h4 = axs[1,1].hist(norm_dog_nonlvox,bins=100)
+                                else:
+                                    #group data
+                                    dimensions[analysis][subj][roi] = dimensions[analysis][subjects[0][0]][roi]
+                                    alpha[analysis][subj][roi] = np.hstack(tuple([alpha[analysis][sid][roi] for sid in alpha[analysis] if 'sub' in sid]))
+                                    multidim_param_array[analysis][subj][roi] = np.hstack(tuple([multidim_param_array[analysis][sid][roi] for sid in multidim_param_array[analysis] if 'sub' in sid]))
+ 
                                     
-                                    height = 1+int(np.max([h1[0].max(),h2[0].max(), h3[0].max(), h4[0].max()]))
-                                    
-                                    axs[0,0].plot(np.zeros(height), np.arange(height), c='black', linestyle='--')   
-                                    axs[0,1].plot(np.zeros(height), np.arange(height), c='black', linestyle='--')                               
-                                    axs[1,0].plot(np.zeros(height), np.arange(height), c='black', linestyle='--')   
-                                    axs[1,1].plot(np.zeros(height), np.arange(height), c='black', linestyle='--')                                
+                            else:
+                                #all analyses data
+                                ans = [an[0] for an in analyses if 'mean' not in an[0]]
+                                dimensions[analysis][subj][roi] = dimensions[analyses[0][0]][subj][roi]
+                                alpha[analysis][subj][roi] = np.hstack(tuple([alpha[an][subj][roi] for an in ans]))
+                                multidim_param_array[analysis][subj][roi] = np.hstack(tuple([multidim_param_array[an][subj][roi] for an in ans]))
 
-                            print('---------------')
-                        if save_figures:
-                            pl.savefig(f"/Users/marcoaqil/PRFMapping/Figures/{subj}_rsq.pdf", dpi=300, bbox_inches='tight')
-                        print('\n')
+                                
+                        
+                            ordered_dimensions = sorted(dimensions[analysis][subj][roi])
                             
-        return     
+                            if subj == 'Group' and 'mean' in analysis and roi == 'all':
+                                print(f"{analysis} {subj} {roi}")
+                                
+                                print(multidim_param_array[analysis][subj][roi].shape)
+                                #ticks = [dim.replace for dim in ordered_dimensions]
+                                
+                                pl.figure(figsize=(6,6))
+                                im = pl.imshow(np.corrcoef(multidim_param_array[analysis][subj][roi]), vmin=-0.5, vmax=0.5, cmap='RdBu_r')
+                                
+                                ticks = []
+                                tick_colors = []
+                                for dim in ordered_dimensions:
+                                    for model in self.only_models:
+                                        if model in dim:
+                                            tick_colors.append(model_colors[model])
+                                            ticks.append(dim.replace(model,''))
+                                
+                                pl.xticks(np.arange(len(ordered_dimensions)), ticks, rotation='vertical')
+                                pl.yticks(np.arange(len(ordered_dimensions)), ticks)
+                                colorbar(im)
+                                
+                                for tick_x, tick_y, tick_color in zip(pl.gca().get_xticklabels(), pl.gca().get_yticklabels(), tick_colors):
+                                    tick_x.set_color(tick_color)
+                                    tick_y.set_color(tick_color)
+
+                                #from sklearn.decomposition import FastICA
+                                from sklearn.manifold import MDS
+                                pca = PCA()#n_components=2, svd_solver='full')
+                                #mds = MDS()
+                                #ica = FastICA()
+                                
+                                transformed_data = pca.fit_transform(multidim_param_array[analysis][subj][roi].T)
+                                #transformed_data = ica.fit_transform(multidim_param_array[analysis][subj][roi].T)
+                                #transformed_data = mds.fit_transform(multidim_param_array[analysis][subj][roi].T)
+                                #transformed_data = multidim_param_array[analysis][subj][roi].T
+                                
+                                
+                                print(transformed_data.shape)
+                                
+                                start = 0
+                                stop = 0
+                                means=[]
+                                # for dims in list(itertools.combinations(np.arange(transformed_data.shape[1]),2)):
+                                #     fig = pl.figure(f'scatter {dims}', figsize=(6,6))
+                                    
+                                #     ax = fig.add_subplot(111)
+                                #     ax.grid(False)
+    
+                                #     #sample = np.random.randint(0, (stop-start), 200)
+                                    
+                                #     #means.append(np.mean(transformed_data[start:stop,:], axis=0))
+    
+                                #     #means_dist = means[np.newaxis,...]-transformed_data[start:stop,:]
+                                    
+                                #     #ax.scatter(transformed_data[start:stop,0].mean(), transformed_data[start:stop,1].mean(), transformed_data[start:stop,2].mean(), s=40, c=cmap_rois[g],  alpha=1) #zorder=len(rois)-i,
+                                #     #ax.scatter(transformed_data[start:stop,dims[0]], transformed_data[start:stop,dims[1]], s=1, c=cmap_rois[g],  alpha=0.5, zorder=len(rois)-1-g)
+                                #     #ax.scatter(transformed_data[:,dims[0]], transformed_data[:,dims[1]], s=1, c=cmap_rois[i],  alpha=0.5, zorder=len(rois)-i)
+
+                                for g,rrr in enumerate(rois): 
+                                    if 'custom' in rrr:
+                                        stop += np.sum(alpha[analysis][subj][rrr])
+                                        for dims in list(itertools.combinations(np.arange(transformed_data.shape[1]),2)):
+                                            fig = pl.figure(f'scatter {dims}', figsize=(6,6))
+                                            
+                                            ax = fig.add_subplot(111)
+                                            ax.grid(False)
+
+                                            #sample = np.random.randint(0, (stop-start), 200)
+                                            
+                                            means.append(np.mean(transformed_data[start:stop,:], axis=0))
+
+                                            #means_dist = means[np.newaxis,...]-transformed_data[start:stop,:]
+                                            
+                                            #ax.scatter(transformed_data[start:stop,0].mean(), transformed_data[start:stop,1].mean(), transformed_data[start:stop,2].mean(), s=40, c=cmap_rois[g],  alpha=1) #zorder=len(rois)-i,
+                                            ax.scatter(transformed_data[start:stop,dims[0]], transformed_data[start:stop,dims[1]], s=1, c=cmap_rois[g],  alpha=0.5, zorder=len(rois)-g)
+                                            #ax.scatter(transformed_data[:,dims[0]], transformed_data[:,dims[1]], s=1, c=cmap_rois[g],  alpha=0.5, zorder=len(rois)-g)
+
+                                            #ax.scatter(transformed_data[start:stop,0][sample], transformed_data[start:stop,1][sample],transformed_data[start:stop,2][sample], s=1, c=cmap_rois[g],  alpha=0.5) #zorder=len(rois)-i,
+    
+                                            #ax.scatter(np.median(transformed_data[start:stop,0]), np.median(transformed_data[start:stop,1]), s=10, c=cmap_rois[g],  alpha=1)
+                                        start += np.sum(alpha[analysis][subj][rrr])
+                                
+                                print(np.var(means, axis=0))
+                                np.set_printoptions(suppress=True)
+                                print(ordered_dimensions)
+                                print(pca.components_)
+                                print(pca.explained_variance_ratio_)
+
+
+
+        return
+      
+   
 
                                 
