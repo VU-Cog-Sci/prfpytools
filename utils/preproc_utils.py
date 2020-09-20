@@ -174,9 +174,19 @@ def prepare_data(subj,
                 for tc_path in [tc_paths[run] for run in fit_runs]:
                     tc_run = nb.load(str(tc_path))
                     #no need to pass further args, only filtering 1 condition
-                    tc_task.append(filter_predictions(np.array([arr.data for arr in tc_run.darrays]).T[...,discard_volumes:],
+                    if data_scaling in ["zsc", "z-score"]:
+                        tc_task.append(zscore(filter_predictions(np.array([arr.data for arr in tc_run.darrays]).T[...,discard_volumes:],
                                                      filter_type=filter_type,
-                                                     filter_params=filter_params))
+                                                     filter_params=filter_params), axis=0))
+                    elif data_scaling in ["psc", "percent_signal_change"]:
+                        tc_task.append(filter_predictions(np.array([arr.data for arr in tc_run.darrays]).T[...,discard_volumes:],
+                                 filter_type=filter_type,
+                                 filter_params=filter_params), axis=0)
+                        tc_task[-1] *= (100/tc_task[-1].mean(-1))
+                    else:
+                        tc_task.append(filter_predictions(np.array([arr.data for arr in tc_run.darrays]).T[...,discard_volumes:],
+                                 filter_type=filter_type,
+                                 filter_params=filter_params), axis=0)                        
     
                     #when scanning sub-001 i mistakenly set the length of the 4F scan to 147, while it should have been 145
                     #therefore, there are two extra images at the end to discard in that time series.
@@ -252,11 +262,11 @@ def prepare_data(subj,
         #masking flat or nearly flat timecourses
         if crossvalidate:
             nonlow_var = (np.abs(tc_full_iso - tc_mean[...,np.newaxis]).max(-1) > (tc_mean*min_percent_var/100)) \
-                 * (np.abs(tc_full_iso_test - tc_mean_test[...,np.newaxis]).max(-1) > (tc_mean_test*min_percent_var/100)) \
-                 * (tc_mean>0) * (tc_mean_test>0)
+                 * (np.abs(tc_full_iso_test - tc_mean_test[...,np.newaxis]).max(-1) > (tc_mean_test*min_percent_var/100)) #\
+                 #* (tc_mean>0) * (tc_mean_test>0)
         else:
-            nonlow_var = (np.abs(tc_full_iso - tc_mean[...,np.newaxis]).max(-1) > (tc_mean*min_percent_var/100)) \
-                 * (tc_mean>0) 
+            nonlow_var = (np.abs(tc_full_iso - tc_mean[...,np.newaxis]).max(-1) > (tc_mean*min_percent_var/100)) #\
+                 #* (tc_mean>0) 
                  
         if roi_idx is not None:
             mask = roi_mask(roi_idx, nonlow_var)
@@ -266,26 +276,10 @@ def prepare_data(subj,
         tc_dict_combined = dict()
         tc_dict_combined['mask'] = mask
 
-        #conversion to +- of % of mean
-        if data_scaling in ["psc", "percent_signal_change"]:
-            tc_full_iso_nonzerovar = 100*(tc_full_iso[mask] / tc_mean[mask,np.newaxis])
-            iso_full = 100*(iso_full/tc_mean)
-            if crossvalidate:
-                tc_full_iso_nonzerovar_test = 100*(tc_full_iso_test[mask] / tc_mean_test[mask,np.newaxis])
-                iso_full_test = 100*(iso_full_test/tc_mean_test)
-        elif data_scaling in ["zsc", "z-score"]:
-            tc_full_iso_nonzerovar = zscore(tc_full_iso[mask], axis=-1)
-            if crossvalidate:
-                tc_full_iso_nonzerovar_test = zscore(tc_full_iso_test[mask], axis=-1)   
-        elif data_scaling == None:
-            tc_full_iso_nonzerovar = tc_full_iso[mask]
-            if crossvalidate:
-                tc_full_iso_nonzerovar_test = tc_full_iso_test[mask]
-        else:
-            print("Warning: data scaling option not recognized. Using raw data.")
-            tc_full_iso_nonzerovar = tc_full_iso[mask]
-            if crossvalidate:
-                tc_full_iso_nonzerovar_test = tc_full_iso_test[mask]
+
+        tc_full_iso_nonzerovar = tc_full_iso[mask]
+        if crossvalidate:
+            tc_full_iso_nonzerovar_test = tc_full_iso_test[mask]
                 
         if fix_bold_baseline:
             tc_full_iso_nonzerovar += (tc_full_iso_nonzerovar.mean(-1)-iso_full[mask])[...,np.newaxis]
