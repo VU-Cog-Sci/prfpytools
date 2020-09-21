@@ -361,7 +361,7 @@ class visualize_results(object):
             pl.ion()
 
             if self.click==0:
-                self.f, self.axes = pl.subplots(2,2,figsize=(10, 15),frameon=False, gridspec_kw={'width_ratios': [8, 2], 'height_ratios': [1,1]})
+                self.f, self.axes = pl.subplots(2,2,figsize=(10, 15),frameon=True, gridspec_kw={'width_ratios': [8, 2], 'height_ratios': [1,1]})
                 self.f.set_tight_layout(True)
             else:
                 self.cbar.remove()
@@ -1132,7 +1132,7 @@ class visualize_results(object):
                             
                             for model in self.only_models:    
                                                                 
-                                pl.figure(f"{analysis} {subj} Mean {y_parameter}", figsize=(8, 8), frameon=False)
+                                pl.figure(f"{analysis} {subj} Mean {y_parameter}", figsize=(8, 8), frameon=True)
                                 
                                 if 'Eccentricity' in y_parameter or 'Size' in y_parameter:
                                     pl.ylabel(f"{subj} Mean {y_parameter} (°)")
@@ -1263,7 +1263,7 @@ class visualize_results(object):
                                                     #pvals.append(wilcoxon(observ, null_distrib, alternative='greater')[1])
                                                     #pvals.append(ks_2samp(observ, null_distrib, alternative='less')[1])
     
-                                                #pl.figure(f"{analysis} {subj} Mean {y_parameter}", figsize=(8, 8), frameon=False) 
+                                                #pl.figure(f"{analysis} {subj} Mean {y_parameter}", figsize=(8, 8), frameon=True) 
                                                         
                                                     
                                                 pval = np.mean(pvals) 
@@ -1419,7 +1419,7 @@ class visualize_results(object):
                             for i, roi in enumerate(rois):
                                 ###################
                                 #x vs y param by ROI
-                                pl.figure(f"{analysis} {subj} {roi.replace('custom.','')} {y_parameter} VS {x_parameter}", figsize=(8, 8), frameon=False)
+                                pl.figure(f"{analysis} {subj} {roi.replace('custom.','')} {y_parameter} VS {x_parameter}", figsize=(8, 8), frameon=True)
                                 #pl.gca().set_yscale('log')
                                 #pl.gca().set_xscale('log')
                                 
@@ -1559,7 +1559,7 @@ class visualize_results(object):
                         if not means_only:        
                             for model in self.only_models:
                                 
-                                pl.figure(f"{analysis} {subj} {model} {y_parameter} VS {x_parameter}", figsize=(8, 8), frameon=False)
+                                pl.figure(f"{analysis} {subj} {model} {y_parameter} VS {x_parameter}", figsize=(8, 8), frameon=True)
                                 #pl.gca().set_yscale('log')
                                 #pl.gca().set_xscale('log')
                                 

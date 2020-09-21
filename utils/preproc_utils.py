@@ -182,8 +182,10 @@ def prepare_data(subj,
                         tc_task.append(filter_predictions(np.array([arr.data for arr in tc_run.darrays]).T[...,discard_volumes:],
                                  filter_type=filter_type,
                                  filter_params=filter_params), axis=0)
-                        tc_task[-1] *= (100/tc_task[-1].mean(-1))
+                        tc_task[-1] *= (100/np.mean(tc_task[-1], axis=-1))[...,np.newaxis]
                     else:
+                        print("Using raw data")
+                        raw_tcs = True
                         tc_task.append(filter_predictions(np.array([arr.data for arr in tc_run.darrays]).T[...,discard_volumes:],
                                  filter_type=filter_type,
                                  filter_params=filter_params), axis=0)                        
@@ -282,12 +284,12 @@ def prepare_data(subj,
             tc_full_iso_nonzerovar_test = tc_full_iso_test[mask]
                 
         if fix_bold_baseline:
-            tc_full_iso_nonzerovar += (tc_full_iso_nonzerovar.mean(-1)-iso_full[mask])[...,np.newaxis]
+            tc_full_iso_nonzerovar -= iso_full[mask][...,np.newaxis]
             if crossvalidate:
-                tc_full_iso_nonzerovar_test += (tc_full_iso_nonzerovar_test.mean(-1)-iso_full_test[mask])[...,np.newaxis]
+                tc_full_iso_nonzerovar_test -= iso_full_test[mask][...,np.newaxis]
                            
                 
-        if save_raw_timecourse:
+        if save_raw_timecourse and raw_tcs == True:
             np.save(opj(data_path,'prfpy',subj+"_timecourse-raw_space-"+fitting_space+".npy"),tc_full_iso[mask])
             if crossvalidate:
                 np.save(opj(data_path,'prfpy',subj+"_timecourse-test-raw_space-"+fitting_space+".npy"),tc_full_iso_test[mask])
