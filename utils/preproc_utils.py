@@ -217,9 +217,21 @@ def prepare_data(subj,
                     for tc_path in [tc_paths[run] for run in cv_runs]:
                         tc_run = nb.load(str(tc_path))
                         #no need to pass further args, only filtering 1 condition
-                        tc_task.append(filter_predictions(np.array([arr.data for arr in tc_run.darrays]).T[...,discard_volumes:],
+                        if data_scaling in ["zsc", "z-score"]:
+                            tc_task.append(zscore(filter_predictions(np.array([arr.data for arr in tc_run.darrays]).T[...,discard_volumes:],
                                                          filter_type=filter_type,
-                                                         filter_params=filter_params))
+                                                         filter_params=filter_params), axis=0))
+                        elif data_scaling in ["psc", "percent_signal_change"]:
+                            tc_task.append(filter_predictions(np.array([arr.data for arr in tc_run.darrays]).T[...,discard_volumes:],
+                                     filter_type=filter_type,
+                                     filter_params=filter_params), axis=0)
+                            tc_task[-1] *= (100/np.mean(tc_task[-1], axis=-1))[...,np.newaxis]
+                        else:
+                            print("Using raw data")
+                            raw_tcs = True
+                            tc_task.append(filter_predictions(np.array([arr.data for arr in tc_run.darrays]).T[...,discard_volumes:],
+                                     filter_type=filter_type,
+                                     filter_params=filter_params), axis=0)   
         
                         #when scanning sub-001 i mistakenly set the length of the 4F scan to 147, while it should have been 145
                         #therefore, there are two extra images at the end to discard in that time series.

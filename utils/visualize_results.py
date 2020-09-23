@@ -51,6 +51,8 @@ class visualize_results(object):
                 else:
                     if k not in subject_list:
                         subject_list.append(k)
+            else:
+                subject_list.append('fsaverage')
         
         self.subjects = subject_list
         return
@@ -145,6 +147,7 @@ class visualize_results(object):
         return
 
     def set_alpha(self, only_models=None, ecc_min=0, ecc_max=5):
+        
         self.only_models=only_models
         self.tc_min = dict()
         for space, space_res in self.main_dict.items():
@@ -175,14 +178,13 @@ class visualize_results(object):
                         ######limits for eccentricity
                         self.ecc_min=ecc_min
                         self.ecc_max=ecc_max
-                        ######max prf size (implemented in surround and size plotting functions)
-                        #w_max = 90                        
+                     
               
                         #housekeeping
                         if only_models is None:
                             rsq = np.vstack(tuple([elem for _,elem in p_r['RSq'].items()])).T
                             ecc = np.vstack(tuple([elem for _,elem in p_r['Eccentricity'].items()])).T
-                            #fw_hmax = np.vstack(tuple([elem for _,elem in p_r['Size (fwhmax)'].items()])).T
+
                         else:
                             rsq = np.vstack(tuple([elem for k,elem in p_r['RSq'].items() if k in only_models])).T
                             ecc = np.vstack(tuple([elem for k,elem in p_r['Eccentricity'].items() if k in only_models])).T                            
@@ -193,545 +195,575 @@ class visualize_results(object):
                         
                         for model in models:
                             p_r['Alpha'][model] = p_r['RSq'][model] * (p_r['Eccentricity'][model]>self.ecc_min) * (p_r['Eccentricity'][model]<self.ecc_max)\
-                                * (tc_stats['Mean']>self.tc_min[subj]) #*(p_r['Size (fwhmax)'][model]<w_max)
+                                * (tc_stats['Mean']>self.tc_min[subj]) 
                        
         return
 
 
-    def pycortex_plots(self, rois, rsq_thresh, analysis_names = 'all', subject_ids='all'):        
+    def pycortex_plots(self, rois, rsq_thresh, space_names = 'fsnative', analysis_names = 'all', subject_ids='all'):        
         pl.rcParams.update({'font.size': 16})
         pl.rcParams.update({'pdf.fonttype':42})        
         self.click=0
         #######PYCORTEX PICKERFUN
         #function to plot prf and timecourses when clicking surface vertex in webgl        
         def clicker_function(voxel,hemi,vertex):
+            if space == 'fsnative':
 
-            print('recovering vertex index...')
-            #translate javascript indeing to python
-            lctm, rctm = cortex.utils.get_ctmmap(subj, method='mg2', level=9)
-            if hemi == 'left':
-                index = lctm[int(vertex)]
-                #print(f"{model} rsq {p_r['RSq'][model][index]}")
-            else:
-                index = len(lctm)+rctm[int(vertex)]
-                #print(f"{model} rsq {p_r['RSq'][model][index]}") 
-            
+                print('recovering vertex index...')
+                #translate javascript indeing to python
+                lctm, rctm = cortex.utils.get_ctmmap(subj, method='mg2', level=9)
+                if hemi == 'left':
+                    index = lctm[int(vertex)]
+                    #print(f"{model} rsq {p_r['RSq'][model][index]}")
+                else:
+                    index = len(lctm)+rctm[int(vertex)]
+                    #print(f"{model} rsq {p_r['RSq'][model][index]}") 
                 
-            #sorting = np.argsort(subj_res['Processed Results']['RSq']['CSS']-subj_res['Processed Results']['RSq']['Norm_abcd'])
-            #alpha_sort = subj_res['Processed Results']['Alpha']['all'][sorting]
-            #sorting = sorting[(alpha_sort>rsq_thresh)*(subj_res['Processed Results']['RSq']['Norm_abcd'][sorting]-subj_res['Processed Results']['RSq']['DoG'][sorting]>0.1)*(subj_res['Processed Results']['RSq']['Norm_abcd'][sorting]>0.6)]
-            #index = sorting[self.click]
-            #surr_vertices = [2624, 285120, 5642, 144995, 5273, 2927, 1266]
-            #both_vertices = [9372, 9383, 17766, 9384]#[161130, 9372, 9383, 302707, 17766, 9395, 9384]
-            #index = both_vertices[self.click]
-            
-            
-            print('recovering data and model timecourses...')
-            
-            vertex_info = f""
-
-            #recover needed information
-            an_info = subj_res['analysis_info']
-            if 'timecourse_folder' not in an_info:
-                an_info['timecourse_folder'] = '/Users/marcoaqil/PRFMapping/PRFMapping-Deriv-hires/prfpy/FS7_results/timecourses/'
-
-            if not hasattr(self, 'prf_stim') or self.prf_stim.task_names != an_info['task_names']:
-                self.prf_stim = create_full_stim(screenshot_paths=[opj(an_info['timecourse_folder'],f'task-{task}_screenshots') for task in an_info['task_names']],
-                            n_pix=an_info['n_pix'],
-                            discard_volumes=an_info['discard_volumes'],
-                            baseline_volumes_begin_end=an_info['baseline_volumes_begin_end'],
-                            dm_edges_clipping=an_info['dm_edges_clipping'],
-                            screen_size_cm=an_info['screen_size_cm'],
-                            screen_distance_cm=an_info['screen_distance_cm'],
-                            TR=an_info['TR'],
-                            task_names=an_info['task_names'])
-
-                
-            tc_paths = [str(path) for path in sorted(Path(an_info['timecourse_folder']).glob(f"{subj}_timecourse_space-{an_info['fitting_space']}_task-*_run-*.npy"))]    
-            mask_paths = [tc_path.replace('timecourse_','mask_') for tc_path in tc_paths]
-            #all_task_names = np.unique(np.array([elem.replace('task-','') for path in tc_paths for elem in path.split('_')  if 'task' in elem]))
-            all_runs = np.unique(np.array([int(elem.replace('run-','').replace('.npy','')) for path in tc_paths for elem in path.split('_')  if 'run' in elem]))
-
-            tc = dict()
-            tc_err = dict()
-            tc_test = dict()
-            tc_fit = dict()
-            
-            for task in an_info['task_names']:
-                if task not in self.prf_stims:
-                    self.prf_stims[task] = create_full_stim(screenshot_paths=[opj(an_info['timecourse_folder'],f'task-{task}_screenshots')],
-                            n_pix=an_info['n_pix'],
-                            discard_volumes=an_info['discard_volumes'],
-                            baseline_volumes_begin_end=an_info['baseline_volumes_begin_end'],
-                            dm_edges_clipping=an_info['dm_edges_clipping'],
-                            screen_size_cm=an_info['screen_size_cm'],
-                            screen_distance_cm=an_info['screen_distance_cm'],
-                            TR=an_info['TR'],
-                            task_names=[task])                    
                     
-                tc_runs=[]
+                #sorting = np.argsort(subj_res['Processed Results']['RSq']['CSS']-subj_res['Processed Results']['RSq']['Norm_abcd'])
+                #alpha_sort = subj_res['Processed Results']['Alpha']['all'][sorting]
+                #sorting = sorting[(alpha_sort>rsq_thresh)*(subj_res['Processed Results']['RSq']['Norm_abcd'][sorting]-subj_res['Processed Results']['RSq']['DoG'][sorting]>0.1)*(subj_res['Processed Results']['RSq']['Norm_abcd'][sorting]>0.6)]
+                #index = sorting[self.click]
+                #surr_vertices = [2624, 285120, 5642, 144995, 5273, 2927, 1266]
+                #both_vertices = [9372, 9383, 17766, 9384]#[161130, 9372, 9383, 302707, 17766, 9395, 9384]
+                #index = both_vertices[self.click]
                 
-                for run in all_runs:
-                    mask_run = [np.load(mask_path) for mask_path in mask_paths if task in mask_path and f"run-{run}" in mask_path][0]
-                    masked_idx = np.sum(mask_run[:index])
-                    
-                    tc_runs.append([np.load(tc_path)[masked_idx] for tc_path in tc_paths if task in tc_path and f"run-{run}" in tc_path][0])
-                    
-                    tc_runs[-1] *=(100/tc_runs[-1].mean(-1))[...,np.newaxis]
-                    tc_runs[-1] += (tc_runs[-1].mean(-1)-np.median(tc_runs[-1][...,self.prf_stims[task].late_iso_dict[task]], axis=-1))[...,np.newaxis]
-                  
-                tc[task] = np.mean(tc_runs, axis=0)
-                tc_err[task] = sem(tc_runs, axis=0)
                 
-                #tc[task] *= (100/tc[task].mean(-1))[...,np.newaxis]
-                #tc[task] += (tc[task].mean(-1)-np.median(tc[task][...,self.prf_stims[task].late_iso_dict[task]], axis=-1))[...,np.newaxis]
+                print('recovering data and model timecourses...')
                 
-                #fit and test timecourses separately
-                if an_info['crossvalidate'] and 'fit_runs' in an_info:
-                    tc_test[task] = np.mean([tc_runs[i] for i in all_runs if i not in an_info['fit_runs']], axis=0)
-                    tc_fit[task] = np.mean([tc_runs[i] for i in all_runs if i in an_info['fit_runs']], axis=0)
-                    
-                    #tc_test[task] *= (100/tc_test[task].mean(-1))[...,np.newaxis]
-                    #tc_test[task] += (tc_test[task].mean(-1)-np.median(tc_test[task][...,self.prf_stims[task].late_iso_dict[task]], axis=-1))[...,np.newaxis]
-                    #tc_fit[task] *= (100/tc_fit[task].mean(-1))[...,np.newaxis]
-                    #tc_fit[task] += (tc_fit[task].mean(-1)-np.median(tc_fit[task][...,self.prf_stims[task].late_iso_dict[task]], axis=-1))[...,np.newaxis]     
-                    
-
-                
-            tc_full = np.concatenate(tuple([tc[task] for task in tc]), axis=0) - 100
-            tc_err = np.concatenate(tuple([tc_err[task] for task in tc_err]), axis=0)
-            
-            if an_info['crossvalidate'] and 'fit_runs' in an_info:
-                tc_full_test = np.concatenate(tuple([tc_test[task] for task in tc_test]), axis=0) - 100
-                tc_full_fit = np.concatenate(tuple([tc_fit[task] for task in tc_fit]), axis=0) - 100    
-                #timecourse reliability stats
-                vertex_info+=f"CV timecourse reliability stats\n"
-                vertex_info+=f"fit-test timecourses pearson R {pearsonr(tc_full_test,tc_full_fit)[0]:.4f}\n"
-                vertex_info+=f"fit-test timecourses R-squared {1-np.sum((tc_full_fit-tc_full_test)**2)/(tc_full_test.var(-1)*tc_full_test.shape[-1]):.4f}\n\n"
-        
-            preds = dict()
-            prfs = dict()
-            for model in self.only_models:
-                gg = model_wrapper(model,
-                                   stimulus=self.prf_stim,
-                                   hrf=an_info['hrf'],
-                                   filter_predictions=an_info['filter_predictions'],
-                                   filter_type=an_info['filter_type'],
-                                   filter_params={x:an_info[x] for x in ["first_modes_to_remove",
-                                                                         "last_modes_to_remove_percent",
-                                                                         "window_length",
-                                                                         "polyorder",
-                                                                         "highpass",
-                                                                         "add_mean"]},
-                                   normalize_RFs=an_info['normalize_RFs'])
-                
-                params = subj_res['Results'][model][np.sum(subj_res['mask'][:index]),:-1]
-                preds[model] = gg.return_prediction(*list(params))[0] - 100
-                
-                np.set_printoptions(suppress=True, precision=4)
-                vertex_info+=f"{model} params: {params} \n"
-                vertex_info+=f"Rsq {model} full tc: {1-np.sum((preds[model]-tc_full)**2)/(tc_full.var(-1)*tc_full.shape[-1]):.4f}\n"
-                
-                if an_info['crossvalidate'] and 'fit_runs' in an_info:
-                    vertex_info+=f"Rsq {model} fit tc: {1-np.sum((preds[model]-tc_full_fit)**2)/(tc_full_fit.var(-1)*tc_full_fit.shape[-1]):.4f}\n"
-                    vertex_info+=f"Rsq {model} test tc: {1-np.sum((preds[model]-tc_full_test)**2)/(tc_full_test.var(-1)*tc_full_test.shape[-1]):.4f}\n"
-
-
-                    
-                    
-                    if model != 'Gauss':
-                        tc_full_test_gauss_resid = tc_full_test[tc_full_test<0]#(tc_full_test - preds['Gauss'][0])
-                        model_gauss_resid = preds[model][tc_full_test<0]#(preds[model] - preds['Gauss'])[0]
-
-                        vertex_info+=f"Rsq {model} negative portions test tc: {1-np.sum((model_gauss_resid-tc_full_test_gauss_resid)**2)/(tc_full_test_gauss_resid.var(-1)*tc_full_test_gauss_resid.shape[-1]):.4f}\n"
-                        vertex_info+=f"Rsq {model} negative portions test pearson R {pearsonr(tc_full_test_gauss_resid,model_gauss_resid)[0]:.4f}\n"
-                        
-                        
-                        #vertex_info+=f"Rsq {model} gauss resid test tc: {1-np.sum((model_gauss_resid-tc_full_test_gauss_resid)**2)/(tc_full_test_gauss_resid.var(-1)*tc_full_test_gauss_resid.shape[-1]):.4f}\n"
-                        #vertex_info+=f"Rsq {model} weighted resid tc: {1-np.sum(((preds[model]-preds['Gauss'])*(preds[model]-tc_full_fit))**2)/(tc_full_fit.var(-1)*tc_full_fit.shape[-1]):.4f}\n"
-                    
-                prfs[model] = create_model_rf_wrapper(model,self.prf_stim,params,an_info['normalize_RFs'])
-                
-                for key in subj_res['Processed Results']:
-                    if model in subj_res['Processed Results'][key]:
-                        vertex_info+=f"{key} {model} {subj_res['Processed Results'][key][model][index]:.8f}\n"
-                
-                vertex_info+="\n"
-                
-            pl.ion()
-
-            if self.click==0:
-                self.f, self.axes = pl.subplots(2,2,figsize=(10, 15),frameon=True, gridspec_kw={'width_ratios': [8, 2], 'height_ratios': [1,1]})
-                self.f.set_tight_layout(True)
-            else:
-                self.cbar.remove()
-                for ax1 in self.axes:
-                    for ax2 in ax1: 
-                        ax2.clear()
-            
-            tseconds = an_info['TR']*np.arange(len(tc_full))
-            cmap = cm.get_cmap('tab10')
-            
-            self.axes[0,0].plot(tseconds,np.zeros(len(tc_full)),linestyle='--',linewidth=0.1, color='black', zorder=0)
+                vertex_info = f""
     
-            
-
-            if an_info['crossvalidate'] and 'fit_runs' in an_info:
-                
-                print(np.std([tc_full_test,tc_full_fit],axis=0))
-                
-                self.axes[0,0].errorbar(tseconds, tc_full, yerr=tc_err, label='Data',  fmt = 's:k', markersize=1,  linewidth=0.3, zorder=1) 
-                
-                #self.axes[0,0].plot(tseconds, tc_full_test, label='Data (test)', linestyle = ':', marker='^', markersize=1, color=cmap(4), linewidth=0.75, alpha=0.5) 
-                #self.axes[0,0].plot(tseconds, tc_full_fit, label='Data (fit)', linestyle = ':', marker='v', markersize=1, color=cmap(5), linewidth=0.75, alpha=0.5) 
-            else:
-                self.axes[0,0].errorbar(tseconds, tc_full, yerr=tc_err, label='Data',  fmt = 's:k', markersize=1,  linewidth=0.3, zorder=1) 
-                
-
-            
-            for model in self.only_models: 
-                if 'Norm' in model:
-                    self.axes[0,0].plot(tseconds, preds[model], linewidth=0.75, color=cmap(3), label=f"Norm ({subj_res['Processed Results']['RSq'][model][index]:.2f})", zorder=2)
-                elif model == 'DoG':
-                    self.axes[0,0].plot(tseconds, preds[model], linewidth=0.75, color=cmap(2), label=f"DoG ({subj_res['Processed Results']['RSq'][model][index]:.2f})", zorder=3)
-                elif model == 'CSS':
-                    self.axes[0,0].plot(tseconds, preds[model], linewidth=0.75, color=cmap(1), label=f"CSS ({subj_res['Processed Results']['RSq'][model][index]:.2f})", zorder=4)
-                elif model == 'Gauss':
-                    self.axes[0,0].plot(tseconds, preds[model], linewidth=0.75, color=cmap(0), label=f"Gauss ({subj_res['Processed Results']['RSq'][model][index]:.2f})", zorder=5)
+                #recover needed information
+                an_info = subj_res['analysis_info']
+                if 'timecourse_folder' not in an_info:
+                    an_info['timecourse_folder'] = '/Users/marcoaqil/PRFMapping/PRFMapping-Deriv-hires/prfpy/FS7_results/timecourses/'
+    
+                if not hasattr(self, 'prf_stim') or self.prf_stim.task_names != an_info['task_names']:
+                    self.prf_stim = create_full_stim(screenshot_paths=[opj(an_info['timecourse_folder'],f'task-{task}_screenshots') for task in an_info['task_names']],
+                                n_pix=an_info['n_pix'],
+                                discard_volumes=an_info['discard_volumes'],
+                                baseline_volumes_begin_end=an_info['baseline_volumes_begin_end'],
+                                dm_edges_clipping=an_info['dm_edges_clipping'],
+                                screen_size_cm=an_info['screen_size_cm'],
+                                screen_distance_cm=an_info['screen_distance_cm'],
+                                TR=an_info['TR'],
+                                task_names=an_info['task_names'])
+    
                     
-            
-            
-   
-            
-            if np.any(['Norm' in model for model in self.only_models]) or 'DoG' in self.only_models:
-                try:
-                    if ((subj_res['Processed Results']['RSq']['DoG'][index]-subj_res['Processed Results']['RSq']['Gauss'][index]) > 0.05) or ((subj_res['Processed Results']['RSq']['Norm_abcd'][index]-subj_res['Processed Results']['RSq']['CSS'][index]) > 0.05):
-                        surround_effect = np.min([preds[model] for model in preds if 'Norm' in model or 'DoG' in model],axis=0)
-                        surround_effect[surround_effect>0] = preds['Gauss'][surround_effect>0]
-                        self.axes[0,0].fill_between(tseconds,
-                                                     surround_effect, 
-                                         preds['Gauss'], label='Surround suppression', alpha=0.2, color='gray')
-                except:
-                    pass
-
-          
-            self.axes[0,0].legend(ncol=3, fontsize=8, loc=9)
-            #self.axes[0,0].set_ylim(-3.5,6.5)
-            self.axes[0,0].set_xlim(0,tseconds.max())
-            #self.axes[0,0].set_ylabel('% signal change')
-            self.axes[0,0].set_title(f"Vertex {index} timecourse")
-            
-            if prfs['Norm_abcd'][0].min() < 0:
-                im = self.axes[0,1].imshow(prfs['Norm_abcd'][0], cmap='RdBu_r', vmin=prfs['Norm_abcd'][0].min(), vmax=-prfs['Norm_abcd'][0].min())
-            else:
-                im = self.axes[0,1].imshow(prfs['Norm_abcd'][0], cmap='RdBu_r', vmax=prfs['Norm_abcd'][0].max(), vmin=-prfs['Norm_abcd'][0].max())
+                tc_paths = [str(path) for path in sorted(Path(an_info['timecourse_folder']).glob(f"{subj}_timecourse_space-{an_info['fitting_space']}_task-*_run-*.npy"))]    
+                mask_paths = [tc_path.replace('timecourse_','mask_') for tc_path in tc_paths]
+                #all_task_names = np.unique(np.array([elem.replace('task-','') for path in tc_paths for elem in path.split('_')  if 'task' in elem]))
+                all_runs = np.unique(np.array([int(elem.replace('run-','').replace('.npy','')) for path in tc_paths for elem in path.split('_')  if 'run' in elem]))
+    
+                tc = dict()
+                tc_err = dict()
+                tc_test = dict()
+                tc_fit = dict()
                 
-            self.cbar = colorbar(im)
-            self.axes[0,1].set_title(f"pRF")
+                for task in an_info['task_names']:
+                    if task not in self.prf_stims:
+                        self.prf_stims[task] = create_full_stim(screenshot_paths=[opj(an_info['timecourse_folder'],f'task-{task}_screenshots')],
+                                n_pix=an_info['n_pix'],
+                                discard_volumes=an_info['discard_volumes'],
+                                baseline_volumes_begin_end=an_info['baseline_volumes_begin_end'],
+                                dm_edges_clipping=an_info['dm_edges_clipping'],
+                                screen_size_cm=an_info['screen_size_cm'],
+                                screen_distance_cm=an_info['screen_distance_cm'],
+                                TR=an_info['TR'],
+                                task_names=[task])                    
+                        
+                    tc_runs=[]
+                    
+                    for run in all_runs:
+                        mask_run = [np.load(mask_path) for mask_path in mask_paths if task in mask_path and f"run-{run}" in mask_path][0]
+                        masked_idx = np.sum(mask_run[:index])
+                        
+                        tc_runs.append([np.load(tc_path)[masked_idx] for tc_path in tc_paths if task in tc_path and f"run-{run}" in tc_path][0])
+                        
+                        tc_runs[-1] *=(100/tc_runs[-1].mean(-1))[...,np.newaxis]
+                        tc_runs[-1] += (tc_runs[-1].mean(-1)-np.median(tc_runs[-1][...,self.prf_stims[task].late_iso_dict[task]], axis=-1))[...,np.newaxis]
+                      
+                    tc[task] = np.mean(tc_runs, axis=0)
+                    tc_err[task] = sem(tc_runs, axis=0)
+                    
+                    #tc[task] *= (100/tc[task].mean(-1))[...,np.newaxis]
+                    #tc[task] += (tc[task].mean(-1)-np.median(tc[task][...,self.prf_stims[task].late_iso_dict[task]], axis=-1))[...,np.newaxis]
+                    
+                    #fit and test timecourses separately
+                    if an_info['crossvalidate'] and 'fit_runs' in an_info:
+                        tc_test[task] = np.mean([tc_runs[i] for i in all_runs if i not in an_info['fit_runs']], axis=0)
+                        tc_fit[task] = np.mean([tc_runs[i] for i in all_runs if i in an_info['fit_runs']], axis=0)
+                        
+                        #tc_test[task] *= (100/tc_test[task].mean(-1))[...,np.newaxis]
+                        #tc_test[task] += (tc_test[task].mean(-1)-np.median(tc_test[task][...,self.prf_stims[task].late_iso_dict[task]], axis=-1))[...,np.newaxis]
+                        #tc_fit[task] *= (100/tc_fit[task].mean(-1))[...,np.newaxis]
+                        #tc_fit[task] += (tc_fit[task].mean(-1)-np.median(tc_fit[task][...,self.prf_stims[task].late_iso_dict[task]], axis=-1))[...,np.newaxis]     
+                        
+    
+                    
+                tc_full = np.concatenate(tuple([tc[task] for task in tc]), axis=0) - 100
+                tc_err = np.concatenate(tuple([tc_err[task] for task in tc_err]), axis=0)
+                
+                if an_info['crossvalidate'] and 'fit_runs' in an_info:
+                    tc_full_test = np.concatenate(tuple([tc_test[task] for task in tc_test]), axis=0) - 100
+                    tc_full_fit = np.concatenate(tuple([tc_fit[task] for task in tc_fit]), axis=0) - 100    
+                    #timecourse reliability stats
+                    vertex_info+=f"CV timecourse reliability stats\n"
+                    vertex_info+=f"fit-test timecourses pearson R {pearsonr(tc_full_test,tc_full_fit)[0]:.4f}\n"
+                    vertex_info+=f"fit-test timecourses R-squared {1-np.sum((tc_full_fit-tc_full_test)**2)/(tc_full_test.var(-1)*tc_full_test.shape[-1]):.4f}\n\n"
             
-            #self.cbar = self.f.colorbar(im, ax=self.axes[0,1], use_gridspec=True)
-            
-            self.axes[0,1].axis('on')            
-            self.axes[1,0].axis('off')
-            self.axes[1,1].axis('off')
-            self.axes[1,0].text(0,1,vertex_info, fontsize=10)
-            
-            self.click+=1
+                preds = dict()
+                prfs = dict()
+                for model in self.only_models:
+                    gg = model_wrapper(model,
+                                       stimulus=self.prf_stim,
+                                       hrf=an_info['hrf'],
+                                       filter_predictions=an_info['filter_predictions'],
+                                       filter_type=an_info['filter_type'],
+                                       filter_params={x:an_info[x] for x in ["first_modes_to_remove",
+                                                                             "last_modes_to_remove_percent",
+                                                                             "window_length",
+                                                                             "polyorder",
+                                                                             "highpass",
+                                                                             "add_mean"]},
+                                       normalize_RFs=an_info['normalize_RFs'])
+                    
+                    params = subj_res['Results'][model][np.sum(subj_res['mask'][:index]),:-1]
+                    preds[model] = gg.return_prediction(*list(params))[0] - 100
+                    
+                    np.set_printoptions(suppress=True, precision=4)
+                    vertex_info+=f"{model} params: {params} \n"
+                    vertex_info+=f"Rsq {model} full tc: {1-np.sum((preds[model]-tc_full)**2)/(tc_full.var(-1)*tc_full.shape[-1]):.4f}\n"
+                    
+                    if an_info['crossvalidate'] and 'fit_runs' in an_info:
+                        vertex_info+=f"Rsq {model} fit tc: {1-np.sum((preds[model]-tc_full_fit)**2)/(tc_full_fit.var(-1)*tc_full_fit.shape[-1]):.4f}\n"
+                        vertex_info+=f"Rsq {model} test tc: {1-np.sum((preds[model]-tc_full_test)**2)/(tc_full_test.var(-1)*tc_full_test.shape[-1]):.4f}\n"
+    
+    
+                        
+                        
+                        if model != 'Gauss':
+                            tc_full_test_gauss_resid = tc_full_test[tc_full_test<0]#(tc_full_test - preds['Gauss'][0])
+                            model_gauss_resid = preds[model][tc_full_test<0]#(preds[model] - preds['Gauss'])[0]
+    
+                            vertex_info+=f"Rsq {model} negative portions test tc: {1-np.sum((model_gauss_resid-tc_full_test_gauss_resid)**2)/(tc_full_test_gauss_resid.var(-1)*tc_full_test_gauss_resid.shape[-1]):.4f}\n"
+                            vertex_info+=f"Rsq {model} negative portions test pearson R {pearsonr(tc_full_test_gauss_resid,model_gauss_resid)[0]:.4f}\n"
+                            
+                            
+                            #vertex_info+=f"Rsq {model} gauss resid test tc: {1-np.sum((model_gauss_resid-tc_full_test_gauss_resid)**2)/(tc_full_test_gauss_resid.var(-1)*tc_full_test_gauss_resid.shape[-1]):.4f}\n"
+                            #vertex_info+=f"Rsq {model} weighted resid tc: {1-np.sum(((preds[model]-preds['Gauss'])*(preds[model]-tc_full_fit))**2)/(tc_full_fit.var(-1)*tc_full_fit.shape[-1]):.4f}\n"
+                        
+                    prfs[model] = create_model_rf_wrapper(model,self.prf_stim,params,an_info['normalize_RFs'])
+                    
+                    for key in subj_res['Processed Results']:
+                        if model in subj_res['Processed Results'][key]:
+                            vertex_info+=f"{key} {model} {subj_res['Processed Results'][key][model][index]:.8f}\n"
+                    
+                    vertex_info+="\n"
+                    
+                pl.ion()
+    
+                if self.click==0:
+                    self.f, self.axes = pl.subplots(2,2,figsize=(10, 15),frameon=True, gridspec_kw={'width_ratios': [8, 2], 'height_ratios': [1,1]})
+                    self.f.set_tight_layout(True)
+                else:
+                    self.cbar.remove()
+                    for ax1 in self.axes:
+                        for ax2 in ax1: 
+                            ax2.clear()
+                
+                tseconds = an_info['TR']*np.arange(len(tc_full))
+                cmap = cm.get_cmap('tab10')
+                
+                self.axes[0,0].plot(tseconds,np.zeros(len(tc_full)),linestyle='--',linewidth=0.1, color='black', zorder=0)
+        
+                
+    
+                if an_info['crossvalidate'] and 'fit_runs' in an_info:
+                    
+                    print(np.std([tc_full_test,tc_full_fit],axis=0))
+                    
+                    self.axes[0,0].errorbar(tseconds, tc_full, yerr=tc_err, label='Data',  fmt = 's:k', markersize=1,  linewidth=0.3, zorder=1) 
+                    
+                    #self.axes[0,0].plot(tseconds, tc_full_test, label='Data (test)', linestyle = ':', marker='^', markersize=1, color=cmap(4), linewidth=0.75, alpha=0.5) 
+                    #self.axes[0,0].plot(tseconds, tc_full_fit, label='Data (fit)', linestyle = ':', marker='v', markersize=1, color=cmap(5), linewidth=0.75, alpha=0.5) 
+                else:
+                    self.axes[0,0].errorbar(tseconds, tc_full, yerr=tc_err, label='Data',  fmt = 's:k', markersize=1,  linewidth=0.3, zorder=1) 
+                    
+    
+                
+                for model in self.only_models: 
+                    if 'Norm' in model:
+                        self.axes[0,0].plot(tseconds, preds[model], linewidth=0.75, color=cmap(3), label=f"Norm ({subj_res['Processed Results']['RSq'][model][index]:.2f})", zorder=2)
+                    elif model == 'DoG':
+                        self.axes[0,0].plot(tseconds, preds[model], linewidth=0.75, color=cmap(2), label=f"DoG ({subj_res['Processed Results']['RSq'][model][index]:.2f})", zorder=3)
+                    elif model == 'CSS':
+                        self.axes[0,0].plot(tseconds, preds[model], linewidth=0.75, color=cmap(1), label=f"CSS ({subj_res['Processed Results']['RSq'][model][index]:.2f})", zorder=4)
+                    elif model == 'Gauss':
+                        self.axes[0,0].plot(tseconds, preds[model], linewidth=0.75, color=cmap(0), label=f"Gauss ({subj_res['Processed Results']['RSq'][model][index]:.2f})", zorder=5)
+                        
+                
+                
+       
+                
+                if np.any(['Norm' in model for model in self.only_models]) or 'DoG' in self.only_models:
+                    try:
+                        if ((subj_res['Processed Results']['RSq']['DoG'][index]-subj_res['Processed Results']['RSq']['Gauss'][index]) > 0.05) or ((subj_res['Processed Results']['RSq']['Norm_abcd'][index]-subj_res['Processed Results']['RSq']['CSS'][index]) > 0.05):
+                            surround_effect = np.min([preds[model] for model in preds if 'Norm' in model or 'DoG' in model],axis=0)
+                            surround_effect[surround_effect>0] = preds['Gauss'][surround_effect>0]
+                            self.axes[0,0].fill_between(tseconds,
+                                                         surround_effect, 
+                                             preds['Gauss'], label='Surround suppression', alpha=0.2, color='gray')
+                    except:
+                        pass
+    
+              
+                self.axes[0,0].legend(ncol=3, fontsize=8, loc=9)
+                #self.axes[0,0].set_ylim(-3.5,6.5)
+                self.axes[0,0].set_xlim(0,tseconds.max())
+                #self.axes[0,0].set_ylabel('% signal change')
+                self.axes[0,0].set_title(f"Vertex {index} timecourse")
+                
+                if prfs['Norm_abcd'][0].min() < 0:
+                    im = self.axes[0,1].imshow(prfs['Norm_abcd'][0], cmap='RdBu_r', vmin=prfs['Norm_abcd'][0].min(), vmax=-prfs['Norm_abcd'][0].min())
+                else:
+                    im = self.axes[0,1].imshow(prfs['Norm_abcd'][0], cmap='RdBu_r', vmax=prfs['Norm_abcd'][0].max(), vmin=-prfs['Norm_abcd'][0].max())
+                    
+                self.cbar = colorbar(im)
+                self.axes[0,1].set_title(f"pRF")
+                
+                #self.cbar = self.f.colorbar(im, ax=self.axes[0,1], use_gridspec=True)
+                
+                self.axes[0,1].axis('on')            
+                self.axes[1,0].axis('off')
+                self.axes[1,1].axis('off')
+                self.axes[1,0].text(0,1,vertex_info, fontsize=10)
+                
+                self.click+=1
           
             return
 
-          
-        for space, space_res in self.main_dict.items():
-            if 'fs' in space:
-                plotted_rois = dd(lambda:False)
-                plotted_stats = dd(lambda:False)
-                if analysis_names == 'all':
-                    analyses = space_res.items()
+
+        if space_names == 'all':
+            spaces = [item for item in self.main_dict.items()]
+        else:
+            spaces = [item for item in self.main_dict.items() if item[0] in space_names] 
+
+        for space, space_res in spaces:
+            plotted_rois = dd(lambda:False)
+            plotted_stats = dd(lambda:False)
+            if analysis_names == 'all':
+                analyses = space_res.items()
+            else:
+                analyses = [item for item in space_res.items() if item[0] in analysis_names] 
+            for analysis, analysis_res in analyses:  
+                if subject_ids == 'all':
+                    subjects = analysis_res.items()
                 else:
-                    analyses = [item for item in space_res.items() if item[0] in analysis_names] 
-                for analysis, analysis_res in analyses:  
-                    if subject_ids == 'all':
-                        subjects = analysis_res.items()
-                    else:
-                        subjects = [item for item in analysis_res.items() if item[0] in subject_ids] 
-                    for subj, subj_res in subjects:
-                        
-                        if subj not in cortex.db.subjects:
-                            print("subject not present in pycortex database. attempting to import...")
-                            cortex.freesurfer.import_subj(subj, freesurfer_subject_dir=self.fs_dir, 
-                                  whitematter_surf='smoothwm')
-                        
-                        p_r = subj_res['Processed Results']
-                        models = p_r['RSq'].keys()
-                        
-                        if space != 'fsaverage':
-                            tc_stats = subj_res['Timecourse Stats']
-                            mask = subj_res['mask']
+                    subjects = [item for item in analysis_res.items() if item[0] in subject_ids] 
+                for subj, subj_res in subjects:
+                    
+                    
+                    if subj not in cortex.db.subjects:
+                        print("subject not present in pycortex database. attempting to import...")
+                        cortex.freesurfer.import_subj(subj, freesurfer_subject_dir=self.fs_dir, 
+                              whitematter_surf='smoothwm')
+                    
+                    p_r = subj_res['Processed Results']
+                    models = p_r['RSq'].keys()
+                    
+                    if space != 'fsaverage':
+                        tc_stats = subj_res['Timecourse Stats']
+                        mask = subj_res['mask']
 
 
-                  
-                        if rois != 'all':
-                            for key in p_r['Alpha']:
-                                p_r['Alpha'][key] = roi_mask(self.idx_rois[subj][rois], p_r['Alpha'][key])
-                                         
+              
+                    if rois != 'all':
+                        for key in p_r['Alpha']:
+                            p_r['Alpha'][key] = roi_mask(self.idx_rois[subj][rois], p_r['Alpha'][key])
+                                     
 
-                        #output freesurefer-format polar angle maps to draw custom ROIs in freeview    
-                        if self.output_freesurfer_maps:
-                                          
-                            lh_c = read_morph_data(opj(self.fs_dir, subj+'/surf/lh.curv'))
-            
-                            polar_freeview = np.copy(p_r['Polar Angle']['Norm_abcd'])#np.mean(polar, axis=-1)
-                            ecc_freeview = np.copy(p_r['Eccentricity']['Norm_abcd'])#np.mean(ecc, axis=-1)
+                    #output freesurefer-format polar angle maps to draw custom ROIs in freeview    
+                    if self.output_freesurfer_maps:
                                       
-                            alpha_freeview = p_r['RSq']['Norm_abcd']* (tc_stats['Mean']>self.tc_min[subj])# rsq.max(-1) * (tc_stats['Mean']>self.tc_min[subj]) * (rsq.min(-1)>0)
-            
-                            polar_freeview[alpha_freeview<rsq_thresh] = -10
-                            ecc_freeview[alpha_freeview<rsq_thresh] = -10
-            
-                            write_morph_data(opj(self.fs_dir, subj+'/surf/lh.polar_norm')
-                                                                   ,polar_freeview[:lh_c.shape[0]])
-                            write_morph_data(opj(self.fs_dir, subj+'/surf/rh.polar_norm')
-                                                                   ,polar_freeview[lh_c.shape[0]:])
-                            write_morph_data(opj(self.fs_dir, subj+'/surf/lh.ecc_norm')
-                                                                   ,ecc_freeview[:lh_c.shape[0]])
-                            write_morph_data(opj(self.fs_dir, subj+'/surf/rh.ecc_norm')
-                                                                   ,ecc_freeview[lh_c.shape[0]:])
-                            
-                            
-                            polar_freeview_masked = np.copy(polar_freeview)
-                            ecc_freeview_masked = np.copy(ecc_freeview)
-                            alpha_freeview_masked = alpha_freeview * (ecc_freeview<self.ecc_max) * (ecc_freeview>self.ecc_min)
-            
-                            polar_freeview_masked[alpha_freeview_masked<rsq_thresh] = -10
-                            ecc_freeview_masked[alpha_freeview_masked<rsq_thresh] = -10
-            
-                            write_morph_data(opj(self.fs_dir, subj+'/surf/lh.polar_masked_norm')
-                                                                   ,polar_freeview_masked[:lh_c.shape[0]])
-                            write_morph_data(opj(self.fs_dir, subj+'/surf/rh.polar_masked_norm')
-                                                                   ,polar_freeview_masked[lh_c.shape[0]:])
-                            write_morph_data(opj(self.fs_dir, subj+'/surf/lh.ecc_masked_norm')
-                                                                   ,ecc_freeview_masked[:lh_c.shape[0]])
-                            write_morph_data(opj(self.fs_dir, subj+'/surf/rh.ecc_masked_norm')
-                                                                   ,ecc_freeview_masked[lh_c.shape[0]:])
-                            
-                        ##START PYCORTEX VISUALIZATIONS                            
-                        #data quality/stats cortex visualization 
-                        if space == 'fsnative' and self.plot_stats_cortex and not plotted_stats[subj] :
-                            
-                            mean_ts_vert = cortex.Vertex2D(tc_stats['Mean'], mask*(tc_stats['Mean']>self.tc_min[subj]), subject=subj, cmap='Jet_2D_alpha')
-                            var_ts_vert = cortex.Vertex2D(tc_stats['Variance'], mask*(tc_stats['Mean']>self.tc_min[subj]), subject=subj, cmap='Jet_2D_alpha')
-                            tsnr_vert = cortex.Vertex2D(tc_stats['TSNR'], mask*(tc_stats['Mean']>self.tc_min[subj]), subject=subj, cmap='Jet_2D_alpha')
-            
-                            data_stats ={'mean':mean_ts_vert.raw, 'var':var_ts_vert.raw, 'tsnr':tsnr_vert.raw}
-            
-                            self.js_handle_dict[space][analysis][subj]['js_handle_stats'] = cortex.webgl.show(data_stats, pickerfun=clicker_function, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)
-            
-                            plotted_stats[subj] = True
+                        lh_c = read_morph_data(opj(self.fs_dir, subj+'/surf/lh.curv'))
+        
+                        polar_freeview = np.copy(p_r['Polar Angle']['Norm_abcd'])#np.mean(polar, axis=-1)
+                        ecc_freeview = np.copy(p_r['Eccentricity']['Norm_abcd'])#np.mean(ecc, axis=-1)
                         
-                        if self.plot_rois_cortex and not plotted_rois[subj]:
+                        if subj != 'fsaverage':
+                            alpha_freeview = p_r['RSq']['Norm_abcd']* (tc_stats['Mean']>self.tc_min[subj])# rsq.max(-1) * (tc_stats['Mean']>self.tc_min[subj]) * (rsq.min(-1)>0)
+                        else:
+                            alpha_freeview = p_r['RSq']['Norm_abcd']
                             
+                        polar_freeview[alpha_freeview<rsq_thresh] = -10
+                        ecc_freeview[alpha_freeview<rsq_thresh] = -10
+        
+                        write_morph_data(opj(self.fs_dir, subj+'/surf/lh.polar_norm')
+                                                               ,polar_freeview[:lh_c.shape[0]])
+                        write_morph_data(opj(self.fs_dir, subj+'/surf/rh.polar_norm')
+                                                               ,polar_freeview[lh_c.shape[0]:])
+                        write_morph_data(opj(self.fs_dir, subj+'/surf/lh.ecc_norm')
+                                                               ,ecc_freeview[:lh_c.shape[0]])
+                        write_morph_data(opj(self.fs_dir, subj+'/surf/rh.ecc_norm')
+                                                               ,ecc_freeview[lh_c.shape[0]:])
+                        
+                        
+                        polar_freeview_masked = np.copy(polar_freeview)
+                        ecc_freeview_masked = np.copy(ecc_freeview)
+                        alpha_freeview_masked = alpha_freeview * (ecc_freeview<self.ecc_max) * (ecc_freeview>self.ecc_min)
+        
+                        polar_freeview_masked[alpha_freeview_masked<rsq_thresh] = -10
+                        ecc_freeview_masked[alpha_freeview_masked<rsq_thresh] = -10
+        
+                        write_morph_data(opj(self.fs_dir, subj+'/surf/lh.polar_masked_norm')
+                                                               ,polar_freeview_masked[:lh_c.shape[0]])
+                        write_morph_data(opj(self.fs_dir, subj+'/surf/rh.polar_masked_norm')
+                                                               ,polar_freeview_masked[lh_c.shape[0]:])
+                        write_morph_data(opj(self.fs_dir, subj+'/surf/lh.ecc_masked_norm')
+                                                               ,ecc_freeview_masked[:lh_c.shape[0]])
+                        write_morph_data(opj(self.fs_dir, subj+'/surf/rh.ecc_masked_norm')
+                                                               ,ecc_freeview_masked[lh_c.shape[0]:])
+                        
+                    ##START PYCORTEX VISUALIZATIONS                            
+                    #data quality/stats cortex visualization 
+                    if space == 'fsnative' and self.plot_stats_cortex and not plotted_stats[subj] :
+                        
+                        mean_ts_vert = cortex.Vertex2D(tc_stats['Mean'], mask*(tc_stats['Mean']>self.tc_min[subj]), subject=subj, cmap='Jet_2D_alpha')
+                        var_ts_vert = cortex.Vertex2D(tc_stats['Variance'], mask*(tc_stats['Mean']>self.tc_min[subj]), subject=subj, cmap='Jet_2D_alpha')
+                        tsnr_vert = cortex.Vertex2D(tc_stats['TSNR'], mask*(tc_stats['Mean']>self.tc_min[subj]), subject=subj, cmap='Jet_2D_alpha')
+        
+                        data_stats ={'mean':mean_ts_vert.raw, 'var':var_ts_vert.raw, 'tsnr':tsnr_vert.raw}
+        
+                        self.js_handle_dict[space][analysis][subj]['js_handle_stats'] = cortex.webgl.show(data_stats, pickerfun=clicker_function, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)
+        
+                        plotted_stats[subj] = True
+                    
+                    if self.plot_rois_cortex and not plotted_rois[subj]:
+                        
+                        
+                        ds_rois = {}
+                        data = np.zeros_like(mask).astype('int')
+                        custom_rois_data = np.zeros_like(mask).astype('int')
+        
+                        for i, roi in enumerate(self.idx_rois[subj]):
+        
+                            roi_data = np.zeros_like(mask)
+                            roi_data[self.idx_rois[subj][roi]] = 1
+                            if 'custom' not in roi and 'visual' not in roi:
+                                data[self.idx_rois[subj][roi]] = i+1
+                            if 'custom' in roi and 'Pole' not in roi:
+                                custom_rois_data[self.idx_rois[subj][roi]] = i+1
+
+                            ds_rois[roi] = cortex.Vertex2D(roi_data, roi_data.astype('bool'), subj, cmap='RdBu_r_alpha').raw
+        
+
+        
+                        ds_rois['Wang2015Atlas'] = cortex.Vertex2D(data, data.astype('bool'), subj, cmap='Retinotopy_HSV_2x_alpha').raw
+                        ds_rois['Custom ROIs'] = cortex.Vertex2D(custom_rois_data, custom_rois_data.astype('bool'), subj, cmap='Retinotopy_HSV_2x_alpha').raw 
+                        
+                        self.js_handle_dict[space][analysis][subj]['js_handle_rois'] = cortex.webgl.show(ds_rois, pickerfun=clicker_function, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)
+        
+                        plotted_rois[subj] = True
+                                                
+
+                        
+        
+                    if self.plot_rsq_cortex:              
+                        ds_rsq = dict()
+                        
+                        
+                        best_model = np.argmax([p_r['RSq'][model] for model in ['Gauss','Norm_abcd','CSS','DoG']],axis=0)
+
+                        ds_rsq['Best model'] = cortex.Vertex2D(best_model, p_r['Alpha']['all'], subject=subj,
+                                                                      vmin2=rsq_thresh, vmax2=0.6, cmap='BROYG_2D').raw 
+
+
+                        for model in self.only_models:
+                            ds_rsq[model] = cortex.Vertex2D(p_r['RSq'][model], p_r['Alpha'][model], subject=subj, 
+                                                            vmin=rsq_thresh, vmax=0.8, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw
                             
-                            ds_rois = {}
-                            data = np.zeros_like(mask).astype('int')
-                            custom_rois_data = np.zeros_like(mask).astype('int')
-            
-                            for i, roi in enumerate(self.idx_rois[subj]):
-            
-                                roi_data = np.zeros_like(mask)
-                                roi_data[self.idx_rois[subj][roi]] = 1
-                                if 'custom' not in roi and 'visual' not in roi:
-                                    data[self.idx_rois[subj][roi]] = i+1
-                                if 'custom' in roi and 'Pole' not in roi:
-                                    custom_rois_data[self.idx_rois[subj][roi]] = i+1
-
-                                ds_rois[roi] = cortex.Vertex2D(roi_data, roi_data.astype('bool'), subj, cmap='RdBu_r_alpha').raw
-            
-
-            
-                            ds_rois['Wang2015Atlas'] = cortex.Vertex2D(data, data.astype('bool'), subj, cmap='Retinotopy_HSV_2x_alpha').raw
-                            ds_rois['Custom ROIs'] = cortex.Vertex2D(custom_rois_data, custom_rois_data.astype('bool'), subj, cmap='Retinotopy_HSV_2x_alpha').raw 
+                        if 'CSS' in models and 'Gauss' in self.only_models:
+                            ds_rsq['CSS - Gauss'] = cortex.Vertex2D(p_r['RSq']['CSS']-p_r['RSq']['Gauss'], p_r['Alpha']['all'], subject=subj,
+                                                                      vmin=-0.1, vmax=0.1, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw   
                             
-                            self.js_handle_dict[space][analysis][subj]['js_handle_rois'] = cortex.webgl.show(ds_rois, pickerfun=clicker_function, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)
-            
-                            plotted_rois[subj] = True
-                                                    
+                        if 'DoG' in models and 'Gauss' in self.only_models:
+                            ds_rsq['DoG - Gauss'] = cortex.Vertex2D(p_r['RSq']['DoG']-p_r['RSq']['Gauss'], p_r['Alpha']['all'], subject=subj,
+                                                                  vmin=-0.1, vmax=0.1, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw
+                        
+                        if 'Norm_abcd' in self.only_models and 'CSS' in self.only_models and 'DoG' in self.only_models and 'Gauss' in self.only_models:
 
-                            
-            
-                        if self.plot_rsq_cortex:              
-                            ds_rsq = dict()
-                            
-                            
-                            best_model = np.argmax([p_r['RSq'][model] for model in ['Gauss','Norm_abcd','CSS','DoG']],axis=0)
-
-                            ds_rsq['Best model'] = cortex.Vertex2D(best_model, p_r['Alpha']['all'], subject=subj,
-                                                                          vmin2=rsq_thresh, vmax2=0.6, cmap='BROYG_2D').raw 
-
-
-                            for model in self.only_models:
-                                ds_rsq[model] = cortex.Vertex2D(p_r['RSq'][model], p_r['Alpha'][model], subject=subj, 
-                                                                vmin=rsq_thresh, vmax=0.8, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw
-                                
-                            if 'CSS' in models and 'Gauss' in self.only_models:
-                                ds_rsq['CSS - Gauss'] = cortex.Vertex2D(p_r['RSq']['CSS']-p_r['RSq']['Gauss'], p_r['Alpha']['all'], subject=subj,
-                                                                          vmin=-0.1, vmax=0.1, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw   
-                                
-                            if 'DoG' in models and 'Gauss' in self.only_models:
-                                ds_rsq['DoG - Gauss'] = cortex.Vertex2D(p_r['RSq']['DoG']-p_r['RSq']['Gauss'], p_r['Alpha']['all'], subject=subj,
+                            ds_rsq[f'Norm_abcd - Gauss'] = cortex.Vertex2D(p_r['RSq']['Norm_abcd']-p_r['RSq']['Gauss'], p_r['Alpha']['all'], subject=subj,
                                                                       vmin=-0.1, vmax=0.1, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw
-                            
-                            if 'Norm_abcd' in self.only_models and 'CSS' in self.only_models and 'DoG' in self.only_models and 'Gauss' in self.only_models:
 
-                                ds_rsq[f'Norm_abcd - Gauss'] = cortex.Vertex2D(p_r['RSq']['Norm_abcd']-p_r['RSq']['Gauss'], p_r['Alpha']['all'], subject=subj,
-                                                                          vmin=-0.1, vmax=0.1, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw
+                            ds_rsq[f'Norm_abcd - DoG'] = cortex.Vertex2D(p_r['RSq']['Norm_abcd']-p_r['RSq']['DoG'], p_r['Alpha']['all'], subject=subj,
+                                                                      vmin=-0.1, vmax=0.1, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw
 
-                                ds_rsq[f'Norm_abcd - DoG'] = cortex.Vertex2D(p_r['RSq']['Norm_abcd']-p_r['RSq']['DoG'], p_r['Alpha']['all'], subject=subj,
-                                                                          vmin=-0.1, vmax=0.1, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw
-
-                                ds_rsq[f'Norm_abcd - CSS'] = cortex.Vertex2D(p_r['RSq']['Norm_abcd']-p_r['RSq']['CSS'], p_r['Alpha']['all'], subject=subj, 
-                                                                          vmin=-0.1, vmax=0.1, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw
+                            ds_rsq[f'Norm_abcd - CSS'] = cortex.Vertex2D(p_r['RSq']['Norm_abcd']-p_r['RSq']['CSS'], p_r['Alpha']['all'], subject=subj, 
+                                                                      vmin=-0.1, vmax=0.1, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw
  
 
-                            for model in [model for model in self.only_models if 'Norm' in model and 'Norm_abcd' != model]:
+                        for model in [model for model in self.only_models if 'Norm' in model and 'Norm_abcd' != model]:
 
-                                ds_rsq[f'{model} - Norm_abcd'] = cortex.Vertex2D(p_r['RSq'][model]-p_r['RSq']['Norm_abcd'], p_r['Alpha']['all'], subject=subj,
-                                                                          vmin=-0.1, vmax=0.1, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw
-                                
-                                
-                            if 'Processed Results' in self.main_dict['T1w'][analysis][subj] and self.compare_volume_surface:
-                                
-                                ds_rsq_comp = dict()
-                                volume_rsq = self.main_dict['T1w'][analysis][subj]['Processed Results']['RSq']['Norm']
-                                ref_img = nb.load(self.main_dict['T1w'][analysis][subj]['Results']['ref_img_path'])
-                                
-                                #rsq_img = nb.Nifti1Image(volume_rsq, ref_img.affine, ref_img.header)
+                            ds_rsq[f'{model} - Norm_abcd'] = cortex.Vertex2D(p_r['RSq'][model]-p_r['RSq']['Norm_abcd'], p_r['Alpha']['all'], subject=subj,
+                                                                      vmin=-0.1, vmax=0.1, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw
+                            
+                            
+                        if 'Processed Results' in self.main_dict['T1w'][analysis][subj] and self.compare_volume_surface:
+                            
+                            ds_rsq_comp = dict()
+                            volume_rsq = self.main_dict['T1w'][analysis][subj]['Processed Results']['RSq']['Norm']
+                            ref_img = nb.load(self.main_dict['T1w'][analysis][subj]['Results']['ref_img_path'])
+                            
+                            #rsq_img = nb.Nifti1Image(volume_rsq, ref_img.affine, ref_img.header)
 
-                                xfm_trans = cortex.xfm.Transform(np.identity(4), ref_img)
-                                xfm_trans.save(subj, 'func_space_transform')
+                            xfm_trans = cortex.xfm.Transform(np.identity(4), ref_img)
+                            xfm_trans.save(subj, 'func_space_transform')
+                            
+                            ds_rsq_comp['Norm_abcd CV rsq (volume fit)'] = cortex.Volume2D(volume_rsq.T, volume_rsq.T, subj, 'func_space_transform',
+                                                                      vmin=rsq_thresh, vmax=0.6, vmin2=0.05, vmax2=rsq_thresh, cmap='Jet_2D_alpha')
+                            ds_rsq_comp['Norm_abcd CV rsq (surface fit)'] = cortex.Vertex2D(p_r['RSq']['Norm_abcd'], p_r['RSq']['Norm_abcd'], subject=subj,
+                                                                      vmin=rsq_thresh, vmax=0.6, vmin2=0.05, vmax2=rsq_thresh, cmap='Jet_2D_alpha').raw
+                            self.js_handle_dict[space][analysis][subj]['js_handle_rsq_comp'] = cortex.webgl.show(ds_rsq_comp, pickerfun=clicker_function, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)
+                        
+
+                        self.js_handle_dict[space][analysis][subj]['js_handle_rsq'] = cortex.webgl.show(ds_rsq, pickerfun=clicker_function, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True) 
+                        
+                    if self.plot_ecc_cortex:
+                        ds_ecc = dict()
+                        
+                        for model in self.only_models:
+                            ds_ecc[model] = cortex.Vertex2D(p_r['Eccentricity'][model], p_r['Alpha'][model], subject=subj, 
+                                                            vmin=self.ecc_min, vmax=self.ecc_max-1, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_r_2D_alpha').raw
+        
+                        self.js_handle_dict[space][analysis][subj]['js_handle_ecc'] = cortex.webgl.show(ds_ecc, pickerfun=clicker_function, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)
+        
+                    if self.plot_polar_cortex:
+                        ds_polar = dict()
+                        
+                        for model in self.only_models:
+                            ds_polar[model] = cortex.Vertex2D(p_r['Polar Angle'][model], p_r['Alpha'][model], subject=subj, 
+                                                              vmin2=rsq_thresh, vmax2=0.6, cmap='Retinotopy_HSV_2x_alpha').raw
+                        
+                        if 'Processed Results' in self.main_dict['T1w'][analysis][subj] and self.compare_volume_surface:
+                            ds_polar_comp = dict()
+                            
+                            volume_rsq = self.main_dict['T1w'][analysis][subj]['Processed Results']['RSq']['Norm_abcd']
+                            volume_polar = self.main_dict['T1w'][analysis][subj]['Processed Results']['Polar Angle']['Norm_abcd']
+                            ref_img = nb.load(self.main_dict['T1w'][analysis][subj]['Results']['ref_img_path'])                                
+
+                            xfm_trans = cortex.xfm.Transform(np.identity(4), ref_img)
+                            xfm_trans.save(subj, 'func_space_transform')
+                            
+                            ds_polar_comp['Norm_abcd CV polar (volume fit)'] = cortex.Volume2D(volume_polar.T, volume_rsq.T, subj, 'func_space_transform',
+                                                                      vmin2=0.05, vmax2=rsq_thresh, cmap='Retinotopy_HSV_2x_alpha')
+                            ds_polar_comp['Norm_abcd CV polar (surface fit)'] = cortex.Vertex2D(p_r['Polar Angle']['Norm_abcd'], p_r['RSq']['Norm_abcd'], subject=subj,
+                                                                      vmin2=0.05, vmax2=rsq_thresh, cmap='Retinotopy_HSV_2x_alpha').raw
+                            self.js_handle_dict[space][analysis][subj]['js_handle_polar_comp'] = cortex.webgl.show(ds_polar_comp, pickerfun=clicker_function, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)
+
+                        
+                        self.js_handle_dict[space][analysis][subj]['js_handle_polar'] = cortex.webgl.show(ds_polar, pickerfun=clicker_function, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)
+        
+                    if self.plot_size_cortex:
+                        ds_size = dict()
+                        
+                        for model in self.only_models:
+                            ds_size[f"{model} fwhmax"] = cortex.Vertex2D(p_r['Size (fwhmax)'][model], p_r['Alpha'][model], subject=subj, 
+                                                             vmin=0, vmax=6, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw
+                            ds_size[f"{model} sigma_1"] = cortex.Vertex2D(p_r['Size (sigma_1)'][model], p_r['Alpha'][model], subject=subj, 
+                                                             vmin=0, vmax=6, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw
+                            
+                        self.js_handle_dict[space][analysis][subj]['js_handle_size'] = cortex.webgl.show(ds_size, pickerfun=clicker_function, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)
+        
+        
+                    if self.plot_amp_cortex:
+                        ds_amp = dict()
+                        
+                        for model in self.only_models:
+                            ds_amp[model] = cortex.Vertex2D(p_r['Amplitude'][model], p_r['Alpha'][model], subject=subj, 
+                                                            vmin=-1, vmax=1, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw
+        
+                        self.js_handle_dict[space][analysis][subj]['js_handle_amp'] = cortex.webgl.show(ds_amp, pickerfun=clicker_function, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)
+                        
+                    if self.plot_css_exp_cortex and 'CSS' in self.only_models:
+                        ds_css_exp = dict()
+                        
+                        ds_css_exp['CSS Exponent'] = cortex.Vertex2D(p_r['CSS Exponent']['CSS'], p_r['Alpha']['CSS'], subject=subj, 
+                                                                     vmin=0, vmax=1, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw
+        
+                        self.js_handle_dict[space][analysis][subj]['js_handle_css_exp'] = cortex.webgl.show(ds_css_exp, pickerfun=clicker_function, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)
+                        
+                    if self.plot_surround_size_cortex:
+                        ds_surround_size = dict()
+                        
+                        
+                        for model in self.only_models:
+                            if model == 'DoG':
+                                ds_surround_size[f'DoG fwatmin'] = cortex.Vertex2D(p_r['Surround Size (fwatmin)']['DoG'], p_r['Alpha']['DoG'], subject=subj, 
+                                                                     vmin=0, vmax=50, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw
+                                ds_surround_size[f'DoG sigma_2'] = cortex.Vertex2D(p_r['Size (sigma_2)']['DoG'], p_r['Alpha']['DoG'], subject=subj, 
+                                                                     vmin=0, vmax=50, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw
+                            elif 'Norm' in model:
+                                ds_surround_size[f"{model} fwatmin"] = cortex.Vertex2D(p_r['Surround Size (fwatmin)'][model], p_r['Alpha'][model], subject=subj, 
+                                                                     vmin=0, vmax=50, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw                    
+                                ds_surround_size[f"{model} sigma_2"] = cortex.Vertex2D(p_r['Size (sigma_2)'][model], p_r['Alpha'][model], subject=subj, 
+                                                                     vmin=0, vmax=10, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw    
                                 
-                                ds_rsq_comp['Norm_abcd CV rsq (volume fit)'] = cortex.Volume2D(volume_rsq.T, volume_rsq.T, subj, 'func_space_transform',
-                                                                          vmin=rsq_thresh, vmax=0.6, vmin2=0.05, vmax2=rsq_thresh, cmap='Jet_2D_alpha')
-                                ds_rsq_comp['Norm_abcd CV rsq (surface fit)'] = cortex.Vertex2D(p_r['RSq']['Norm_abcd'], p_r['RSq']['Norm_abcd'], subject=subj,
-                                                                          vmin=rsq_thresh, vmax=0.6, vmin2=0.05, vmax2=rsq_thresh, cmap='Jet_2D_alpha').raw
-                                self.js_handle_dict[space][analysis][subj]['js_handle_rsq_comp'] = cortex.webgl.show(ds_rsq_comp, pickerfun=clicker_function, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)
-                            
+                        self.js_handle_dict[space][analysis][subj]['js_handle_surround_size'] = cortex.webgl.show(ds_surround_size, pickerfun=clicker_function, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)    
 
-                            self.js_handle_dict[space][analysis][subj]['js_handle_rsq'] = cortex.webgl.show(ds_rsq, pickerfun=clicker_function, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True) 
-                            
-                        if self.plot_ecc_cortex:
-                            ds_ecc = dict()
-                            
-                            for model in self.only_models:
-                                ds_ecc[model] = cortex.Vertex2D(p_r['Eccentricity'][model], p_r['Alpha'][model], subject=subj, 
-                                                                vmin=self.ecc_min, vmax=self.ecc_max-1, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_r_2D_alpha').raw
-            
-                            self.js_handle_dict[space][analysis][subj]['js_handle_ecc'] = cortex.webgl.show(ds_ecc, pickerfun=clicker_function, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)
-            
-                        if self.plot_polar_cortex:
-                            ds_polar = dict()
-                            
-                            for model in self.only_models:
-                                ds_polar[model] = cortex.Vertex2D(p_r['Polar Angle'][model], p_r['Alpha'][model], subject=subj, 
-                                                                  vmin2=rsq_thresh, vmax2=0.6, cmap='Retinotopy_HSV_2x_alpha').raw
-                            
-                            if 'Processed Results' in self.main_dict['T1w'][analysis][subj] and self.compare_volume_surface:
-                                ds_polar_comp = dict()
+                    if self.plot_suppression_index_cortex:
+                        ds_suppression_index = dict()
+                        
+                        
+                        for model in self.only_models:
+                            if model == 'DoG':
+                                ds_suppression_index[f'{model} SI (full)'] = cortex.Vertex2D(p_r['Suppression Index (full)'][model], p_r['Alpha'][model], subject=subj, 
+                                                                     vmin=0, vmax=10, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw
+                                ds_suppression_index[f'{model} SI (aperture)'] = cortex.Vertex2D(p_r['Suppression Index'][model], p_r['Alpha'][model], subject=subj, 
+                                                                     vmin=0, vmax=1.5, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw                                    
+                            elif 'Norm' in model:
+                                ds_suppression_index[f'{model} NI (full)'] = cortex.Vertex2D(p_r['Suppression Index (full)'][model], p_r['Alpha'][model], subject=subj, 
+                                                                     vmin=1, vmax=20, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw
+                                ds_suppression_index[f'{model} NI (aperture)'] = cortex.Vertex2D(p_r['Suppression Index'][model], p_r['Alpha'][model], subject=subj, 
+                                                                     vmin=0, vmax=1.5, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw                      
+        
+                        self.js_handle_dict[space][analysis][subj]['js_handle_suppression_index'] = cortex.webgl.show(ds_suppression_index, pickerfun=clicker_function, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)    
+
+                    if self.plot_size_ratio_cortex:
+                        ds_size_ratio = dict()           
+                        for model in self.only_models:
+                            if model in p_r['Size ratio (sigma_2/sigma_1)']:
+                                ds_size_ratio[f'{model} size ratio'] = cortex.Vertex2D(p_r['Size ratio (sigma_2/sigma_1)'][model], p_r['Alpha'][model], subject=subj, 
+                                                                     vmin=4, vmax=16, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw                                                      
+        
+                        self.js_handle_dict[space][analysis][subj]['js_handle_size_ratio'] = cortex.webgl.show(ds_size_ratio, pickerfun=clicker_function, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)    
+                    
+                    if self.plot_receptors_cortex:
+                        if 'Receptor Maps' in p_r:
+                            ds_receptors = dict()           
+                            for receptor in p_r['Receptor Maps']:
                                 
-                                volume_rsq = self.main_dict['T1w'][analysis][subj]['Processed Results']['RSq']['Norm_abcd']
-                                volume_polar = self.main_dict['T1w'][analysis][subj]['Processed Results']['Polar Angle']['Norm_abcd']
-                                ref_img = nb.load(self.main_dict['T1w'][analysis][subj]['Results']['ref_img_path'])                                
+                                ds_receptors[receptor] = cortex.Vertex2D(p_r['Receptor Maps'][receptor], p_r['Alpha']['all'], subject=subj, 
+                                                                         vmin=np.quantile(p_r['Receptor Maps'][receptor][p_r['Alpha']['all']>rsq_thresh],0.1), vmax=np.quantile(p_r['Receptor Maps'][receptor][p_r['Alpha']['all']>rsq_thresh],0.9), 
+                                                                         vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw                                                      
+            
+                            self.js_handle_dict[space][analysis][subj]['js_handle_receptors'] = cortex.webgl.show(ds_receptors, pickerfun=clicker_function, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)    
 
-                                xfm_trans = cortex.xfm.Transform(np.identity(4), ref_img)
-                                xfm_trans.save(subj, 'func_space_transform')
-                                
-                                ds_polar_comp['Norm_abcd CV polar (volume fit)'] = cortex.Volume2D(volume_polar.T, volume_rsq.T, subj, 'func_space_transform',
-                                                                          vmin2=0.05, vmax2=rsq_thresh, cmap='Retinotopy_HSV_2x_alpha')
-                                ds_polar_comp['Norm_abcd CV polar (surface fit)'] = cortex.Vertex2D(p_r['Polar Angle']['Norm_abcd'], p_r['RSq']['Norm_abcd'], subject=subj,
-                                                                          vmin2=0.05, vmax2=rsq_thresh, cmap='Retinotopy_HSV_2x_alpha').raw
-                                self.js_handle_dict[space][analysis][subj]['js_handle_polar_comp'] = cortex.webgl.show(ds_polar_comp, pickerfun=clicker_function, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)
+                         
+                    if self.plot_norm_baselines_cortex:
+                        ds_norm_baselines = dict()
+                        
+                        
+                        for model in [model for model in self.only_models if 'Norm' in model]:
 
-                            
-                            self.js_handle_dict[space][analysis][subj]['js_handle_polar'] = cortex.webgl.show(ds_polar, pickerfun=clicker_function, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)
-            
-                        if self.plot_size_cortex:
-                            ds_size = dict()
-                            
-                            for model in self.only_models:
-                                ds_size[f"{model} fwhmax"] = cortex.Vertex2D(p_r['Size (fwhmax)'][model], p_r['Alpha'][model], subject=subj, 
-                                                                 vmin=0, vmax=6, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw
-                                ds_size[f"{model} sigma_1"] = cortex.Vertex2D(p_r['Size (sigma_1)'][model], p_r['Alpha'][model], subject=subj, 
-                                                                 vmin=0, vmax=6, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw
-                                
-                            self.js_handle_dict[space][analysis][subj]['js_handle_size'] = cortex.webgl.show(ds_size, pickerfun=clicker_function, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)
-            
-            
-                        if self.plot_amp_cortex:
-                            ds_amp = dict()
-                            
-                            for model in self.only_models:
-                                ds_amp[model] = cortex.Vertex2D(p_r['Amplitude'][model], p_r['Alpha'][model], subject=subj, 
-                                                                vmin=-1, vmax=1, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw
-            
-                            self.js_handle_dict[space][analysis][subj]['js_handle_amp'] = cortex.webgl.show(ds_amp, pickerfun=clicker_function, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)
-                            
-                        if self.plot_css_exp_cortex and 'CSS' in self.only_models:
-                            ds_css_exp = dict()
-                            
-                            ds_css_exp['CSS Exponent'] = cortex.Vertex2D(p_r['CSS Exponent']['CSS'], p_r['Alpha']['CSS'], subject=subj, 
-                                                                         vmin=0, vmax=1, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw
-            
-                            self.js_handle_dict[space][analysis][subj]['js_handle_css_exp'] = cortex.webgl.show(ds_css_exp, pickerfun=clicker_function, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)
-                            
-                        if self.plot_surround_size_cortex:
-                            ds_surround_size = dict()
-                            
-                            
-                            for model in self.only_models:
-                                if model == 'DoG':
-                                    ds_surround_size[f'DoG fwatmin'] = cortex.Vertex2D(p_r['Surround Size (fwatmin)']['DoG'], p_r['Alpha']['DoG'], subject=subj, 
-                                                                         vmin=0, vmax=50, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw
-                                    ds_surround_size[f'DoG sigma_2'] = cortex.Vertex2D(p_r['Size (sigma_2)']['DoG'], p_r['Alpha']['DoG'], subject=subj, 
-                                                                         vmin=0, vmax=50, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw
-                                elif 'Norm' in model:
-                                    ds_surround_size[f"{model} fwatmin"] = cortex.Vertex2D(p_r['Surround Size (fwatmin)'][model], p_r['Alpha'][model], subject=subj, 
-                                                                         vmin=0, vmax=50, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw                    
-                                    ds_surround_size[f"{model} sigma_2"] = cortex.Vertex2D(p_r['Size (sigma_2)'][model], p_r['Alpha'][model], subject=subj, 
-                                                                         vmin=0, vmax=10, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw    
-                                    
-                            self.js_handle_dict[space][analysis][subj]['js_handle_surround_size'] = cortex.webgl.show(ds_surround_size, pickerfun=clicker_function, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)    
-
-                        if self.plot_suppression_index_cortex:
-                            ds_suppression_index = dict()
-                            
-                            
-                            for model in self.only_models:
-                                if model == 'DoG':
-                                    ds_suppression_index[f'{model} (full)'] = cortex.Vertex2D(p_r['Suppression Index (full)'][model], p_r['Alpha'][model], subject=subj, 
-                                                                         vmin=0, vmax=10, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw
-                                    ds_suppression_index[f'{model} (aperture)'] = cortex.Vertex2D(p_r['Suppression Index'][model], p_r['Alpha'][model], subject=subj, 
-                                                                         vmin=0, vmax=1.5, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw                                    
-                                elif 'Norm' in model:
-                                    ds_suppression_index[f'{model} (full)'] = cortex.Vertex2D(p_r['Suppression Index (full)'][model], p_r['Alpha'][model], subject=subj, 
-                                                                         vmin=0, vmax=10, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw
-                                    ds_suppression_index[f'{model} (aperture)'] = cortex.Vertex2D(p_r['Suppression Index'][model], p_r['Alpha'][model], subject=subj, 
-                                                                         vmin=0, vmax=1.5, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw                      
-            
-                            self.js_handle_dict[space][analysis][subj]['js_handle_suppression_index'] = cortex.webgl.show(ds_suppression_index, pickerfun=clicker_function, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)    
-                             
-                        if self.plot_norm_baselines_cortex:
-                            ds_norm_baselines = dict()
-                            
-                            
-                            for model in [model for model in self.only_models if 'Norm' in model]:
-
-                                ds_norm_baselines[f'{model} Param. B'] = cortex.Vertex2D(p_r['Norm Param. B'][model], p_r['Alpha'][model], subject=subj, 
-                                                                             vmin=5, vmax=100, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw                    
-                                ds_norm_baselines[f'{model} Param. D'] = cortex.Vertex2D(p_r['Norm Param. D'][model], p_r['Alpha'][model], subject=subj, 
-                                                                             vmin=5, vmax=100, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw
-                                ds_norm_baselines[f'{model} Ratio (B/D)'] = cortex.Vertex2D(p_r['Ratio (B/D)'][model], p_r['Alpha'][model], subject=subj, 
-                                                                             vmin=0, vmax=5, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw
-                            
-                            self.js_handle_dict[space][analysis][subj]['js_handle_norm_baselines'] = cortex.webgl.show(ds_norm_baselines, pickerfun=clicker_function, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)    
+                            ds_norm_baselines[f'{model} Param. B'] = cortex.Vertex2D(p_r['Norm Param. B'][model], p_r['Alpha'][model], subject=subj, 
+                                                                         vmin=5, vmax=100, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw                    
+                            ds_norm_baselines[f'{model} Param. D'] = cortex.Vertex2D(p_r['Norm Param. D'][model], p_r['Alpha'][model], subject=subj, 
+                                                                         vmin=5, vmax=100, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw
+                            ds_norm_baselines[f'{model} Ratio (B/D)'] = cortex.Vertex2D(p_r['Ratio (B/D)'][model], p_r['Alpha'][model], subject=subj, 
+                                                                         vmin=0, vmax=5, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw
+                        
+                        self.js_handle_dict[space][analysis][subj]['js_handle_norm_baselines'] = cortex.webgl.show(ds_norm_baselines, pickerfun=clicker_function, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)    
         print('-----')                              
         return    
         
@@ -866,9 +898,9 @@ class visualize_results(object):
     
     
     def quant_plots(self, x_parameter, y_parameter, rois, rsq_thresh, save_figures, 
-                    analysis_names = 'all', subject_ids='all', ylim={}, xlim={},
+                    space_names = 'fsnative', analysis_names = 'all', subject_ids='all', plot_receptors=False, ylim={}, xlim={},
                     x_param_model=None, violin=False, scatter=False, diff_gauss=False, diff_gauss_x=False,
-                    means_only=False, stats_on_plot=False):
+                    means_only=False, stats_on_plot=False, bin_by='size'):
         """
         
 
@@ -916,10 +948,15 @@ class visualize_results(object):
         pl.rcParams['axes.spines.right'] = False
         pl.rcParams['axes.spines.top'] = False
         
-        cmap_rois = cm.get_cmap('nipy_spectral')(np.linspace(0.0, 0.9, 9)[::-1]) #change 9 to len(rois) if needed
+        cmap_rois = cm.get_cmap('nipy_spectral')(np.linspace(0.0, 0.9, len(rois))[::-1]) #change 9 to len(rois) if needed
 
-        for space, space_res in self.main_dict.items():
-            if 'fsnative' in space:
+        if space_names == 'all':
+            spaces = [item for item in self.main_dict.items()]
+        else:
+            spaces = [item for item in self.main_dict.items() if item[0] in space_names] 
+
+        for space, space_res in spaces:
+            if 'fs' in space:
                 
                 #upsampling correction: fsnative has approximately 3 times as many datapoints as original
                 upsampling_corr_factor = 3
@@ -927,10 +964,11 @@ class visualize_results(object):
                 w_max=60
                 #remove absurd suppression index values
                 supp_max=1000
-                #bar or violin width
-                bar_or_violin_width = 0.3
                 #css max
                 css_max=1
+                #bar or violin width
+                bar_or_violin_width = 0.3
+
                 
                         
                 if analysis_names == 'all':
@@ -979,8 +1017,8 @@ class visualize_results(object):
                             for model in self.only_models:                                
 
                                 
-                                if 'mean' not in analysis:
-                                    if 'sub' in subj:
+                                if 'mean' not in analysis or 'fsaverage' in subj:
+                                    if 'sub' in subj or 'fsaverage' in subj:
                                         if roi in self.idx_rois[subj]:
                                             if 'rsq' in y_parameter.lower():
                                                 #comparing same vertices for model performance
@@ -1018,20 +1056,35 @@ class visualize_results(object):
                                         if y_parameter == 'Surround Size (fwatmin)' or x_parameter == 'Surround Size (fwatmin)':# and model == 'DoG':
                                             #exclude too large surround (no surround)
                                             alpha[analysis][subj][model][roi] *= (subj_res['Processed Results']['Surround Size (fwatmin)'][model]<w_max)
+                                            if x_param_model!=None:
+                                                alpha[analysis][subj][model][roi] *= (subj_res['Processed Results']['Surround Size (fwatmin)'][x_param_model]<w_max)
+
+                                        
+                                        if y_parameter == 'Surround/Centre Amplitude'  or x_parameter == 'Surround/Centre Amplitude' :# and model == 'DoG':
+                                            #exclude too large surround (no surround)
+                                            if x_param_model!=None:
+                                                alpha[analysis][subj][model][roi] *= (subj_res['Processed Results']['Surround/Centre Amplitude'][x_param_model]<w_max)
+                                            else:
+                                                alpha[analysis][subj][model][roi] *= (subj_res['Processed Results']['Surround/Centre Amplitude'][model]<w_max)
+
+                                                
                                         if 'Suppression' in y_parameter:
                                             #exclude nonsensical suppression index values
                                             alpha[analysis][subj][model][roi] *= (subj_res['Processed Results'][y_parameter][model]<supp_max)                                            
                                         if 'Suppression' in x_parameter:
                                             #exclude nonsensical suppression index values
                                             alpha[analysis][subj][model][roi] *= (subj_res['Processed Results'][x_parameter][model]<supp_max)
+                                            if x_param_model!=None:
+                                                alpha[analysis][subj][model][roi] *= (subj_res['Processed Results'][x_parameter][x_param_model]<supp_max)
+                                                
                                         if 'CSS Exponent' in x_parameter:
                                             alpha[analysis][subj][model][roi] *= (subj_res['Processed Results'][x_parameter][x_param_model]<css_max)
                                                 
          
                                         #if 'ccrsq' in y_parameter.lower():
                                         #    alpha[analysis][subj][model][roi] *= (subj_res['Processed Results'][y_parameter][model]>0)
-                                            
-                                        alpha[analysis][subj][model][roi] *= np.isfinite(subj_res['Processed Results'][y_parameter][model])
+                                        if not plot_receptors:
+                                            alpha[analysis][subj][model][roi] *= np.isfinite(subj_res['Processed Results'][y_parameter][model])
                                        
                                         if x_param_model != None:
                                             
@@ -1045,9 +1098,15 @@ class visualize_results(object):
                                             alpha[analysis][subj][model][roi] *= np.isfinite(subj_res['Processed Results'][x_parameter][model])                                    
 
                                             x_par[analysis][subj][model][roi] = subj_res['Processed Results'][x_parameter][model][alpha[analysis][subj][model][roi]]
-
-                                        y_par[analysis][subj][model][roi] = (subj_res['Processed Results'][y_parameter][model][alpha[analysis][subj][model][roi]])
                                             
+                                        #handling special case of plotting receptors as y-parameter, since they are not part of any model
+                                        if not plot_receptors:
+                                            y_par[analysis][subj][model][roi] = (subj_res['Processed Results'][y_parameter][model][alpha[analysis][subj][model][roi]])
+                                        else:
+                                            y_par[analysis][subj][model][roi] = (subj_res['Processed Results']['Receptor Maps'][y_parameter][alpha[analysis][subj][model][roi]])
+                                            
+                                        
+                                        
                                         if diff_gauss:
                                             y_par[analysis][subj][model][roi] -= subj_res['Processed Results'][y_parameter]['Gauss'][alpha[analysis][subj][model][roi]]
                                         
@@ -1055,17 +1114,11 @@ class visualize_results(object):
                                             x_par[analysis][subj][model][roi] -= subj_res['Processed Results'][x_parameter]['Gauss'][alpha[analysis][subj][model][roi]]
                                         
                                             
-                                            
-                                                
-                                            
-                                            
-                                            
+
                                             #set negative ccrsq and rsq to zero
                                             #if 'ccrsq' in y_parameter.lower():
                                             #    y_par[analysis][subj][model][roi][y_par[analysis][subj][model][roi]<0] = 0
-                                            
-                                            
-                                        
+                 
     
                                         #r - squared weighting
                                         
@@ -1085,7 +1138,7 @@ class visualize_results(object):
                                             rsq[analysis][subj][model][roi] = np.copy(subj_res['Processed Results']['RSq'][model][alpha[analysis][subj][model][roi]])
                                             
                                             #if plotting different model parameters use mean-rsquared as weighting
-                                            if x_param_model != None:
+                                            if x_param_model != None and x_param_model in subj_res['Processed Results']['RSq']:
                                                 rsq_x_param = np.copy(subj_res['Processed Results']['RSq'][x_param_model][alpha[analysis][subj][model][roi]])
                                                 rsq_x_param[subj_res['Processed Results']['RSq'][x_param_model][alpha[analysis][subj][model][roi]]<0] = 0
                                                 
@@ -1099,7 +1152,7 @@ class visualize_results(object):
                                         
                                         
         
-                                    else:
+                                    elif len(subjects)>1 and 'fsaverage' not in subjects:
                                         #group stats
                                         x_par_group = np.concatenate(tuple([x_par[analysis][sid][model][roi] for sid in x_par[analysis] if 'sub' in sid]))
                                         
@@ -1110,7 +1163,7 @@ class visualize_results(object):
                                         y_par[analysis][subj][model][roi] = np.copy(y_par_group)
                                         rsq[analysis][subj][model][roi] = np.copy(rsq_group)
                                     
-                                else:
+                                elif 'fsaverage' not in subjects:
                                     #mean analysis
                                     ans = [an[0] for an in analyses if 'mean' not in an[0]]
                                     alpha[analysis][subj][model][roi] = np.hstack(tuple([alpha[an][subj][model][roi] for an in ans]))
@@ -1407,12 +1460,9 @@ class visualize_results(object):
                                 #     pl.legend(by_label.values(), by_label.keys())
                                     
                                 if save_figures:
-                                    if len(analyses)>1:
-                                        os.makedirs(f"/Users/marcoaqil/PRFMapping/Figures/{analysis}", exist_ok=True)
-                                        pl.savefig(f"/Users/marcoaqil/PRFMapping/Figures/{analysis}/{subj} {model} Mean {y_parameter.replace('/','')}.pdf", dpi=300, bbox_inches='tight')
+                                    os.makedirs(f"/Users/marcoaqil/PRFMapping/Figures/{analysis}", exist_ok=True)
+                                    pl.savefig(f"/Users/marcoaqil/PRFMapping/Figures/{analysis}/{subj} {model} Mean {y_parameter.replace('/','')}.pdf", dpi=300, bbox_inches='tight')
                                                           
-                                    else:                      
-                                        pl.savefig(f"/Users/marcoaqil/PRFMapping/Figures/{subj} {model} Mean {y_parameter.replace('/','')}.pdf", dpi=300, bbox_inches='tight')
 
                         
                         if not means_only:
@@ -1434,12 +1484,14 @@ class visualize_results(object):
                                     
                                     
                                     try:
+                                        
+                                        if bin_by == 'space':
                                         #equally spaced bins
-                                        #x_par_range = np.linspace(np.quantile(x_par[analysis][subj][model][roi], 0.05), np.quantile(x_par[analysis][subj][model][roi], 0.95), 8)
-                                        #split_x_par_bins = np.array_split(x_par_sorted, [np.nanargmin(np.abs(el-np.sort(x_par[analysis][subj][model][roi]))) for el in x_par_range])
-
+                                            x_par_range = np.linspace(np.quantile(x_par[analysis][subj][model][roi], 0.05), np.quantile(x_par[analysis][subj][model][roi], 0.95), 8)
+                                            split_x_par_bins = np.array_split(x_par_sorted, [np.nanargmin(np.abs(el-np.sort(x_par[analysis][subj][model][roi]))) for el in x_par_range])
+                                        elif bin_by == 'size':
                                         #equally sized bins
-                                        split_x_par_bins = np.array_split(x_par_sorted, 8)
+                                            split_x_par_bins = np.array_split(x_par_sorted, 8)
                                     
                                     
                                         for x_par_quantile in split_x_par_bins:
@@ -1526,7 +1578,10 @@ class visualize_results(object):
                                 elif 'B/D' in x_parameter:
                                     pl.xlabel(f"{x_parameter} (% signal change)")                                
                                 else:
-                                    pl.xlabel(f"{x_parameter}")    
+                                    pl.xlabel(f"{x_parameter}")  
+        
+                                if x_param_model != None:
+                                    pl.xlabel(f"{x_param_model} {pl.gca().get_xlabel()}")
                                 
                                 if 'Eccentricity' in y_parameter or 'Size' in y_parameter:
                                     pl.ylabel(f"{subj} {roi.replace('custom.','')} {y_parameter} (°)")
@@ -1547,12 +1602,12 @@ class visualize_results(object):
                                 # pl.legend([legend_dict[label] for label in legend_dict], legend_dict.keys())  
                                     
                                 if save_figures:
-                                    if len(analyses)>1:
-                                        os.makedirs(f"/Users/marcoaqil/PRFMapping/Figures/{analysis}", exist_ok=True)
+                                    os.makedirs(f"/Users/marcoaqil/PRFMapping/Figures/{analysis}", exist_ok=True)
+                                    if x_param_model != None:
+                                        pl.savefig(f"/Users/marcoaqil/PRFMapping/Figures/{analysis}/{subj} {roi.replace('custom.','')} {y_parameter.replace('/','')} VS {x_param_model} {x_parameter.replace('/','')}.pdf", dpi=300, bbox_inches='tight')
+                                    
+                                    else:      
                                         pl.savefig(f"/Users/marcoaqil/PRFMapping/Figures/{analysis}/{subj} {roi.replace('custom.','')} {y_parameter.replace('/','')} VS {x_parameter.replace('/','')}.pdf", dpi=300, bbox_inches='tight')
-                                                          
-                                    else:                                 
-                                        pl.savefig(f"/Users/marcoaqil/PRFMapping/Figures/{subj} {roi.replace('custom.','')} {y_parameter.replace('/','')} VS {x_parameter.replace('/','')}.pdf", dpi=300, bbox_inches='tight')
 
 
                         ########params by model (all rois)
@@ -1628,6 +1683,8 @@ class visualize_results(object):
                                 else:
                                     pl.xlabel(f"{x_parameter}")
                                     
+                                if x_param_model != None:
+                                    pl.xlabel(f"{x_param_model} {pl.gca().get_xlabel()}")                                    
                                 
                                 if 'Eccentricity' in y_parameter or 'Size' in y_parameter:
                                     pl.ylabel(f"{subj} {model} {y_parameter} (°)")
@@ -1648,13 +1705,11 @@ class visualize_results(object):
                                 # pl.legend([legend_dict[label] for label in legend_dict], legend_dict.keys())                      
     
                                 if save_figures:
-                                    if len(analyses)>1:
-                                        os.makedirs(f"/Users/marcoaqil/PRFMapping/Figures/{analysis}", exist_ok=True)
+                                    os.makedirs(f"/Users/marcoaqil/PRFMapping/Figures/{analysis}", exist_ok=True)
+                                    if x_param_model != None:
+                                        pl.savefig(f"/Users/marcoaqil/PRFMapping/Figures/{analysis}/{subj} {model} {y_parameter.replace('/','')} VS {x_param_model} {x_parameter.replace('/','')}.pdf", dpi=300, bbox_inches='tight')
+                                    else:
                                         pl.savefig(f"/Users/marcoaqil/PRFMapping/Figures/{analysis}/{subj} {model} {y_parameter.replace('/','')} VS {x_parameter.replace('/','')}.pdf", dpi=300, bbox_inches='tight')
-                                                          
-                                    else:                                 
-                                        pl.savefig(f"/Users/marcoaqil/PRFMapping/Figures/{subj} {model} {y_parameter.replace('/','')} VS {x_parameter.replace('/','')}.pdf", dpi=300, bbox_inches='tight')
-
 
         return
     
@@ -1740,6 +1795,15 @@ class visualize_results(object):
                                         for model in self.only_models:
                                             if model in subj_res['Processed Results'][param] and alpha[analysis][subj][roi].sum()>0:
                                                 alpha[analysis][subj][roi] *= np.isfinite(subj_res['Processed Results'][param][model])
+                                                
+                                                
+                                                if param == 'Surround Size (fwatmin)':
+                                                    #exclude too large surround (no surround)
+                                                    alpha[analysis][subj][roi] *= (subj_res['Processed Results'][param][model]<60)
+                                                if param == 'CSS Exponent':
+                                                    alpha[analysis][subj][roi] *= (subj_res['Processed Results'][param][model]<1)
+                                                if 'Suppression' in param:
+                                                    alpha[analysis][subj][roi] *= (subj_res['Processed Results'][param][model]<1000)
 
                                                 # param_max = subj_res['Processed Results'][param][model][alpha[analysis][subj][roi]].mean()+3*np.std(subj_res['Processed Results'][param][model][alpha[analysis][subj][roi]])
                                                 # param_min = subj_res['Processed Results'][param][model][alpha[analysis][subj][roi]].mean()-3*np.std(subj_res['Processed Results'][param][model][alpha[analysis][subj][roi]])
@@ -1787,14 +1851,22 @@ class visualize_results(object):
                         
                             ordered_dimensions = sorted(dimensions[analysis][subj][roi])
                             
-                            if subj == 'Group' and 'mean' in analysis and roi == 'all':
+                            if subj == 'Group' and 'mean' in analysis:
                                 print(f"{analysis} {subj} {roi}")
                                 
                                 print(multidim_param_array[analysis][subj][roi].shape)
                                 #ticks = [dim.replace for dim in ordered_dimensions]
                                 
-                                pl.figure(figsize=(6,6))
-                                im = pl.imshow(np.corrcoef(multidim_param_array[analysis][subj][roi]), vmin=-0.5, vmax=0.5, cmap='RdBu_r')
+                                pl.figure(figsize=(12,12))
+                                correlation_matrix = np.corrcoef(multidim_param_array[analysis][subj][roi])
+                                im = pl.imshow(correlation_matrix, vmin=-0.5, vmax=0.5, cmap='RdBu_r')
+                                #pl.xlim((0,correlation_matrix.shape[0]))
+                                #pl.ylim((0,correlation_matrix.shape[0]))
+                                
+                                for i in range(correlation_matrix.shape[0]):
+                                    for j in range(correlation_matrix.shape[1]):
+                                        pl.text(i, j, f"{correlation_matrix[i,j]:.2f}", fontsize=14, color='black', weight = 'bold', ha='center', va='center')
+                                    
                                 
                                 ticks = []
                                 tick_colors = []
@@ -1812,68 +1884,68 @@ class visualize_results(object):
                                     tick_x.set_color(tick_color)
                                     tick_y.set_color(tick_color)
 
-                                #from sklearn.decomposition import FastICA
-                                from sklearn.manifold import MDS
-                                pca = PCA()#n_components=2, svd_solver='full')
-                                #mds = MDS()
-                                #ica = FastICA()
+                                # #from sklearn.decomposition import FastICA
+                                # #from sklearn.manifold import MDS
+                                # pca = PCA()#n_components=2, svd_solver='full')
+                                # #mds = MDS()
+                                # #ica = FastICA()
                                 
-                                transformed_data = pca.fit_transform(multidim_param_array[analysis][subj][roi].T)
-                                #transformed_data = ica.fit_transform(multidim_param_array[analysis][subj][roi].T)
-                                #transformed_data = mds.fit_transform(multidim_param_array[analysis][subj][roi].T)
-                                #transformed_data = multidim_param_array[analysis][subj][roi].T
+                                # transformed_data = pca.fit_transform(multidim_param_array[analysis][subj][roi].T)
+                                # #transformed_data = ica.fit_transform(multidim_param_array[analysis][subj][roi].T)
+                                # #transformed_data = mds.fit_transform(multidim_param_array[analysis][subj][roi].T)
+                                # #transformed_data = multidim_param_array[analysis][subj][roi].T
                                 
                                 
-                                print(transformed_data.shape)
+                                # print(transformed_data.shape)
                                 
-                                start = 0
-                                stop = 0
-                                means=[]
-                                # for dims in list(itertools.combinations(np.arange(transformed_data.shape[1]),2)):
-                                #     fig = pl.figure(f'scatter {dims}', figsize=(6,6))
+                                # start = 0
+                                # stop = 0
+                                # means=[]
+                                # # for dims in list(itertools.combinations(np.arange(transformed_data.shape[1]),2)):
+                                # #     fig = pl.figure(f'scatter {dims}', figsize=(6,6))
                                     
-                                #     ax = fig.add_subplot(111)
-                                #     ax.grid(False)
+                                # #     ax = fig.add_subplot(111)
+                                # #     ax.grid(False)
     
-                                #     #sample = np.random.randint(0, (stop-start), 200)
+                                # #     #sample = np.random.randint(0, (stop-start), 200)
                                     
-                                #     #means.append(np.mean(transformed_data[start:stop,:], axis=0))
+                                # #     #means.append(np.mean(transformed_data[start:stop,:], axis=0))
     
-                                #     #means_dist = means[np.newaxis,...]-transformed_data[start:stop,:]
+                                # #     #means_dist = means[np.newaxis,...]-transformed_data[start:stop,:]
                                     
-                                #     #ax.scatter(transformed_data[start:stop,0].mean(), transformed_data[start:stop,1].mean(), transformed_data[start:stop,2].mean(), s=40, c=cmap_rois[g],  alpha=1) #zorder=len(rois)-i,
-                                #     #ax.scatter(transformed_data[start:stop,dims[0]], transformed_data[start:stop,dims[1]], s=1, c=cmap_rois[g],  alpha=0.5, zorder=len(rois)-1-g)
-                                #     #ax.scatter(transformed_data[:,dims[0]], transformed_data[:,dims[1]], s=1, c=cmap_rois[i],  alpha=0.5, zorder=len(rois)-i)
+                                # #     #ax.scatter(transformed_data[start:stop,0].mean(), transformed_data[start:stop,1].mean(), transformed_data[start:stop,2].mean(), s=40, c=cmap_rois[g],  alpha=1) #zorder=len(rois)-i,
+                                # #     #ax.scatter(transformed_data[start:stop,dims[0]], transformed_data[start:stop,dims[1]], s=1, c=cmap_rois[g],  alpha=0.5, zorder=len(rois)-1-g)
+                                # #     #ax.scatter(transformed_data[:,dims[0]], transformed_data[:,dims[1]], s=1, c=cmap_rois[i],  alpha=0.5, zorder=len(rois)-i)
 
-                                for g,rrr in enumerate(rois): 
-                                    if 'custom' in rrr:
-                                        stop += np.sum(alpha[analysis][subj][rrr])
-                                        for dims in list(itertools.combinations(np.arange(transformed_data.shape[1]),2)):
-                                            fig = pl.figure(f'scatter {dims}', figsize=(6,6))
+                                # for g,rrr in enumerate(rois): 
+                                #     if 'custom' in rrr:
+                                #         stop += np.sum(alpha[analysis][subj][rrr])
+                                #         for dims in list(itertools.combinations(np.arange(transformed_data.shape[1]),2)):
+                                #             fig = pl.figure(f'scatter {dims}', figsize=(6,6))
                                             
-                                            ax = fig.add_subplot(111)
-                                            ax.grid(False)
+                                #             ax = fig.add_subplot(111)
+                                #             ax.grid(False)
 
-                                            #sample = np.random.randint(0, (stop-start), 200)
+                                #             #sample = np.random.randint(0, (stop-start), 200)
                                             
-                                            means.append(np.mean(transformed_data[start:stop,:], axis=0))
+                                #             means.append(np.mean(transformed_data[start:stop,:], axis=0))
 
-                                            #means_dist = means[np.newaxis,...]-transformed_data[start:stop,:]
+                                #             #means_dist = means[np.newaxis,...]-transformed_data[start:stop,:]
                                             
-                                            #ax.scatter(transformed_data[start:stop,0].mean(), transformed_data[start:stop,1].mean(), transformed_data[start:stop,2].mean(), s=40, c=cmap_rois[g],  alpha=1) #zorder=len(rois)-i,
-                                            ax.scatter(transformed_data[start:stop,dims[0]], transformed_data[start:stop,dims[1]], s=1, c=cmap_rois[g],  alpha=0.5, zorder=len(rois)-g)
-                                            #ax.scatter(transformed_data[:,dims[0]], transformed_data[:,dims[1]], s=1, c=cmap_rois[g],  alpha=0.5, zorder=len(rois)-g)
+                                #             #ax.scatter(transformed_data[start:stop,0].mean(), transformed_data[start:stop,1].mean(), transformed_data[start:stop,2].mean(), s=40, c=cmap_rois[g],  alpha=1) #zorder=len(rois)-i,
+                                #             ax.scatter(transformed_data[start:stop,dims[0]], transformed_data[start:stop,dims[1]], s=1, c=cmap_rois[g],  alpha=0.5, zorder=len(rois)-g)
+                                #             #ax.scatter(transformed_data[:,dims[0]], transformed_data[:,dims[1]], s=1, c=cmap_rois[g],  alpha=0.5, zorder=len(rois)-g)
 
-                                            #ax.scatter(transformed_data[start:stop,0][sample], transformed_data[start:stop,1][sample],transformed_data[start:stop,2][sample], s=1, c=cmap_rois[g],  alpha=0.5) #zorder=len(rois)-i,
+                                #             #ax.scatter(transformed_data[start:stop,0][sample], transformed_data[start:stop,1][sample],transformed_data[start:stop,2][sample], s=1, c=cmap_rois[g],  alpha=0.5) #zorder=len(rois)-i,
     
-                                            #ax.scatter(np.median(transformed_data[start:stop,0]), np.median(transformed_data[start:stop,1]), s=10, c=cmap_rois[g],  alpha=1)
-                                        start += np.sum(alpha[analysis][subj][rrr])
+                                #             #ax.scatter(np.median(transformed_data[start:stop,0]), np.median(transformed_data[start:stop,1]), s=10, c=cmap_rois[g],  alpha=1)
+                                #         start += np.sum(alpha[analysis][subj][rrr])
                                 
-                                print(np.var(means, axis=0))
-                                np.set_printoptions(suppress=True)
-                                print(ordered_dimensions)
-                                print(pca.components_)
-                                print(pca.explained_variance_ratio_)
+                                # print(np.var(means, axis=0))
+                                # np.set_printoptions(suppress=True)
+                                # print(ordered_dimensions)
+                                # print(pca.components_)
+                                # print(pca.explained_variance_ratio_)
 
 
 
