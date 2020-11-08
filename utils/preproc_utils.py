@@ -63,9 +63,9 @@ def create_dm_from_screenshots(screenshot_path,
     #clipping edges
     #top, bottom, left, right
     design_matrix[:dm_edges_clipping[0],:,:] = 0
-    design_matrix[-dm_edges_clipping[1]:,:,:] = 0
+    design_matrix[(design_matrix.shape[0]-dm_edges_clipping[1]):,:,:] = 0
     design_matrix[:,:dm_edges_clipping[2],:] = 0
-    design_matrix[:,-dm_edges_clipping[3]:,:] = 0
+    design_matrix[:,(design_matrix.shape[0]-dm_edges_clipping[3]):,:] = 0
     print("Design matrix completed")
     
     return design_matrix
