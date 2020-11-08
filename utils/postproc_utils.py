@@ -383,17 +383,15 @@ class results(object):
         return
 
 
-# def mergedict_mean(dict1):
-#     """
-#     mean type merger (take mean of common dictionary elements)
-#     """
-#     mean_dict = 
-#     for k, v in dict1.items():
-#         if (isinstance(dict1[k], dict) or isinstance(dict1[k], dd)):
-            
-#             mergedict_mean(dict1[k])
-#         else:
-            
+def norm_1d_sr_function(a,b,c,d,s_1,s_2,x,stims,mu_x=0):
+    sr_function = (a*np.sum(np.exp(-(x-mu_x)**2/(2*s_1**2))*stims, axis=-1) + b) / (c*np.sum(np.exp(-(x-mu_x)**2/(2*s_2**2))*stims, axis=-1) + d) - b/d
+    return sr_function
+
+def norm_2d_sr_function(a,b,c,d,s_1,s_2,x,y,stims,mu_x=0,mu_y=0):
+    xx,yy = np.meshgrid(x,y)
+
+    sr_function = (a*np.sum(np.exp(-((xx-mu_x)**2+(yy-mu_y)**2)/(2*s_1**2))*stims, axis=(-1,-2)) + b) / (c*np.sum(np.exp(-((xx-mu_x)**2+(yy-mu_y)**2)/(2*s_2**2))*stims, axis=(-1,-2)) + d) - b/d
+    return sr_function             
             
 def mergedict_OR(dict1, dict2):
     """
@@ -471,69 +469,6 @@ def suppression_index(stim, aperture, params, normalize_RFs=False):
  
     return srf.sum(axis=(1,2)) / prf.sum(axis=(1,2))   
 
-def create_retinotopy_colormaps():
-    hue, alpha = np.meshgrid(np.linspace(
-        0, 1, 256, endpoint=False), 1-np.linspace(0, 1, 256))
-
-    hsv = np.zeros(list(hue.shape)+[3])
-
-
-    # convert angles to colors, using correlations as weights
-    hsv[..., 0] = hue  # angs_discrete  # angs_n
-    # np.sqrt(rsq) #np.ones_like(rsq)  # np.sqrt(rsq)
-    hsv[..., 1] = np.ones_like(alpha)
-    # np.nan_to_num(rsq ** -3) # np.ones_like(rsq)#n
-    hsv[..., 2] = np.ones_like(alpha)
-    hsv[-1,:,2] = 0
-
-    rgb = colors.hsv_to_rgb(hsv)
-    rgba = np.vstack((rgb.T, alpha[..., np.newaxis].T)).T
-    pl.imshow(rgba)
-    hsv_fn = os.path.join(os.path.split(cortex.database.default_filestore)[
-                          0], 'colormaps', 'Retinotopy_HSV_alpha.png')
-    sp.misc.imsave(hsv_fn, rgba)
-
-    hue, alpha = np.meshgrid(
-        np.fmod(np.linspace(0, 2, 256), 1.0), 1-np.linspace(0, 1, 256))
-    hsv = np.zeros(list(hue.shape)+[3])
-    # convert angles to colors, using correlations as weights
-    hsv[..., 0] = hue  # angs_discrete  # angs_n
-    # np.sqrt(rsq) #np.ones_like(rsq)  # np.sqrt(rsq)
-    hsv[..., 1] = np.ones_like(alpha)
-    # np.nan_to_num(rsq ** -3) # np.ones_like(rsq)#n
-    hsv[..., 2] = np.ones_like(alpha)
-    hsv[-1,:,2] = 0
-
-    rgb = colors.hsv_to_rgb(hsv)
-    rgba = np.vstack((rgb.T, alpha[..., np.newaxis].T)).T
-    pl.imshow(rgba)
-    hsv_fn = os.path.join(os.path.split(cortex.database.default_filestore)[
-                          0], 'colormaps', 'Retinotopy_HSV_2x_alpha.png')
-    sp.misc.imsave(hsv_fn, rgba)
-    #####
-    jet = mpimg.imread('/Users/marcoaqil/pycortex/filestore/colormaps/jet_r.png')
-    jet = colors.rgb_to_hsv(jet[...,:3])
-
-    hue, alpha = np.meshgrid(jet[...,0], 1-np.linspace(0, 1, 256))
-
-    hsv = np.zeros(list(hue.shape)+[3])
-
-    # convert angles to colors, using correlations as weights
-    hsv[..., 0] = hue  # angs_discrete  # angs_n
-    # np.sqrt(rsq) #np.ones_like(rsq)  # np.sqrt(rsq)
-    hsv[..., 1] = np.ones_like(alpha)
-    # np.nan_to_num(rsq ** -3) # np.ones_like(rsq)#n
-    hsv[..., 2] = np.ones_like(alpha)#rdbu[...,2]
-    hsv[-1,:,2] = 0
-
-    rgb = colors.hsv_to_rgb(hsv)
-    rgba = np.vstack((rgb.T, alpha[..., np.newaxis].T)).T
-    pl.imshow(rgba)
-    hsv_fn = os.path.join(os.path.split(cortex.database.default_filestore)[
-                          0], 'colormaps', 'Jet_r_2D_alpha.png')
-    sp.misc.imsave(hsv_fn, rgba)
-
-
 
 def fwhmax_fwatmin(model, params, normalize_RFs=False, return_profiles=False):
     model = model.lower()
@@ -601,3 +536,68 @@ def colorbar(mappable):
     cbar = fig.colorbar(mappable, cax=cax)
     plt.sca(last_axes)
     return cbar        
+
+
+def create_retinotopy_colormaps():
+    hue, alpha = np.meshgrid(np.linspace(
+        0, 1, 256, endpoint=False), 1-np.linspace(0, 1, 256))
+
+    hsv = np.zeros(list(hue.shape)+[3])
+
+
+    # convert angles to colors, using correlations as weights
+    hsv[..., 0] = hue  # angs_discrete  # angs_n
+    # np.sqrt(rsq) #np.ones_like(rsq)  # np.sqrt(rsq)
+    hsv[..., 1] = np.ones_like(alpha)
+    # np.nan_to_num(rsq ** -3) # np.ones_like(rsq)#n
+    hsv[..., 2] = np.ones_like(alpha)
+    hsv[-1,:,2] = 0
+
+    rgb = colors.hsv_to_rgb(hsv)
+    rgba = np.vstack((rgb.T, alpha[..., np.newaxis].T)).T
+    pl.imshow(rgba)
+    hsv_fn = os.path.join(os.path.split(cortex.database.default_filestore)[
+                          0], 'colormaps', 'Retinotopy_HSV_alpha.png')
+    sp.misc.imsave(hsv_fn, rgba)
+
+    hue, alpha = np.meshgrid(
+        np.fmod(np.linspace(0, 2, 256), 1.0), 1-np.linspace(0, 1, 256))
+    hsv = np.zeros(list(hue.shape)+[3])
+    # convert angles to colors, using correlations as weights
+    hsv[..., 0] = hue  # angs_discrete  # angs_n
+    # np.sqrt(rsq) #np.ones_like(rsq)  # np.sqrt(rsq)
+    hsv[..., 1] = np.ones_like(alpha)
+    # np.nan_to_num(rsq ** -3) # np.ones_like(rsq)#n
+    hsv[..., 2] = np.ones_like(alpha)
+    hsv[-1,:,2] = 0
+
+    rgb = colors.hsv_to_rgb(hsv)
+    rgba = np.vstack((rgb.T, alpha[..., np.newaxis].T)).T
+    pl.imshow(rgba)
+    hsv_fn = os.path.join(os.path.split(cortex.database.default_filestore)[
+                          0], 'colormaps', 'Retinotopy_HSV_2x_alpha.png')
+    sp.misc.imsave(hsv_fn, rgba)
+    #####
+    jet = mpimg.imread('/Users/marcoaqil/pycortex/filestore/colormaps/jet_r.png')
+    jet = colors.rgb_to_hsv(jet[...,:3])
+
+    hue, alpha = np.meshgrid(jet[...,0], 1-np.linspace(0, 1, 256))
+
+    hsv = np.zeros(list(hue.shape)+[3])
+
+    # convert angles to colors, using correlations as weights
+    hsv[..., 0] = hue  # angs_discrete  # angs_n
+    # np.sqrt(rsq) #np.ones_like(rsq)  # np.sqrt(rsq)
+    hsv[..., 1] = np.ones_like(alpha)
+    # np.nan_to_num(rsq ** -3) # np.ones_like(rsq)#n
+    hsv[..., 2] = np.ones_like(alpha)#rdbu[...,2]
+    hsv[-1,:,2] = 0
+
+    rgb = colors.hsv_to_rgb(hsv)
+    rgba = np.vstack((rgb.T, alpha[..., np.newaxis].T)).T
+    pl.imshow(rgba)
+    hsv_fn = os.path.join(os.path.split(cortex.database.default_filestore)[
+                          0], 'colormaps', 'Jet_r_2D_alpha.png')
+    sp.misc.imsave(hsv_fn, rgba)
+
+
