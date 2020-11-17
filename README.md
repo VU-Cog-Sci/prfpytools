@@ -1,9 +1,6 @@
-# prfpy_norm
-Marco Aqil's normalization pRF model implementations
+# prfpy_tools
+Tools for preprocessing, postprocessing, and visualization of results from prfpy.
 
 ## Requirements
  - prfpy
 
-## To Do:
-
-list conda
