@@ -954,6 +954,9 @@ class visualize_results(object):
         pl.rcParams['axes.spines.right'] = False
         pl.rcParams['axes.spines.top'] = False
         
+        if not os.path.exists(figure_path):
+            os.makedirs(figure_path)
+        
         cmap_values = list(np.linspace(0.9, 0.0, len([r for r in rois if 'custom.' in r])))
         
         cmap_values += [0 for r in rois if 'custom.' not in r]
@@ -1474,7 +1477,7 @@ class visualize_results(object):
                                     
                                 if save_figures:
                                     os.makedirs(opj(figure_path, analysis), exist_ok=True)
-                                    pl.savefig(opj(figure_path, analysis, f"{subj} {model} Mean {y_parameter.replace('/','')}.pdf"), dpi=300, bbox_inches='tight')
+                                    pl.savefig(opj(figure_path, analysis, f"{subj} {model} Mean {y_parameter.replace('/','')}.pdf"), dpi=600, bbox_inches='tight')
                                                           
 
                         
@@ -1631,10 +1634,10 @@ class visualize_results(object):
                                     os.makedirs(opj(figure_path, analysis), exist_ok=True)
                                     
                                     if x_param_model != None:
-                                        pl.savefig(opj(figure_path, analysis, f"{subj} {roi.replace('custom.','')} {y_parameter.replace('/','')} VS {x_param_model} {x_parameter.replace('/','')}.pdf"), dpi=300, bbox_inches='tight')
+                                        pl.savefig(opj(figure_path, analysis, f"{subj} {roi.replace('custom.','')} {y_parameter.replace('/','')} VS {x_param_model} {x_parameter.replace('/','')}.pdf"), dpi=600, bbox_inches='tight')
                                     
                                     else:      
-                                        pl.savefig(opj(figure_path, analysis, f"{subj} {roi.replace('custom.','')} {y_parameter.replace('/','')} VS {x_parameter.replace('/','')}.pdf"), dpi=300, bbox_inches='tight')
+                                        pl.savefig(opj(figure_path, analysis, f"{subj} {roi.replace('custom.','')} {y_parameter.replace('/','')} VS {x_parameter.replace('/','')}.pdf"), dpi=600, bbox_inches='tight')
 
 
                         ########params by model (all rois)
@@ -1741,9 +1744,9 @@ class visualize_results(object):
                                 if save_figures:
                                     os.makedirs(opj(figure_path, analysis), exist_ok=True)
                                     if x_param_model != None:
-                                        pl.savefig(opj(figure_path, analysis, f"{subj} {model} {y_parameter.replace('/','')} VS {x_param_model} {x_parameter.replace('/','')}.pdf"), dpi=300, bbox_inches='tight')
+                                        pl.savefig(opj(figure_path, analysis, f"{subj} {model} {y_parameter.replace('/','')} VS {x_param_model} {x_parameter.replace('/','')}.pdf"), dpi=600, bbox_inches='tight')
                                     else:
-                                        pl.savefig(opj(figure_path, analysis, f"{subj} {model} {y_parameter.replace('/','')} VS {x_parameter.replace('/','')}.pdf"), dpi=300, bbox_inches='tight')
+                                        pl.savefig(opj(figure_path, analysis, f"{subj} {model} {y_parameter.replace('/','')} VS {x_parameter.replace('/','')}.pdf"), dpi=600, bbox_inches='tight')
 
         return
     
@@ -1751,15 +1754,16 @@ class visualize_results(object):
                     analysis_names = 'all', subject_ids='all', y_parameter_toplevel=None,
                     x_dims_idx=None, y_dims_idx=None):
 
-
+        if not os.path.exists(figure_path):
+            os.makedirs(figure_path)
        
         pl.rcParams.update({'font.size': 28})
         pl.rcParams.update({'pdf.fonttype':42})
         pl.rcParams.update({'figure.max_open_warning': 0})
-        pl.rcParams['axes.spines.right'] = True
-        pl.rcParams['axes.spines.top'] = True
+        pl.rcParams['axes.spines.right'] = False
+        pl.rcParams['axes.spines.top'] = False
         
-        cmap_values = list(np.linspace(0.0, 0.9, len([r for r in rois if 'custom.' in r])))
+        cmap_values = list(np.linspace(0.9, 0.0, len([r for r in rois if 'custom.' in r])))
         
         cmap_values += [0 for r in rois if 'custom.' not in r]
         
@@ -1799,6 +1803,8 @@ class visualize_results(object):
             
             rsq_predictions = []
             corr_predictions = []
+            
+            response_functions = dd(list)
                
             
             for analysis, analysis_res in analyses:       
@@ -2007,36 +2013,58 @@ class visualize_results(object):
                             
                             size_response_curves = True
                             if size_response_curves:
-                                response_functions = []
+                                
                                 curve_par_dict = dict()
                                 
+                                dim_stim = 2
+                                bar_stim = False
+                                center_prfs = True
+                                plot_data = False
+                                plot_curves = True                               
+                                resp_measure = 'Max (model-based)'
+                                normalize_response = True
+                                confint = True
+                                
                                 x = np.linspace(-5.3,5.3,540)
+                                #this is used in 2D because in fitting i used a design matrix of size 54, and the screen size is 10.6s
                                 dx = (np.max(x)-np.min(x))/len(x) *54/10.6
+                                
                                 #1d stims
-                                #stims = [np.zeros_like(x) for n in range(int(x.shape[-1]/4))]
-                                #2d stims
-                                factr=4
-                                stims = [np.zeros((x.shape[0],x.shape[0])) for n in range(int(x.shape[-1]/(2*factr)))]
-                                stim_sizes=[]
+                                if dim_stim == 1:
+                                    stims = [np.zeros_like(x) for n in range(int(x.shape[-1]/4))]
+                                else:
+                                    factr=4
+                                    stims = [np.zeros((x.shape[0],x.shape[0])) for n in range(int(x.shape[-1]/(2*factr)))]
+                                    stim_sizes=[]
+                                    
                                 print(len(stims))
                                 for pp, stim in enumerate(stims):
-                                    #2d rectangle or 1d
-                                    #stim[int(stim.shape[0]/2)-pp:int(stim.shape[0]/2)+pp] = 1
-                                    #2d circle
-                                    xx,yy = np.meshgrid(x,x)
-                                    stim[((xx**2+yy**2)**0.5)<(x.max()*pp/(len(stims)*factr))] = 1
-                                    stim_sizes.append(2*(x.max()*pp/(len(stims)*factr)))
+                                    
+                                    if dim_stim == 1 or bar_stim == True:
+                                        #2d rectangle or 1d
+                                        stim[int(stim.shape[0]/2)-pp:int(stim.shape[0]/2)+pp] = 1
+                                    
+                                    else:
+                                        #2d circle
+                                        xx,yy = np.meshgrid(x,x)
+                                        stim[((xx**2+yy**2)**0.5)<(x.max()*pp/(len(stims)*factr))] = 1
+                                        stim_sizes.append(2*(x.max()*pp/(len(stims)*factr)))
                                 
                                 if subj == 'Group' and roi == 'custom.V1':
                                     pl.figure()
-                                    pl.imshow(stims[-1])
+                                    if dim_stim == 1:
+                                        pl.imshow(stims)
+                                    else:
+                                        pl.imshow(stims[-1])
                                     
-                                #1d stim sizes
-                                #stim_sizes = (np.max(x)-np.min(x))*np.sum(stims,axis=-1)/x.shape[0]
-                                #2d stim sizes (rectangle)
-                                #stim_sizes = (np.max(x)-np.min(x))*np.sum(stims,axis=(-1,-2))/x.shape[0]**2                                    
-
                                 
+                                if dim_stim == 1:
+                                    #1d stim sizes
+                                    stim_sizes = (np.max(x)-np.min(x))*np.sum(stims,axis=-1)/x.shape[0]
+                                elif bar_stim == True:
+                                    #2d stim sizes (rectangle)
+                                    stim_sizes = (np.max(x)-np.min(x))*np.sum(stims,axis=(-1,-2))/x.shape[0]**2                                    
+     
                                 # for c in range(100):
                                 #     sample = np.random.randint(0, len(multidim_param_array[analysis][subj][roi]), int(len(multidim_param_array[analysis][subj][roi])/upsampling_corr_factor))
                                         
@@ -2056,7 +2084,7 @@ class visualize_results(object):
                                     #curve_par_dict[par] = np.median(multidim_param_array[analysis][subj][roi][ordered_dimensions.index(f'{par} Norm_abcd')])
                                     
                                     curve_par_dict[par] = weightstats.DescrStatsW(multidim_param_array[analysis][subj][roi][ordered_dimensions.index(f'{par} Norm_abcd')],
-                                                        weights=multidim_param_array[analysis][subj][roi][ordered_dimensions.index(f'RSq Norm_abcd')]).mean
+                                                        weights=multidim_param_array[analysis][subj][roi][ordered_dimensions.index(f'RSq Norm_abcd')])
                                     
                                     #curve_par_dict[par] = np.copy(multidim_param_array[analysis][subj][roi][ordered_dimensions.index(f'{par} Norm_abcd')])
                                     #print(f"{roi} {par} {curve_par_dict[par]}")
@@ -2071,21 +2099,60 @@ class visualize_results(object):
                                 #     response_functions.append(norm_1d_sr_function(curve_par_dict['Amplitude'][vertex],curve_par_dict['Norm Param. B'][vertex],curve_par_dict['Surround Amplitude'][vertex],
                                 #                                               curve_par_dict['Norm Param. D'][vertex],curve_par_dict['Size (sigma_1)'][vertex],curve_par_dict['Size (sigma_2)'][vertex],x,stims,
                                 #                                               mu_x=0)#curve_par_dict['Eccentricity'][vertex]))#*np.sign(np.cos(curve_par_dict['Polar Angle'][vertex]))))
+                                
+                                if center_prfs:
+                                    ecc = 0
+                                    #ecc_max_min = (0,0)
+                                else:
+                                    ecc = curve_par_dict['Eccentricity'].mean
+                                    #ecc_max_min = curve_par_dict['Eccentricity'].zconfint_mean(alpha=0.05/upsampling_corr_factor)
+                                    
+                                if dim_stim == 1:    
+                                    mean_srf = norm_1d_sr_function(curve_par_dict['Amplitude'].mean,curve_par_dict['Norm Param. B'].mean,curve_par_dict['Surround Amplitude'].mean,
+                                                                                  curve_par_dict['Norm Param. D'].mean,curve_par_dict['Size (sigma_1)'].mean,curve_par_dict['Size (sigma_2)'].mean,x,stims,
+                                                                                  mu_x=ecc*np.sign(np.cos(curve_par_dict['Polar Angle'].mean)))
+        
+                                else:
+                                    mean_srf = norm_2d_sr_function(dx**2*curve_par_dict['Amplitude'].mean,curve_par_dict['Norm Param. B'].mean,
+                                                               dx**2*curve_par_dict['Surround Amplitude'].mean,
+                                                                                curve_par_dict['Norm Param. D'].mean,curve_par_dict['Size (sigma_1)'].mean,curve_par_dict['Size (sigma_2)'].mean,x,x,stims,
+                                                                                mu_x=ecc*np.cos(curve_par_dict['Polar Angle'].mean),
+                                                                                mu_y=ecc*np.sin(curve_par_dict['Polar Angle'].mean))
+                                    
+                                
+                                    
+                                if confint and subj != 'Group':
+                                    
+                                    # combinations = [list(i) for i in itertools.product([0, 1], repeat=8)]
+                                    
+                                    # for cc in combinations[::5]:
+                                    #     if dim_stim == 1:  
+                                    #         response_functions.append(norm_1d_sr_function(curve_par_dict['Amplitude'].zconfint_mean(alpha=0.05/upsampling_corr_factor)[cc[0]],curve_par_dict['Norm Param. B'].zconfint_mean(alpha=0.05/upsampling_corr_factor)[cc[1]],curve_par_dict['Surround Amplitude'].zconfint_mean(alpha=0.05/upsampling_corr_factor)[cc[2]],
+                                    #                                                   curve_par_dict['Norm Param. D'].zconfint_mean(alpha=0.05/upsampling_corr_factor)[cc[3]],curve_par_dict['Size (sigma_1)'].zconfint_mean(alpha=0.05/upsampling_corr_factor)[cc[4]],curve_par_dict['Size (sigma_2)'].zconfint_mean(alpha=0.05/upsampling_corr_factor)[cc[5]],x,stims,
+                                    #                                                   mu_x=ecc_max_min[cc[6]]*np.sign(np.cos(curve_par_dict['Polar Angle'].zconfint_mean(alpha=0.05/upsampling_corr_factor)[cc[7]]))))
+            
+                                    #     else:
+                                    #         response_functions.append(norm_2d_sr_function(dx**2*curve_par_dict['Amplitude'].zconfint_mean(alpha=0.05/upsampling_corr_factor)[cc[0]],curve_par_dict['Norm Param. B'].zconfint_mean(alpha=0.05/upsampling_corr_factor)[cc[1]],
+                                    #                                dx**2*curve_par_dict['Surround Amplitude'].zconfint_mean(alpha=0.05/upsampling_corr_factor)[cc[2]],
+                                    #                                                 curve_par_dict['Norm Param. D'].zconfint_mean(alpha=0.05/upsampling_corr_factor)[cc[3]],curve_par_dict['Size (sigma_1)'].zconfint_mean(alpha=0.05/upsampling_corr_factor)[cc[4]],curve_par_dict['Size (sigma_2)'].zconfint_mean(alpha=0.05/upsampling_corr_factor)[cc[5]],x,x,stims,
+                                    #                                                 mu_x=ecc_max_min[cc[6]]*np.cos(curve_par_dict['Polar Angle'].zconfint_mean(alpha=0.05/upsampling_corr_factor)[cc[7]]),
+                                    #                                                 mu_y=ecc_max_min[cc[6]]*np.sin(curve_par_dict['Polar Angle'].zconfint_mean(alpha=0.05/upsampling_corr_factor)[cc[7]])))
+                                    response_functions[roi].append(mean_srf)  
+                                    #response_functions = np.array(response_functions)
+                                
+                                #srf_stats = weightstats.DescrStatsW(response_functions,weights=curve_par_dict['RSq'])
+                                #mean_srf = srf_stats.mean#np.mean(response_functions, axis=0)
+                                #max_srf = srf_stats.zconfint_mean(alpha=0.01/upsampling_corr_factor)[1]# mean_srf+sem(response_functions, axis=0)
+                                #min_srf = srf_stats.zconfint_mean(alpha=0.01/upsampling_corr_factor)[0]#mean_srf-sem(response_functions, axis=0)
+                                
 
+                                if normalize_response: 
                                     
-                                # mean_srf = norm_1d_sr_function(curve_par_dict['Amplitude'],curve_par_dict['Norm Param. B'],curve_par_dict['Surround Amplitude'],
-                                #                                               curve_par_dict['Norm Param. D'],curve_par_dict['Size (sigma_1)'],curve_par_dict['Size (sigma_2)'],x,stims,
-                                #                                               mu_x=0)#curve_par_dict['Eccentricity']*np.sign(np.cos(curve_par_dict['Polar Angle'])))
-    
-                                
-                                mean_srf = norm_2d_sr_function(dx**2*curve_par_dict['Amplitude'],curve_par_dict['Norm Param. B'],
-                                                               dx**2*curve_par_dict['Surround Amplitude'],
-                                                                                curve_par_dict['Norm Param. D'],curve_par_dict['Size (sigma_1)'],curve_par_dict['Size (sigma_2)'],x,x,stims,
-                                                                                mu_x=0,#curve_par_dict['Eccentricity']*np.cos(curve_par_dict['Polar Angle']),
-                                                                                mu_y=0)#curve_par_dict['Eccentricity']*np.sin(curve_par_dict['Polar Angle']))
+                                    mean_srf /= mean_srf.max()
                                     
-                                
-                                resp_measure = 'Max (model-based)'
+                                    
+
+
                                 actual_response_1R = weightstats.DescrStatsW(multidim_param_array['fit-task-1R_fit-runs-all'][subj][roi][ordered_dimensions.index(resp_measure)],
                                                                           weights=multidim_param_array['fit-task-1R_fit-runs-all'][subj][roi][ordered_dimensions.index(f'RSq Norm_abcd')])
                                 actual_response_2R = weightstats.DescrStatsW(multidim_param_array['fit-task-2R_fit-runs-all'][subj][roi][ordered_dimensions.index(resp_measure)],
@@ -2097,69 +2164,100 @@ class visualize_results(object):
                                 actual_response_4F = weightstats.DescrStatsW(multidim_param_array['fit-task-4F_fit-runs-all'][subj][roi][ordered_dimensions.index(resp_measure)],
                                                                           weights=multidim_param_array['fit-task-4F_fit-runs-all'][subj][roi][ordered_dimensions.index(f'RSq Norm_abcd')])
                                
-                                #actual_response_1 = weightstats.DescrStatsW(np.concatenate((multidim_param_array['fit-task-1R_fit-runs-all'][subj][roi][ordered_dimensions.index(resp_measure)],
-                                #                                                           multidim_param_array['fit-task-1S_fit-runs-all'][subj][roi][ordered_dimensions.index(resp_measure)])),
-                                #                                          weights=np.concatenate((multidim_param_array['fit-task-1R_fit-runs-all'][subj][roi][ordered_dimensions.index(f'RSq Norm_abcd')],
-                                #                                                                  multidim_param_array['fit-task-1S_fit-runs-all'][subj][roi][ordered_dimensions.index(f'RSq Norm_abcd')])))
-                                #actual_response_4 = weightstats.DescrStatsW(np.concatenate((multidim_param_array['fit-task-4R_fit-runs-all'][subj][roi][ordered_dimensions.index(resp_measure)],
-                                #                                                           multidim_param_array['fit-task-4F_fit-runs-all'][subj][roi][ordered_dimensions.index(resp_measure)])),
-                                #                                         weights=np.concatenate((multidim_param_array['fit-task-4R_fit-runs-all'][subj][roi][ordered_dimensions.index(f'RSq Norm_abcd')],
-                                #                                                                  multidim_param_array['fit-task-4F_fit-runs-all'][subj][roi][ordered_dimensions.index(f'RSq Norm_abcd')])))
+                                actual_response_1 = weightstats.DescrStatsW(np.concatenate((multidim_param_array['fit-task-1R_fit-runs-all'][subj][roi][ordered_dimensions.index(resp_measure)],
+                                                                                          multidim_param_array['fit-task-1S_fit-runs-all'][subj][roi][ordered_dimensions.index(resp_measure)])),
+                                                                          weights=np.concatenate((multidim_param_array['fit-task-1R_fit-runs-all'][subj][roi][ordered_dimensions.index(f'RSq Norm_abcd')],
+                                                                                                  multidim_param_array['fit-task-1S_fit-runs-all'][subj][roi][ordered_dimensions.index(f'RSq Norm_abcd')])))
+                                actual_response_4 = weightstats.DescrStatsW(np.concatenate((multidim_param_array['fit-task-4R_fit-runs-all'][subj][roi][ordered_dimensions.index(resp_measure)],
+                                                                                          multidim_param_array['fit-task-4F_fit-runs-all'][subj][roi][ordered_dimensions.index(resp_measure)])),
+                                                                        weights=np.concatenate((multidim_param_array['fit-task-4R_fit-runs-all'][subj][roi][ordered_dimensions.index(f'RSq Norm_abcd')],
+                                                                                                  multidim_param_array['fit-task-4F_fit-runs-all'][subj][roi][ordered_dimensions.index(f'RSq Norm_abcd')])))
                                
                                 
-                                data_sr = [actual_response_1R.mean, actual_response_1S.mean,actual_response_2R.mean,actual_response_4R.mean,actual_response_4F.mean]/np.max([actual_response_1R.mean, actual_response_1S.mean,actual_response_2R.mean,actual_response_4R.mean,actual_response_4F.mean])
-                                yerr_data_sr = np.array([np.abs(ss.zconfint_mean(alpha=0.01/upsampling_corr_factor)-ss.mean) for ss in [actual_response_1R,actual_response_1S,actual_response_2R,actual_response_4R,actual_response_4F]]).T
+                                data_sr = [actual_response_1.mean, actual_response_1.mean,actual_response_2R.mean,actual_response_4.mean,actual_response_4.mean]/np.max([actual_response_1.mean, actual_response_1.mean,actual_response_2R.mean,actual_response_4.mean,actual_response_4.mean])
+                                yerr_data_sr = np.array([np.abs(ss.zconfint_mean(alpha=0.01/upsampling_corr_factor)-ss.mean) for ss in [actual_response_1,actual_response_1,actual_response_2R,actual_response_4,actual_response_4]]).T
                                 #yerr_data_sr /= np.max([actual_response_1R.mean,actual_response_1S.mean,actual_response_2R.mean,actual_response_4R.mean,actual_response_4F.mean])
                                 
-                                #srf_stats = weightstats.DescrStatsW(response_functions,weights=curve_par_dict['RSq'])
-                                #mean_srf = srf_stats.mean#np.mean(response_functions, axis=0)
-                                #max_srf = srf_stats.zconfint_mean(alpha=0.01/upsampling_corr_factor)[1]# mean_srf+sem(response_functions, axis=0)
-                                #min_srf = srf_stats.zconfint_mean(alpha=0.01/upsampling_corr_factor)[0]#mean_srf-sem(response_functions, axis=0)
-                                
-                                                              
-                                mean_srf /= mean_srf.max()
+
                                 if subj == 'Group':
-                                    pl.figure(f"Size response {roi.replace('custom.','')}", figsize =(8,8))
-                                    #pl.gca().set_yscale('log')
-                                    pl.plot(stim_sizes, mean_srf, c=cmap_rois[len(rois)-1-i], label=roi.replace('custom.',''), linewidth=3)
+                                    pl.figure(f"Size response {roi.replace('custom.','')}", figsize = (8,8))
                                     
-                                    pl.errorbar([0.5, 0.5,1.25,2.5, 2.5], data_sr, yerr_data_sr, marker='s', linestyle='', c=cmap_rois[len(rois)-1-i])
+                                    if plot_curves:
+                                        pl.plot(stim_sizes, mean_srf, c=cmap_rois[i], label=roi.replace('custom.',''), linewidth=3)
                                     
-                                    pl.plot(stim_sizes,np.zeros(len(stim_sizes)),linestyle='--',linewidth=0.8, alpha=0.8, color='black',zorder=0)
+                                    if plot_data:
+                                        pl.errorbar([0.5, 1.25, 2.5], data_sr[np.r_[0,2,3]], yerr_data_sr[:,np.r_[0,2,3]], marker='s', mec='k', linestyle='-', c=cmap_rois[i], label=roi.replace('custom.',''))# label='Same speed')
+                                        #pl.errorbar([0.5, 1.25, 2.5], data_sr[np.r_[1,2,4]], yerr_data_sr[:,np.r_[1,2,4]], marker='v',  mec='k',linestyle='-', c=cmap_rois[i], label='Same STCE')
+                                    
+                                    #pl.plot(stim_sizes,np.zeros(len(stim_sizes)),linestyle='--',linewidth=0.8, alpha=0.8, color='black',zorder=0)
                                     pl.ylabel("Response")
-                                    pl.xlabel("Stimulus size (degrees)")
-                                    pl.legend(fontsize=28)   
+                                    pl.xlabel("Stimulus size (°)")
+                                    pl.legend(fontsize=28,loc=8)   
                                     if save_figures:
-                                        pl.savefig(opj(figure_path,f"sr_functions_{roi.replace('custom.','')}.pdf"),dpi=300, bbox_inches='tight')
+                                        pl.savefig(opj(figure_path,f"sr_functions_{roi.replace('custom.','')}.pdf"),dpi=600, bbox_inches='tight')
                                     
-                                    pl.figure(f'Size response all rois', figsize =(8,8))
-                                    #pl.gca().set_yscale('log')
-                                    pl.plot(stim_sizes, mean_srf, c=cmap_rois[len(rois)-1-i], label=roi.replace('custom.',''), linewidth=3)
                                     
-                                    pl.errorbar([0.5, 0.5,1.25,2.5, 2.5],data_sr,yerr_data_sr, marker='s',  linestyle='', c=cmap_rois[len(rois)-1-i])
+                                    pl.figure(f'Size response all rois', figsize = (8,8))
 
-                                    if i == 0:
-                                        pl.plot(stim_sizes,np.zeros(len(stim_sizes)),linestyle='--',linewidth=0.8, alpha=0.8, color='black', zorder=0)
-                                    pl.ylabel("Response")
-                                    pl.xlabel("Stimulus size (degrees)")
-                                    pl.legend(fontsize=12)   
-                                    if save_figures:
-                                        pl.savefig(opj(figure_path,'sr_functions_allrois.pdf'), dpi=300, bbox_inches='tight')
                                     
-                                #pl.fill_between(stim_sizes, min_srf/mean_srf.max(),
-                                #                    max_srf/mean_srf.max(), color=cmap_rois[len(rois)-1-i], alpha=0.2)
-                                    #css_datapoints = np.geomspace(0.8, 24, num=13)
-                                    #pl.scatter(css_datapoints,np.zeros_like(css_datapoints))
+                                    if roi == 'all_custom':
+                                        if plot_data:
+                                            pl.errorbar([0.5, 1.25, 2.5], data_sr[np.r_[0,2,3]], yerr_data_sr[:,np.r_[0,2,3]], marker='s', mec='k', linestyle='-', c='grey', label=roi.replace('custom.',''))# label='Same speed')
+                                            #pl.errorbar([0.5, 1.25, 2.5], data_sr[np.r_[1,2,4]], yerr_data_sr[:,np.r_[1,2,4]], marker='v',  mec='k',linestyle='', c='grey', label='Same STCE (all rois)')
+                                                                                
+                                    else:
+                                        if plot_data:
+                                            pl.errorbar([0.5, 1.25, 2.5], data_sr[np.r_[0,2,3]], 0, marker='s', markersize=6, zorder=len(rois)-i, mec='k', linestyle='-', c=cmap_rois[i], label=roi.replace('custom.',''))# label='Same speed')
+                                        if plot_curves:
+                                            pl.plot(stim_sizes, mean_srf, c=cmap_rois[i], label=roi.replace('custom.',''), linewidth=2, zorder=len(rois))
+                                    
+                                    if confint:
+                                        
+                                        if normalize_response:
+                                            response_functions[roi] /= mean_srf.max()
+                                        pl.fill_between(stim_sizes, mean_srf+sem(response_functions[roi], axis=0),
+                                                        mean_srf-sem(response_functions[roi], axis=0), color=cmap_rois[i], label=roi.replace('custom.',''), alpha=0.2, zorder=len(rois))
+                                                                                
+                                        # pl.fill_between(stim_sizes, np.sort(response_functions[roi], axis=0)[1],
+                                        #                 np.sort(response_functions[roi], axis=0)[-2], color=cmap_rois[i], alpha=0.2, zorder=len(rois)-i)
+                                    handles, labels = pl.gca().get_legend_handles_labels()
+        
+                                    legend_dict = dd(list)
+                                    for cc, label in enumerate(labels):
+                                        legend_dict[label].append(handles[cc])
+                                        
+                                    for label in legend_dict:
+                                        legend_dict[label] = tuple(legend_dict[label])
+        
+                                    pl.legend([legend_dict[label] for label in legend_dict], legend_dict.keys(), fontsize=20,loc=8)  
+                                    #if i == 0:
+                                    #    pl.plot(stim_sizes,np.zeros(len(stim_sizes)),linestyle='--',linewidth=0.8, alpha=0.8, color='black', zorder=0)
+                                    
+                                    #pl.ylabel("Response")
+                                    pl.xlabel("Stimulus size (°)")
+                                    pl.tick_params(labelleft=False)
+
+                                    if save_figures:
+                                        pl.savefig(opj(figure_path,'sr_functions_allrois.pdf'), dpi=600, bbox_inches='tight')
+                                    
+
+
                                 else:
-                                    pl.figure(f"Size response {roi.replace('custom.','')}", figsize =(8,8))
-                                    #pl.gca().set_yscale('log')
-                                    if roi in self.idx_rois[subj]:
-                                        pl.plot(stim_sizes, mean_srf, c=cmap_rois[len(rois)-1-i], alpha=0.5, linewidth=1)
-                                
+                                    #subject curves
+                                    pl.figure(f"Size response {roi.replace('custom.','')}", figsize = (8,8))
+
+                                    if np.sum(alpha[analysis][subj][roi]) > 0:
+                                        if plot_curves:
+                                            pl.plot(stim_sizes, mean_srf, c=cmap_rois[i], alpha=0.5, linewidth=1)
+                                        if plot_data:
+                                            pl.errorbar([0.5, 1.25, 2.5], data_sr[np.r_[0,2,3]], 0, alpha=0.25,  linestyle='-', c=cmap_rois[i])#markersize=4, marker='s',
+                                            #pl.errorbar([0.5, 1.25, 2.5], data_sr[np.r_[1,2,4]], yerr_data_sr[:,np.r_[1,2,4]], alpha=0.4, markersize=4, marker='v',linestyle='', c=cmap_rois[i])
+                                                 
                                 
 
 
-                                
+                                     #css_datapoints = np.geomspace(0.8, 24, num=13)
+                                    #pl.scatter(css_datapoints,np.zeros_like(css_datapoints))                               
                             
 
             #print(f"mean rsq pred {np.mean(rsq_predictions)}")
