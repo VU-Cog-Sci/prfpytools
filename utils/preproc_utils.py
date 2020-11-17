@@ -78,7 +78,8 @@ def create_full_stim(screenshot_paths,
                 screen_size_cm,
                 screen_distance_cm,
                 TR,
-                task_names):
+                task_names,
+                **kwargs):
     dm_list = []
 
     for i, task_name in enumerate(task_names):
@@ -123,7 +124,8 @@ def create_full_stim(screenshot_paths,
                              TR=TR,
                              task_lengths=task_lengths,
                              task_names=task_names,
-                             late_iso_dict=late_iso_dict)
+                             late_iso_dict=late_iso_dict,
+                             **kwargs)
 
 
     return prf_stim

@@ -41,6 +41,7 @@ screenshot_paths = analysis_info["screenshot_paths"]
 screen_size_cm = analysis_info["screen_size_cm"]
 screen_distance_cm = analysis_info["screen_distance_cm"]
 TR = analysis_info["TR"]
+normalize_integral_dx = analysis_info["normalize_integral_dx"]
 
 task_names = analysis_info["task_names"]
 data_path = analysis_info["data_path"]
@@ -212,7 +213,8 @@ if crossvalidate and fit_task is not None:
                 screen_size_cm,
                 screen_distance_cm,
                 TR,
-                [fit_task])
+                [fit_task],
+                normalize_integral_dx)
     
     test_prf_stim = create_full_stim(screenshot_paths,
                 n_pix,
@@ -222,7 +224,8 @@ if crossvalidate and fit_task is not None:
                 screen_size_cm,
                 screen_distance_cm,
                 TR,
-                [task for task in task_names if task is not fit_task])
+                [task for task in task_names if task is not fit_task],
+                normalize_integral_dx)
 else:
     prf_stim = create_full_stim(screenshot_paths,
                 n_pix,
@@ -232,7 +235,8 @@ else:
                 screen_size_cm,
                 screen_distance_cm,
                 TR,
-                task_names)
+                task_names,
+                normalize_integral_dx)
     #for all other cases, a separate test-set stimulus it not needed
     test_prf_stim = prf_stim
     
@@ -246,7 +250,8 @@ if chunk_nr == 0 and len(save_runs)>0:
             screen_size_cm,
             screen_distance_cm,
             TR,
-            [task])
+            [task],
+            normalize_integral_dx)
         
         test_prf_stim_single_task = prf_stim_single_task
         
