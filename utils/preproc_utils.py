@@ -1,6 +1,6 @@
 import os
 import numpy as np
-
+import h5py
 import nibabel as nb
 from collections import defaultdict as dd
 from pathlib import Path
@@ -79,13 +79,21 @@ def create_full_stim(screenshot_paths,
                 screen_distance_cm,
                 TR,
                 task_names,
-                **kwargs):
+                normalize_integral_dx):
     dm_list = []
 
     for i, task_name in enumerate(task_names):
         # create stimulus
         if task_name in screenshot_paths[i]:
-            dm_list.append(create_dm_from_screenshots(screenshot_paths[i],
+            
+            if screenshot_paths[i].endswith('hd5'):
+                with h5py.File(screenshot_paths[i], 'r') as f:
+                    dm_task = np.array(f.get('stim')).T
+                dm_list.append(dm_task[::int(dm_task.shape[0]/n_pix),::int(dm_task.shape[0]/n_pix),:])
+                
+            
+            else:
+                dm_list.append(create_dm_from_screenshots(screenshot_paths[i],
                                                   n_pix,
                                                   dm_edges_clipping)[..., discard_volumes:])
     
@@ -125,7 +133,7 @@ def create_full_stim(screenshot_paths,
                              task_lengths=task_lengths,
                              task_names=task_names,
                              late_iso_dict=late_iso_dict,
-                             **kwargs)
+                             normalize_integral_dx=normalize_integral_dx)
 
 
     return prf_stim
@@ -155,42 +163,105 @@ def prepare_data(subj,
                  save_noise_ceiling):
 
     if fitting_space == 'fsaverage' or fitting_space == 'fsnative':
+        hemis = ['L', 'R']
+    elif fitting_space == 'HCP':
+        hemis = ['LR']
         
-        tc_dict = dd(lambda:dd(dict))
-        for hemi in ['L', 'R']:
-            for task_name in prf_stim.task_names:
-                tc_task = []
+    tc_dict = dd(lambda:dd(dict))
+    
+    for hemi in hemis:
+        for task_name in prf_stim.task_names:
+            tc_task = []
+            if fitting_space == 'fsaverage' or fitting_space == 'fsnative':
                 tc_paths = sorted(Path(opj(data_path,'fmriprep',subj)).glob(opj('**',subj+'_ses-*_task-'+task_name+'_run-*_space-'+fitting_space+'_hemi-'+hemi+'*.func.gii')))
+            elif fitting_space == 'HCP': 
+                tc_paths = sorted(Path(opj(data_path,subj)).glob(opj('**',f"tfMRI_RET{task_name}*_7T_*_Atlas_1.6mm_MSMAll_hp2000_clean.dtseries.nii")))
+            
+            print("For task "+task_name+", hemisphere "+hemi+" of subject "+subj+", a total of "+str(len(tc_paths))+" runs were found.")
+            
+            if fit_runs is not None and (len(fit_runs)>len(tc_paths) or np.any(np.array(fit_runs)>=len(tc_paths))):
+                print(f"{fit_runs} fit_runs requested but only {len(tc_paths)} runs were found.")
+                raise ValueError
 
+            if fit_runs is None:
+                #if CV over tasks, or if no CV, use all runs
+                fit_runs = np.arange(len(tc_paths))
+            
+                
+            for tc_path in [tc_paths[run] for run in fit_runs]:
+                tc_run = nb.load(str(tc_path))
+                if fitting_space == 'fsaverage' or fitting_space == 'fsnative':
+                    tc_run_data = np.array([arr.data for arr in tc_run.darrays]).T[...,discard_volumes:]
+                elif fitting_space == 'HCP':
+                    tc_run_data = np.array(tc_run.get_data()).T[...,discard_volumes:]
+                        
+                #no need to pass further args, only filtering 1 condition
+                if data_scaling in ["zsc", "z-score"]:
+                    tc_task.append(zscore(filter_predictions(tc_run_data,
+                                                 filter_type=filter_type,
+                                                 filter_params=filter_params), axis=0))
+                elif data_scaling in ["psc", "percent_signal_change"]:
+                    tc_task.append(filter_predictions(tc_run_data,
+                             filter_type=filter_type,
+                             filter_params=filter_params), axis=0)
+                    tc_task[-1] *= (100/np.mean(tc_task[-1], axis=-1))[...,np.newaxis]
+                else:
+                    print("Using raw data")
+                    raw_tcs = True
+                    tc_task.append(filter_predictions(tc_run_data,
+                             filter_type=filter_type,
+                             filter_params=filter_params), axis=0)                        
+
+                #when scanning sub-001 i mistakenly set the length of the 4F scan to 147, while it should have been 145
+                #therefore, there are two extra images at the end to discard in that time series.
+                #from sub-002 onwards, this was corrected.
+                if subj == 'sub-001' and task_name=='4F':
+                    tc_task[-1] = tc_task[-1][...,:-2]
+
+            
+            tc_dict[hemi][task_name]['timecourse'] = np.mean(tc_task, axis=0)
+            tc_dict[hemi][task_name]['baseline'] = np.median(tc_dict[hemi][task_name]['timecourse'][...,prf_stim.late_iso_dict[task_name]],
+                                               axis=-1)
+   
+        if crossvalidate:
+            for task_name in test_prf_stim.task_names:                          
+                tc_task = []
+                if fitting_space == 'fsaverage' or fitting_space == 'fsnative':
+                    tc_paths = sorted(Path(opj(data_path,'fmriprep',subj)).glob(opj('**',subj+'_ses-*_task-'+task_name+'_run-*_space-'+fitting_space+'_hemi-'+hemi+'*.func.gii')))
+                elif fitting_space == 'HCP': 
+                    tc_paths = sorted(Path(opj(data_path,subj)).glob(opj('**',f"tfMRI_RET{task_name}*_7T_*_Atlas_1.6mm_MSMAll_hp2000_clean.dtseries.nii")))
+                
                 print("For task "+task_name+", hemisphere "+hemi+" of subject "+subj+", a total of "+str(len(tc_paths))+" runs were found.")
                 
-                if fit_runs is not None and (len(fit_runs)>len(tc_paths) or np.any(np.array(fit_runs)>=len(tc_paths))):
-                    print(f"{fit_runs} fit_runs requested but only {len(tc_paths)} runs were found.")
-                    raise ValueError
+                if fit_task is not None:
+                    #if CV is over tasks, can use all runs for test data as well
+                    cv_runs = np.arange(len(tc_paths))
+                else:
+                    cv_runs = [run for run in np.arange(len(tc_paths)) if run not in fit_runs]
 
-                if fit_runs is None:
-                    #if CV over tasks, or if no CV, use all runs
-                    fit_runs = np.arange(len(tc_paths))
-                
-                    
-                for tc_path in [tc_paths[run] for run in fit_runs]:
+                for tc_path in [tc_paths[run] for run in cv_runs]:
                     tc_run = nb.load(str(tc_path))
                     #no need to pass further args, only filtering 1 condition
+                    if fitting_space == 'fsaverage' or fitting_space == 'fsnative':
+                        tc_run_data = np.array([arr.data for arr in tc_run.darrays]).T[...,discard_volumes:]
+                    elif fitting_space == 'HCP':
+                        tc_run_data = np.array(tc_run.get_data()).T[...,discard_volumes:]                    
+                    
                     if data_scaling in ["zsc", "z-score"]:
-                        tc_task.append(zscore(filter_predictions(np.array([arr.data for arr in tc_run.darrays]).T[...,discard_volumes:],
+                        tc_task.append(zscore(filter_predictions(tc_run_data,
                                                      filter_type=filter_type,
                                                      filter_params=filter_params), axis=0))
                     elif data_scaling in ["psc", "percent_signal_change"]:
-                        tc_task.append(filter_predictions(np.array([arr.data for arr in tc_run.darrays]).T[...,discard_volumes:],
+                        tc_task.append(filter_predictions(tc_run_data,
                                  filter_type=filter_type,
                                  filter_params=filter_params), axis=0)
                         tc_task[-1] *= (100/np.mean(tc_task[-1], axis=-1))[...,np.newaxis]
                     else:
                         print("Using raw data")
                         raw_tcs = True
-                        tc_task.append(filter_predictions(np.array([arr.data for arr in tc_run.darrays]).T[...,discard_volumes:],
+                        tc_task.append(filter_predictions(tc_run_data,
                                  filter_type=filter_type,
-                                 filter_params=filter_params), axis=0)                        
+                                 filter_params=filter_params), axis=0)   
     
                     #when scanning sub-001 i mistakenly set the length of the 4F scan to 147, while it should have been 145
                     #therefore, there are two extra images at the end to discard in that time series.
@@ -199,276 +270,235 @@ def prepare_data(subj,
                         tc_task[-1] = tc_task[-1][...,:-2]
 
                 
-                tc_dict[hemi][task_name]['timecourse'] = np.mean(tc_task, axis=0)
-                tc_dict[hemi][task_name]['baseline'] = np.median(tc_dict[hemi][task_name]['timecourse'][...,prf_stim.late_iso_dict[task_name]],
-                                                   axis=-1)
-   
-            if crossvalidate:
-                for task_name in test_prf_stim.task_names:                          
-                    tc_task = []
-                    tc_paths = sorted(Path(opj(data_path,'fmriprep',subj)).glob(opj('**',subj+'_ses-*_task-'+task_name+'_run-*_space-'+fitting_space+'_hemi-'+hemi+'*.func.gii')))
-    
-                    print("For task "+task_name+", hemisphere "+hemi+" of subject "+subj+", a total of "+str(len(tc_paths))+" runs were found.")
-    
-                    if fit_task is not None:
-                        #if CV is over tasks, can use all runs for test data as well
-                        cv_runs = np.arange(len(tc_paths))
-                    else:
-                        cv_runs = [run for run in np.arange(len(tc_paths)) if run not in fit_runs]
-    
-                    for tc_path in [tc_paths[run] for run in cv_runs]:
-                        tc_run = nb.load(str(tc_path))
-                        #no need to pass further args, only filtering 1 condition
-                        if data_scaling in ["zsc", "z-score"]:
-                            tc_task.append(zscore(filter_predictions(np.array([arr.data for arr in tc_run.darrays]).T[...,discard_volumes:],
-                                                         filter_type=filter_type,
-                                                         filter_params=filter_params), axis=0))
-                        elif data_scaling in ["psc", "percent_signal_change"]:
-                            tc_task.append(filter_predictions(np.array([arr.data for arr in tc_run.darrays]).T[...,discard_volumes:],
-                                     filter_type=filter_type,
-                                     filter_params=filter_params), axis=0)
-                            tc_task[-1] *= (100/np.mean(tc_task[-1], axis=-1))[...,np.newaxis]
-                        else:
-                            print("Using raw data")
-                            raw_tcs = True
-                            tc_task.append(filter_predictions(np.array([arr.data for arr in tc_run.darrays]).T[...,discard_volumes:],
-                                     filter_type=filter_type,
-                                     filter_params=filter_params), axis=0)   
-        
-                        #when scanning sub-001 i mistakenly set the length of the 4F scan to 147, while it should have been 145
-                        #therefore, there are two extra images at the end to discard in that time series.
-                        #from sub-002 onwards, this was corrected.
-                        if subj == 'sub-001' and task_name=='4F':
-                            tc_task[-1] = tc_task[-1][...,:-2]
-    
-                    
-                    tc_dict[hemi][task_name]['timecourse_test'] = np.mean(tc_task, axis=0)
-                    tc_dict[hemi][task_name]['baseline_test'] = np.median(tc_dict[hemi][task_name]['timecourse_test'][...,test_prf_stim.late_iso_dict[task_name]],
-                                                       axis=-1)
-
-        
-            #shift timeseries so they have the same average value in proper baseline periods across conditions
-            tc_dict[hemi]['median_baseline'] = np.median([tc_dict[hemi][task_name]['baseline'] for task_name in prf_stim.task_names], axis=0)
-    
-            for task_name in prf_stim.task_names:
-                iso_diff = tc_dict[hemi]['median_baseline'] - tc_dict[hemi][task_name]['baseline']
-                tc_dict[hemi][task_name]['timecourse'] += iso_diff[...,np.newaxis]
-               
-            tc_dict[hemi]['full_iso']=np.concatenate(tuple([tc_dict[hemi][task_name]['timecourse'] for task_name in prf_stim.task_names]), axis=-1)
-
-            if crossvalidate:
-                tc_dict[hemi]['median_baseline_test'] = np.median([tc_dict[hemi][task_name]['baseline_test'] for task_name in test_prf_stim.task_names], axis=0)
-        
-                for task_name in test_prf_stim.task_names:
-                    iso_diff_test = tc_dict[hemi]['median_baseline_test'] - tc_dict[hemi][task_name]['baseline_test']
-                    tc_dict[hemi][task_name]['timecourse_test'] += iso_diff_test[...,np.newaxis]
-                   
-                tc_dict[hemi]['full_iso_test']=np.concatenate(tuple([tc_dict[hemi][task_name]['timecourse_test'] for task_name in test_prf_stim.task_names]), axis=-1)
-
-
-        tc_full_iso = np.concatenate((tc_dict['L']['full_iso'], tc_dict['R']['full_iso']), axis=0)
-        iso_full = np.concatenate((tc_dict['L']['median_baseline'], tc_dict['R']['median_baseline']), axis=0)
-        tc_mean = tc_full_iso.mean(-1)
-
-        if crossvalidate:
-            tc_full_iso_test = np.concatenate((tc_dict['L']['full_iso_test'], tc_dict['R']['full_iso_test']), axis=0)
-            iso_full_test = np.concatenate((tc_dict['L']['median_baseline_test'], tc_dict['R']['median_baseline_test']), axis=0)
-            tc_mean_test = tc_full_iso_test.mean(-1)
-
-        #masking flat or nearly flat timecourses
-        if crossvalidate:
-            nonlow_var = (np.abs(tc_full_iso - tc_mean[...,np.newaxis]).max(-1) > (tc_mean*min_percent_var/100)) \
-                 * (np.abs(tc_full_iso_test - tc_mean_test[...,np.newaxis]).max(-1) > (tc_mean_test*min_percent_var/100)) #\
-                 #* (tc_mean>0) * (tc_mean_test>0)
-        else:
-            nonlow_var = (np.abs(tc_full_iso - tc_mean[...,np.newaxis]).max(-1) > (tc_mean*min_percent_var/100)) #\
-                 #* (tc_mean>0) 
-                 
-        if roi_idx is not None:
-            mask = roi_mask(roi_idx, nonlow_var)
-        else:
-            mask = nonlow_var
-            
-        tc_dict_combined = dict()
-        tc_dict_combined['mask'] = mask
-
-
-        tc_full_iso_nonzerovar = tc_full_iso[mask]
-        if crossvalidate:
-            tc_full_iso_nonzerovar_test = tc_full_iso_test[mask]
-                
-        if fix_bold_baseline:
-            tc_full_iso_nonzerovar -= iso_full[mask][...,np.newaxis]
-            if crossvalidate:
-                tc_full_iso_nonzerovar_test -= iso_full_test[mask][...,np.newaxis]
-                           
-                
-        if save_raw_timecourse and raw_tcs == True:
-            np.save(opj(data_path,'prfpy',subj+"_timecourse-raw_space-"+fitting_space+".npy"),tc_full_iso[mask])
-            if crossvalidate:
-                np.save(opj(data_path,'prfpy',subj+"_timecourse-test-raw_space-"+fitting_space+".npy"),tc_full_iso_test[mask])
-                
-        if save_noise_ceiling:
-            noise_ceiling = 1-np.sum((tc_full_iso_nonzerovar_test-tc_full_iso_nonzerovar)**2, axis=-1)/(tc_full_iso_nonzerovar_test.shape[-1]*tc_full_iso_nonzerovar_test.var(-1))
-            np.save(opj(data_path,'prfpy',f"{subj}_noise-ceiling_space-{fitting_space}.npy"),noise_ceiling)
-                
-        order = np.random.permutation(tc_full_iso_nonzerovar.shape[0])
-
-        tc_dict_combined['order'] = order
-
-        tc_dict_combined['tc'] = tc_full_iso_nonzerovar[order]
-        if crossvalidate:
-            tc_dict_combined['tc_test'] = tc_full_iso_nonzerovar_test[order]
-            
-        return tc_dict_combined
-
-    else:
-
-        #############preparing the data (VOLUME FITTING) (NOT UP TO DATE)
-        tc_dict=dd(dict)
-
-        #create a single brain mask in BOLD space
-        brain_masks = []
-        for task_name in prf_stim.task_names:
-
-            mask_paths = sorted(Path(opj(data_path,'fmriprep',subj)).glob(opj('**',subj+'_ses-*_task-'+task_name+'_run-*_space-'+fitting_space+'_desc-brain_mask.nii.gz')))
-    
-            for mask_path in mask_paths:
-                brain_masks.append(nb.load(str(mask_path)).get_data().astype(bool))
-    
-        combined_brain_mask = np.ones_like(brain_masks[0]).astype(bool)
-        for brain_mask in brain_masks:
-            combined_brain_mask *= brain_mask
-            
-
-        for task_name in prf_stim.task_names:
-            tc_task = []
-            tc_paths = sorted(Path(opj(data_path,'fmriprep',subj)).glob(opj('**',subj+'_ses-*_task-'+task_name+'_run-*_space-'+fitting_space+'_desc-preproc_bold.nii.gz')))
-
-            print("For task "+task_name+", of subject "+subj+", a total of "+str(len(tc_paths))+" runs were found.")
-
-            if fit_runs is not None and fit_runs>=len(tc_paths):
-                print(f"{fit_runs} fit_runs requested but only {len(tc_paths)} runs were found.")
-                raise ValueError
-
-            if not crossvalidate or fit_task is not None:
-                #if CV over tasks, or if no CV, use all runs
-                fit_runs = len(tc_paths)
-
-            for tc_path in tc_paths[:fit_runs]:
-                tc_run = nb.load(str(tc_path)).get_data()[...,discard_volumes:]
-    
-                tc_task.append(sgfilter_predictions(np.reshape(tc_run,(-1, tc_run.shape[-1])),
-                                                     window_length=window_length,
-                                                     polyorder=polyorder,
-                                                     highpass=highpass,
-                                                     add_mean=add_mean))
-    
-                #when scanning sub-001 i mistakenly set the length of the 4F scan to 147, while it should have been 145
-                #therefore, there are two extra images at the end to discard in that time series.
-                #from sub-002 onwards, this was corrected.
-                if subj == 'sub-001' and task_name=='4F':
-                    tc_task[-1] = tc_task[-1][...,:-2]
-    
-    
-            tc_dict[task_name]['timecourse'] = np.median(tc_task, axis=0)
-            tc_dict[task_name]['baseline'] = np.median(tc_dict[task_name]['timecourse'][...,prf_stim.late_iso_dict[task_name]],
+                tc_dict[hemi][task_name]['timecourse_test'] = np.mean(tc_task, axis=0)
+                tc_dict[hemi][task_name]['baseline_test'] = np.median(tc_dict[hemi][task_name]['timecourse_test'][...,test_prf_stim.late_iso_dict[task_name]],
                                                    axis=-1)
 
-        if crossvalidate:
-            for task_name in test_prf_stim.task_names:                
-                tc_task = []
-                tc_paths = sorted(Path(opj(data_path,'fmriprep',subj)).glob(opj('**',subj+'_ses-*_task-'+task_name+'_run-*_space-'+fitting_space+'_desc-preproc_bold.nii.gz')))
     
-                print("For task "+task_name+", of subject "+subj+", a total of "+str(len(tc_paths))+" runs were found.")
-
-                if fit_task is not None:
-                    #if CV is over tasks, can use all runs for test data
-                    fit_runs = 0
-                    
-                for tc_path in tc_paths[fit_runs:]:
-                    tc_run = nb.load(str(tc_path)).get_data()[...,discard_volumes:]
-        
-                    tc_task.append(sgfilter_predictions(np.reshape(tc_run,(-1, tc_run.shape[-1])),
-                                                         window_length=window_length,
-                                                         polyorder=polyorder,
-                                                         highpass=highpass,
-                                                         add_mean=add_mean))
-    
-                    #when scanning sub-001 i mistakenly set the length of the 4F scan to 147, while it should have been 145
-                    #therefore, there are two extra images at the end to discard in that time series.
-                    #from sub-002 onwards, this was corrected.
-                    if subj == 'sub-001' and task_name=='4F':
-                        tc_task[-1] = tc_task[-1][...,:-2]                
-                    
-                    
-                tc_dict[task_name]['timecourse_test'] = np.median(tc_task, axis=0)
-                tc_dict[task_name]['baseline_test'] = np.median(tc_dict[task_name]['timecourse_test'][...,test_prf_stim.late_iso_dict[task_name]],
-                                               axis=-1)
-
         #shift timeseries so they have the same average value in proper baseline periods across conditions
-        iso_full = np.median([tc_dict[task_name]['baseline'] for task_name in prf_stim.task_names], axis=0)
-    
-        for task_name in prf_stim.task_names:
-            iso_diff = iso_full - tc_dict[task_name]['baseline']
-            tc_dict[task_name]['timecourse'] += iso_diff[...,np.newaxis]
+        tc_dict[hemi]['median_baseline'] = np.median([tc_dict[hemi][task_name]['baseline'] for task_name in prf_stim.task_names], axis=0)
 
-        tc_full_iso=np.concatenate(tuple([tc_dict[task_name]['timecourse'] for task_name in prf_stim.task_names]), axis=-1)
-        tc_mean = tc_full_iso.mean(-1)
+        for task_name in prf_stim.task_names:
+            iso_diff = tc_dict[hemi]['median_baseline'] - tc_dict[hemi][task_name]['baseline']
+            tc_dict[hemi][task_name]['timecourse'] += iso_diff[...,np.newaxis]
+           
+        tc_dict[hemi]['full_iso']=np.concatenate(tuple([tc_dict[hemi][task_name]['timecourse'] for task_name in prf_stim.task_names]), axis=-1)
 
         if crossvalidate:
-            iso_full_test = np.median([tc_dict[task_name]['baseline_test'] for task_name in test_prf_stim.task_names], axis=0)
+            tc_dict[hemi]['median_baseline_test'] = np.median([tc_dict[hemi][task_name]['baseline_test'] for task_name in test_prf_stim.task_names], axis=0)
     
             for task_name in test_prf_stim.task_names:
-                iso_diff_test = iso_full_test - tc_dict[task_name]['baseline_test']
-                tc_dict[task_name]['timecourse_test'] += iso_diff_test[...,np.newaxis]
+                iso_diff_test = tc_dict[hemi]['median_baseline_test'] - tc_dict[hemi][task_name]['baseline_test']
+                tc_dict[hemi][task_name]['timecourse_test'] += iso_diff_test[...,np.newaxis]
                
-            tc_full_iso_test=np.concatenate(tuple([tc_dict[task_name]['timecourse_test'] for task_name in test_prf_stim.task_names]), axis=-1)
-            tc_mean_test = tc_full_iso_test.mean(-1)
+            tc_dict[hemi]['full_iso_test']=np.concatenate(tuple([tc_dict[hemi][task_name]['timecourse_test'] for task_name in test_prf_stim.task_names]), axis=-1)
 
-        #mask flat or nearly flat timecourses
-        nonlow_var = np.reshape(combined_brain_mask, tc_full_iso.shape[0]) * \
-            (np.abs(tc_full_iso - tc_mean[...,np.newaxis]).max(-1) > (tc_mean*min_percent_var/100)) \
-                * (tc_mean>0) * (tc_mean_test>0)
 
-        if roi_idx is not None:
-            mask = roi_mask(roi_idx, nonlow_var)
-        else:
-            mask = nonlow_var
-            
-        tc_dict_combined = dict()
+    tc_full_iso = np.concatenate(tuple([tc_dict[hemi]['full_iso'] for hemi in hemis]), axis=0)
+    iso_full = np.concatenate(tuple([tc_dict[hemi]['median_baseline'] for hemi in hemis]), axis=0)
+    tc_mean = tc_full_iso.mean(-1)
+
+    if crossvalidate:
+        tc_full_iso_test = np.concatenate(tuple([tc_dict[hemi]['full_iso_test'] for hemi in hemis]), axis=0)
+        iso_full_test = np.concatenate(tuple([tc_dict[hemi]['median_baseline_test'] for hemi in hemis]), axis=0)
+        tc_mean_test = tc_full_iso_test.mean(-1)
+
+    #masking flat or nearly flat timecourses
+    if crossvalidate:
+        nonlow_var = (np.abs(tc_full_iso - tc_mean[...,np.newaxis]).max(-1) > (tc_mean*min_percent_var/100)) \
+             * (np.abs(tc_full_iso_test - tc_mean_test[...,np.newaxis]).max(-1) > (tc_mean_test*min_percent_var/100)) #\
+             #* (tc_mean>0) * (tc_mean_test>0)
+    else:
+        nonlow_var = (np.abs(tc_full_iso - tc_mean[...,np.newaxis]).max(-1) > (tc_mean*min_percent_var/100)) #\
+             #* (tc_mean>0) 
+             
+    if roi_idx is not None:
+        mask = roi_mask(roi_idx, nonlow_var)
+    else:
+        mask = nonlow_var
         
-        tc_dict_combined['mask'] = np.reshape(mask, combined_brain_mask.shape)
+    tc_dict_combined = dict()
+    tc_dict_combined['mask'] = mask
 
-        #conversion to +- of % of mean
-        if data_scaling in ["psc", "percent_signal_change"]:
-            tc_full_iso_nonzerovar = 100*(tc_full_iso[mask]/ iso_full[mask,np.newaxis])
-            if crossvalidate:
-                tc_full_iso_nonzerovar_test = 100*(tc_full_iso_test[mask] / iso_full_test[mask,np.newaxis])
-        elif data_scaling == None:
-            tc_full_iso_nonzerovar = tc_full_iso[mask]
-            if crossvalidate:
-                tc_full_iso_nonzerovar_test = tc_full_iso_test[mask]
-        else:
-            print("Warning: data scaling option not recognized. Using raw data.")
-            tc_full_iso_nonzerovar = tc_full_iso[mask]
-            if crossvalidate:
-                tc_full_iso_nonzerovar_test = tc_full_iso_test[mask]
 
-        if save_raw_timecourse:
-            np.save(opj(data_path,'prfpy',subj+"_timecourse-raw_space-"+fitting_space+".npy"),tc_full_iso[mask])
-            if crossvalidate:
-                np.save(opj(data_path,'prfpy',subj+"_timecourse-test-raw_space-"+fitting_space+".npy"),tc_full_iso_test[mask])
-                
-        order = np.random.permutation(tc_full_iso_nonzerovar.shape[0])
-
-        tc_dict_combined['order'] = order
-
-        tc_dict_combined['tc'] = tc_full_iso_nonzerovar[order]
+    tc_full_iso_nonzerovar = tc_full_iso[mask]
+    if crossvalidate:
+        tc_full_iso_nonzerovar_test = tc_full_iso_test[mask]
+            
+    if fix_bold_baseline:
+        tc_full_iso_nonzerovar -= iso_full[mask][...,np.newaxis]
         if crossvalidate:
-            tc_dict_combined['tc_test'] = tc_full_iso_nonzerovar_test[order]
+            tc_full_iso_nonzerovar_test -= iso_full_test[mask][...,np.newaxis]
+                       
+            
+    if save_raw_timecourse and raw_tcs == True:
+        np.save(opj(data_path,'prfpy',subj+"_timecourse-raw_space-"+fitting_space+".npy"),tc_full_iso[mask])
+        if crossvalidate:
+            np.save(opj(data_path,'prfpy',subj+"_timecourse-test-raw_space-"+fitting_space+".npy"),tc_full_iso_test[mask])
+            
+    if save_noise_ceiling:
+        noise_ceiling = 1-np.sum((tc_full_iso_nonzerovar_test-tc_full_iso_nonzerovar)**2, axis=-1)/(tc_full_iso_nonzerovar_test.shape[-1]*tc_full_iso_nonzerovar_test.var(-1))
+        np.save(opj(data_path,'prfpy',f"{subj}_noise-ceiling_space-{fitting_space}.npy"),noise_ceiling)
+            
+    order = np.random.permutation(tc_full_iso_nonzerovar.shape[0])
 
-        return tc_dict_combined
+    tc_dict_combined['order'] = order
+
+    tc_dict_combined['tc'] = tc_full_iso_nonzerovar[order]
+    if crossvalidate:
+        tc_dict_combined['tc_test'] = tc_full_iso_nonzerovar_test[order]
+        
+    return tc_dict_combined
+
+    # else:
+        
+        
+    #     ####################### (VOLUME FITTING) (NOT UP TO DATE)
+    #     #############preparing the data (VOLUME FITTING) (NOT UP TO DATE)
+    #     tc_dict=dd(dict)
+
+    #     #create a single brain mask in BOLD space
+    #     brain_masks = []
+    #     for task_name in prf_stim.task_names:
+
+    #         mask_paths = sorted(Path(opj(data_path,'fmriprep',subj)).glob(opj('**',subj+'_ses-*_task-'+task_name+'_run-*_space-'+fitting_space+'_desc-brain_mask.nii.gz')))
+    
+    #         for mask_path in mask_paths:
+    #             brain_masks.append(nb.load(str(mask_path)).get_data().astype(bool))
+    
+    #     combined_brain_mask = np.ones_like(brain_masks[0]).astype(bool)
+    #     for brain_mask in brain_masks:
+    #         combined_brain_mask *= brain_mask
+            
+
+    #     for task_name in prf_stim.task_names:
+    #         tc_task = []
+    #         tc_paths = sorted(Path(opj(data_path,'fmriprep',subj)).glob(opj('**',subj+'_ses-*_task-'+task_name+'_run-*_space-'+fitting_space+'_desc-preproc_bold.nii.gz')))
+
+    #         print("For task "+task_name+", of subject "+subj+", a total of "+str(len(tc_paths))+" runs were found.")
+
+    #         if fit_runs is not None and fit_runs>=len(tc_paths):
+    #             print(f"{fit_runs} fit_runs requested but only {len(tc_paths)} runs were found.")
+    #             raise ValueError
+
+    #         if not crossvalidate or fit_task is not None:
+    #             #if CV over tasks, or if no CV, use all runs
+    #             fit_runs = len(tc_paths)
+
+    #         for tc_path in tc_paths[:fit_runs]:
+    #             tc_run = nb.load(str(tc_path)).get_data()[...,discard_volumes:]
+    
+    #             tc_task.append(sgfilter_predictions(np.reshape(tc_run,(-1, tc_run.shape[-1])),
+    #                                                  window_length=window_length,
+    #                                                  polyorder=polyorder,
+    #                                                  highpass=highpass,
+    #                                                  add_mean=add_mean))
+    
+    #             #when scanning sub-001 i mistakenly set the length of the 4F scan to 147, while it should have been 145
+    #             #therefore, there are two extra images at the end to discard in that time series.
+    #             #from sub-002 onwards, this was corrected.
+    #             if subj == 'sub-001' and task_name=='4F':
+    #                 tc_task[-1] = tc_task[-1][...,:-2]
+    
+    
+    #         tc_dict[task_name]['timecourse'] = np.median(tc_task, axis=0)
+    #         tc_dict[task_name]['baseline'] = np.median(tc_dict[task_name]['timecourse'][...,prf_stim.late_iso_dict[task_name]],
+    #                                                axis=-1)
+
+    #     if crossvalidate:
+    #         for task_name in test_prf_stim.task_names:                
+    #             tc_task = []
+    #             tc_paths = sorted(Path(opj(data_path,'fmriprep',subj)).glob(opj('**',subj+'_ses-*_task-'+task_name+'_run-*_space-'+fitting_space+'_desc-preproc_bold.nii.gz')))
+    
+    #             print("For task "+task_name+", of subject "+subj+", a total of "+str(len(tc_paths))+" runs were found.")
+
+    #             if fit_task is not None:
+    #                 #if CV is over tasks, can use all runs for test data
+    #                 fit_runs = 0
+                    
+    #             for tc_path in tc_paths[fit_runs:]:
+    #                 tc_run = nb.load(str(tc_path)).get_data()[...,discard_volumes:]
+        
+    #                 tc_task.append(sgfilter_predictions(np.reshape(tc_run,(-1, tc_run.shape[-1])),
+    #                                                      window_length=window_length,
+    #                                                      polyorder=polyorder,
+    #                                                      highpass=highpass,
+    #                                                      add_mean=add_mean))
+    
+    #                 #when scanning sub-001 i mistakenly set the length of the 4F scan to 147, while it should have been 145
+    #                 #therefore, there are two extra images at the end to discard in that time series.
+    #                 #from sub-002 onwards, this was corrected.
+    #                 if subj == 'sub-001' and task_name=='4F':
+    #                     tc_task[-1] = tc_task[-1][...,:-2]                
+                    
+                    
+    #             tc_dict[task_name]['timecourse_test'] = np.median(tc_task, axis=0)
+    #             tc_dict[task_name]['baseline_test'] = np.median(tc_dict[task_name]['timecourse_test'][...,test_prf_stim.late_iso_dict[task_name]],
+    #                                            axis=-1)
+
+    #     #shift timeseries so they have the same average value in proper baseline periods across conditions
+    #     iso_full = np.median([tc_dict[task_name]['baseline'] for task_name in prf_stim.task_names], axis=0)
+    
+    #     for task_name in prf_stim.task_names:
+    #         iso_diff = iso_full - tc_dict[task_name]['baseline']
+    #         tc_dict[task_name]['timecourse'] += iso_diff[...,np.newaxis]
+
+    #     tc_full_iso=np.concatenate(tuple([tc_dict[task_name]['timecourse'] for task_name in prf_stim.task_names]), axis=-1)
+    #     tc_mean = tc_full_iso.mean(-1)
+
+    #     if crossvalidate:
+    #         iso_full_test = np.median([tc_dict[task_name]['baseline_test'] for task_name in test_prf_stim.task_names], axis=0)
+    
+    #         for task_name in test_prf_stim.task_names:
+    #             iso_diff_test = iso_full_test - tc_dict[task_name]['baseline_test']
+    #             tc_dict[task_name]['timecourse_test'] += iso_diff_test[...,np.newaxis]
+               
+    #         tc_full_iso_test=np.concatenate(tuple([tc_dict[task_name]['timecourse_test'] for task_name in test_prf_stim.task_names]), axis=-1)
+    #         tc_mean_test = tc_full_iso_test.mean(-1)
+
+    #     #mask flat or nearly flat timecourses
+    #     nonlow_var = np.reshape(combined_brain_mask, tc_full_iso.shape[0]) * \
+    #         (np.abs(tc_full_iso - tc_mean[...,np.newaxis]).max(-1) > (tc_mean*min_percent_var/100)) \
+    #             * (tc_mean>0) * (tc_mean_test>0)
+
+    #     if roi_idx is not None:
+    #         mask = roi_mask(roi_idx, nonlow_var)
+    #     else:
+    #         mask = nonlow_var
+            
+    #     tc_dict_combined = dict()
+        
+    #     tc_dict_combined['mask'] = np.reshape(mask, combined_brain_mask.shape)
+
+    #     #conversion to +- of % of mean
+    #     if data_scaling in ["psc", "percent_signal_change"]:
+    #         tc_full_iso_nonzerovar = 100*(tc_full_iso[mask]/ iso_full[mask,np.newaxis])
+    #         if crossvalidate:
+    #             tc_full_iso_nonzerovar_test = 100*(tc_full_iso_test[mask] / iso_full_test[mask,np.newaxis])
+    #     elif data_scaling == None:
+    #         tc_full_iso_nonzerovar = tc_full_iso[mask]
+    #         if crossvalidate:
+    #             tc_full_iso_nonzerovar_test = tc_full_iso_test[mask]
+    #     else:
+    #         print("Warning: data scaling option not recognized. Using raw data.")
+    #         tc_full_iso_nonzerovar = tc_full_iso[mask]
+    #         if crossvalidate:
+    #             tc_full_iso_nonzerovar_test = tc_full_iso_test[mask]
+
+    #     if save_raw_timecourse:
+    #         np.save(opj(data_path,'prfpy',subj+"_timecourse-raw_space-"+fitting_space+".npy"),tc_full_iso[mask])
+    #         if crossvalidate:
+    #             np.save(opj(data_path,'prfpy',subj+"_timecourse-test-raw_space-"+fitting_space+".npy"),tc_full_iso_test[mask])
+                
+    #     order = np.random.permutation(tc_full_iso_nonzerovar.shape[0])
+
+    #     tc_dict_combined['order'] = order
+
+    #     tc_dict_combined['tc'] = tc_full_iso_nonzerovar[order]
+    #     if crossvalidate:
+    #         tc_dict_combined['tc_test'] = tc_full_iso_nonzerovar_test[order]
+
+    #     return tc_dict_combined
 
 
 
