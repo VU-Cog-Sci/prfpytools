@@ -86,7 +86,7 @@ def create_full_stim(screenshot_paths,
         # create stimulus
         if task_name in screenshot_paths[i]:
             
-            if screenshot_paths[i].endswith('hd5'):
+            if screenshot_paths[i].endswith('hdf5'):
                 with h5py.File(screenshot_paths[i], 'r') as f:
                     dm_task = np.array(f.get('stim')).T
                 dm_list.append(dm_task[::int(dm_task.shape[0]/n_pix),::int(dm_task.shape[0]/n_pix),:])
@@ -203,14 +203,14 @@ def prepare_data(subj,
                 elif data_scaling in ["psc", "percent_signal_change"]:
                     tc_task.append(filter_predictions(tc_run_data,
                              filter_type=filter_type,
-                             filter_params=filter_params), axis=0)
+                             filter_params=filter_params))
                     tc_task[-1] *= (100/np.mean(tc_task[-1], axis=-1))[...,np.newaxis]
                 else:
                     print("Using raw data")
                     raw_tcs = True
                     tc_task.append(filter_predictions(tc_run_data,
                              filter_type=filter_type,
-                             filter_params=filter_params), axis=0)                        
+                             filter_params=filter_params))                        
 
                 #when scanning sub-001 i mistakenly set the length of the 4F scan to 147, while it should have been 145
                 #therefore, there are two extra images at the end to discard in that time series.
@@ -254,14 +254,14 @@ def prepare_data(subj,
                     elif data_scaling in ["psc", "percent_signal_change"]:
                         tc_task.append(filter_predictions(tc_run_data,
                                  filter_type=filter_type,
-                                 filter_params=filter_params), axis=0)
+                                 filter_params=filter_params))
                         tc_task[-1] *= (100/np.mean(tc_task[-1], axis=-1))[...,np.newaxis]
                     else:
                         print("Using raw data")
                         raw_tcs = True
                         tc_task.append(filter_predictions(tc_run_data,
                                  filter_type=filter_type,
-                                 filter_params=filter_params), axis=0)   
+                                 filter_params=filter_params))   
     
                     #when scanning sub-001 i mistakenly set the length of the 4F scan to 147, while it should have been 145
                     #therefore, there are two extra images at the end to discard in that time series.
