@@ -332,9 +332,9 @@ def prepare_data(subj,
                        
             
     if save_raw_timecourse and raw_tcs == True:
-        np.save(opj(data_path,'prfpy',subj+"_timecourse-raw_space-"+fitting_space+".npy"),tc_full_iso[mask])
+        np.save(opj(data_path.replace('scratch-shared', 'home'),'prfpy',subj+"_timecourse-raw_space-"+fitting_space+".npy"),tc_full_iso[mask])
         if crossvalidate:
-            np.save(opj(data_path,'prfpy',subj+"_timecourse-test-raw_space-"+fitting_space+".npy"),tc_full_iso_test[mask])
+            np.save(opj(data_path.replace('scratch-shared', 'home'),'prfpy',subj+"_timecourse-test-raw_space-"+fitting_space+".npy"),tc_full_iso_test[mask])
             
     if save_noise_ceiling:
         noise_ceiling = 1-np.sum((tc_full_iso_nonzerovar_test-tc_full_iso_nonzerovar)**2, axis=-1)/(tc_full_iso_nonzerovar_test.shape[-1]*tc_full_iso_nonzerovar_test.var(-1))

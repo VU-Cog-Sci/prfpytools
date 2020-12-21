@@ -159,10 +159,6 @@ if "--grab" in sys.argv:
     tc_ordered[order] = np.copy(tc)
     np.save(tc_path.replace('scratch-shared', 'home').replace('.npy',analysis_time+'.npy'), tc_ordered)
     
-    if save_raw_timecourse:
-        tc_raw_path=opj(data_path,  subj+"_timecourse-raw_space-"+fitting_space+".npy")
-        cp(tc_raw_path, tc_raw_path.replace('scratch-shared', 'home').replace('.npy',analysis_time+'.npy'))
-    
         
     if crossvalidate:
         tc_test_path=opj(data_path,  subj+"_timecourse-test_space-"+fitting_space+".npy")
@@ -170,9 +166,7 @@ if "--grab" in sys.argv:
         tc_test_ordered = np.zeros_like(tc_test)
         tc_test_ordered[order] = np.copy(tc_test)
         np.save(tc_test_path.replace('scratch-shared', 'home').replace('.npy',analysis_time+'.npy'), tc_test_ordered)
-        if save_raw_timecourse:
-            tc_test_raw_path=opj(data_path,  subj+"_timecourse-test-raw_space-"+fitting_space+".npy")
-            cp(tc_test_raw_path, tc_test_raw_path.replace('scratch-shared', 'home').replace('.npy',analysis_time+'.npy'))
+
 
         
 cp(analysis_settings, analysis_settings.replace('scratch-shared', 'home').replace('.yml',analysis_time+'.yml'))
