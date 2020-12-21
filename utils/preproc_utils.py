@@ -333,6 +333,8 @@ def prepare_data(subj,
             
     if save_raw_timecourse and raw_tcs == True:
         np.save(opj(data_path.replace('scratch-shared', 'home'),'prfpy',subj+"_timecourse-raw_space-"+fitting_space+".npy"),tc_full_iso[mask])
+        np.save(opj(data_path.replace('scratch-shared', 'home'),'prfpy',subj+"_mask-raw_space-"+fitting_space+".npy"),mask)
+        
         if crossvalidate:
             np.save(opj(data_path.replace('scratch-shared', 'home'),'prfpy',subj+"_timecourse-test-raw_space-"+fitting_space+".npy"),tc_full_iso_test[mask])
             
