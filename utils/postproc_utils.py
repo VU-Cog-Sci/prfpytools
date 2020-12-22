@@ -28,7 +28,7 @@ class results(object):
                         calculate_noise_ceiling=False):
         
         an_list = [path for path in os.listdir(results_folder) if 'analysis' in path]
-        subjects = [path[:7] for path in an_list]
+        subjects = [path.split('_')[0] for path in an_list]
         an_infos = []
         for path in an_list:
             with open(opj(results_folder,path)) as f:
@@ -276,8 +276,8 @@ class results(object):
 
         for subj in set(subjects):
 
-            tc_raw = np.load(opj(timecourse_folder,f'{subj}_timecourse-raw_space-fsnative.npy'))
-            mask = np.load(opj(timecourse_folder,f'{subj}_mask-raw_space-fsnative.npy'))
+            tc_raw = np.load(opj(timecourse_folder,f'{subj}_timecourse-raw_space-{space}.npy'))
+            mask = np.load(opj(timecourse_folder,f'{subj}_mask-raw_space-{space}.npy'))
         
             tc_mean = tc_raw.mean(-1)
             tc_mean_full = np.zeros(mask.shape)
@@ -293,8 +293,8 @@ class results(object):
             tc_tsnr_full[mask] = tc_mean/np.sqrt(tc_var)
             raw_tc_stats['TSNR'] = tc_tsnr_full
             
-            for ke in self.main_dict['fsnative']:
-                self.main_dict['fsnative'][ke][subj]['Timecourse Stats'] = deepcopy(raw_tc_stats)
+            for ke in self.main_dict[space]:
+                self.main_dict[space][ke][subj]['Timecourse Stats'] = deepcopy(raw_tc_stats)
                 
         return
         

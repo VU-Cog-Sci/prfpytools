@@ -8,6 +8,7 @@ Created on Tue Mar 17 10:37:08 2020
 import os
 import numpy as np
 from tqdm import tqdm
+import yaml
 import matplotlib.pyplot as pl
 import cortex
 import nibabel as nb
@@ -49,7 +50,7 @@ class visualize_results(object):
     def get_subjects(self, curr_dict, subject_list = []):
         for k, v in curr_dict.items():
             if 'fsaverage' not in k:
-                if 'sub-' not in k:# and isinstance(v, (dict,dd)):
+                if 'sub-' not in k and not k.isdecimal():# and isinstance(v, (dict,dd)):
                     self.get_subjects(v, subject_list)
                 else:
                     if k not in subject_list:
@@ -64,70 +65,80 @@ class visualize_results(object):
         self.spaces = self.main_dict.keys()
         return
         
-    def import_rois_and_flatmaps(self, fs_dir):
+    def define_rois_and_flatmaps(self, fs_dir, data_path, import_flatmaps, output_rois, hcp_atlas_path = None):
         self.idx_rois = dd(dict)
         self.fs_dir = fs_dir
         self.get_spaces()
         self.get_subjects(self.main_dict)
         for subj in self.subjects:
+            if os.path.exists(opj(self.fs_dir, subj)):
             
-            if subj not in cortex.db.subjects:
-                print("importing subject from freesurfer")
-                print(f"note: this command often files when executed on mac OS via jupyter notebook.\
-                      Rather, source freesurfer and execute it in ipython: \
-                          cortex.freesurfer.import_subj({subj}, freesurfer_subject_dir={self.fs_dir}, \
-                      whitematter_surf='smoothwm')")
-                cortex.freesurfer.import_subj(subj, freesurfer_subject_dir=self.fs_dir, 
-                      whitematter_surf='smoothwm')
-            if self.import_flatmaps:
-                try:
-                    print('importing flatmaps from freesurfer')
-                    cortex.freesurfer.import_flat(subject=subj, patch='full', hemis=['lh', 'rh'], 
-                                              freesurfer_subject_dir=self.fs_dir, clean=True)
-                except Exception as e:
-                    print(e)
-                    pass
-                     
+                if subj not in cortex.db.subjects:
+                    print("importing subject from freesurfer")
+                    print(f"note: this command often files when executed on mac OS via jupyter notebook.\
+                          Rather, source freesurfer and execute it in ipython: \
+                              cortex.freesurfer.import_subj({subj}, freesurfer_subject_dir={self.fs_dir}, \
+                          whitematter_surf='smoothwm')")
+                    cortex.freesurfer.import_subj(subj, freesurfer_subject_dir=self.fs_dir, 
+                          whitematter_surf='smoothwm')
+                if import_flatmaps:
+                    try:
+                        print('importing flatmaps from freesurfer')
+                        cortex.freesurfer.import_flat(subject=subj, patch='full', hemis=['lh', 'rh'], 
+                                                  freesurfer_subject_dir=self.fs_dir, clean=True)
+                    except Exception as e:
+                        print(e)
+                        pass
+                            
+                if os.path.exists(opj(self.fs_dir, subj, 'label', 'lh.wang2015atlas.V1d.label')):
+                    src_subject=subj
+                else:
+                    src_subject='fsaverage'
+                        
             
+                wang_rois = ["V1v", "V1d", "V2v", "V2d", "V3v", "V3d", "hV4", "VO1", "VO2", "PHC1", "PHC2",
+                    "TO2", "TO1", "LO2", "LO1", "V3B", "V3A", "IPS0", "IPS1", "IPS2", "IPS3", "IPS4", 
+                    "IPS5", "SPL1", "FEF"]
+                for roi in wang_rois:
+                    try:
+                        self.idx_rois[subj][roi], _ = cortex.freesurfer.get_label(subj,
+                                                              label='wang2015atlas.'+roi,
+                                                              fs_dir=self.fs_dir,
+                                                              src_subject=src_subject,
+                                                              verbose=True)
+                    except Exception as e:
+                        print(e)
             
-            if os.path.exists(opj(self.fs_dir, subj, 'label', 'lh.wang2015atlas.V1d.label')):
-                src_subject=subj
-            else:
-                src_subject='fsaverage'
-                    
-        
-            wang_rois = ["V1v", "V1d", "V2v", "V2d", "V3v", "V3d", "hV4", "VO1", "VO2", "PHC1", "PHC2",
-                "TO2", "TO1", "LO2", "LO1", "V3B", "V3A", "IPS0", "IPS1", "IPS2", "IPS3", "IPS4", 
-                "IPS5", "SPL1", "FEF"]
-            for roi in wang_rois:
-                try:
-                    self.idx_rois[subj][roi], _ = cortex.freesurfer.get_label(subj,
-                                                          label='wang2015atlas.'+roi,
-                                                          fs_dir=self.fs_dir,
-                                                          src_subject=src_subject,
-                                                          verbose=True)
-                except Exception as e:
-                    print(e)
-        
-            self.idx_rois[subj]['visual_system'] = np.concatenate(tuple([self.idx_rois[subj][roi] for roi in self.idx_rois[subj]]), axis=0)
-            self.idx_rois[subj]['V1']=np.concatenate((self.idx_rois[subj]['V1v'],self.idx_rois[subj]['V1d']))
-            self.idx_rois[subj]['V2']=np.concatenate((self.idx_rois[subj]['V2v'],self.idx_rois[subj]['V2d']))
-            self.idx_rois[subj]['V3']=np.concatenate((self.idx_rois[subj]['V3v'],self.idx_rois[subj]['V3d']))
-        
-            #parse custom ROIs if they have been created
-            for roi in [el for el in os.listdir(opj(self.fs_dir, subj, 'label')) if 'custom' in el]:
-                roi = roi.replace('lh.','').replace('rh.','').replace('.label','')
-                try:
-                    self.idx_rois[subj][roi], _ = cortex.freesurfer.get_label(subj,
-                                                          label=roi,
-                                                          fs_dir=self.fs_dir,
-                                                          src_subject=subj,
-                                                          hemisphere=['lh', 'rh'])
-                except Exception as e:
-                    print(e)
-                    pass
+                self.idx_rois[subj]['visual_system'] = np.concatenate(tuple([self.idx_rois[subj][roi] for roi in self.idx_rois[subj]]), axis=0)
+                self.idx_rois[subj]['V1']=np.concatenate((self.idx_rois[subj]['V1v'],self.idx_rois[subj]['V1d']))
+                self.idx_rois[subj]['V2']=np.concatenate((self.idx_rois[subj]['V2v'],self.idx_rois[subj]['V2d']))
+                self.idx_rois[subj]['V3']=np.concatenate((self.idx_rois[subj]['V3v'],self.idx_rois[subj]['V3d']))
+            
+                #parse custom ROIs if they have been created
+                for roi in [el for el in os.listdir(opj(self.fs_dir, subj, 'label')) if 'custom' in el]:
+                    roi = roi.replace('lh.','').replace('rh.','').replace('.label','')
+                    try:
+                        self.idx_rois[subj][roi], _ = cortex.freesurfer.get_label(subj,
+                                                              label=roi,
+                                                              fs_dir=self.fs_dir,
+                                                              src_subject=subj,
+                                                              hemisphere=['lh', 'rh'])
+                    except Exception as e:
+                        print(e)
+                        pass
+            elif 'HCP' in self.spaces and subj.isdigits() and hcp_atlas_path != None:
+                #HCP data
+                print('Using HCP atlas to define ROIs')
+                atlas = np.concatenate((nb.load(hcp_atlas_path+'.L.gii').darrays[0].data,
+                                        nb.load(hcp_atlas_path+'.R.gii').darrays[0].data))
+                with open(hcp_atlas_path+'.json') as f:
+                    atlas_labels = yaml.safe_load(f)
+                for ke,va in atlas_labels.items():
+                    self.idx_rois[subj]['HCPQ1Q6'+ke] = np.where(atlas == va)
+                    self.idx_rois[subj]['HCPQ1Q6'+ke[:-1]] = np.where((atlas == atlas_labels[ke[:-1]+'R']) or (atlas == atlas_labels[ke[:-1]+'L']))
+          
                 
-            if self.import_rois:
+            if import_flatmaps:
                 for roi_name, roi_idx in self.idx_rois[subj].items():
                     if 'custom' in roi_name:
                         #need a correctly flattened brain to do this
@@ -141,10 +152,10 @@ class visualize_results(object):
                             pass        
                         
             #For ROI-based fitting
-            if len(self.output_rois)>0:
+            if len(output_rois)>0:
                 try:
                     rois = np.concatenate(tuple([self.idx_rois[subj][roi] for roi in self.output_rois]), axis=0)
-                    np.save('/Users/marcoaqil/PRFMapping/PRFMapping-Deriv-hires/prfpy/'+subj+'_combined-rois.npy', rois)
+                    np.save(opj(data_path, f"prfpy/{subj}_combined-rois.npy"), rois)
                 except Exception as e:
                     print(e)
                     pass    
@@ -155,7 +166,7 @@ class visualize_results(object):
         self.only_models=only_models
         self.tc_min = dict()
         for space, space_res in self.main_dict.items():
-            if 'fs' in space:
+            if 'fs' in space or 'HCP' in space:
                 for analysis, analysis_res in space_res.items():       
                     for subj, subj_res in analysis_res.items():
                         print(space+" "+analysis+" "+subj)
@@ -213,7 +224,7 @@ class visualize_results(object):
         #######PYCORTEX PICKERFUN
         #function to plot prf and timecourses when clicking surface vertex in webgl        
         def clicker_function(voxel,hemi,vertex):
-            if space == 'fsnative':
+            if space == 'fsnative' or space == 'HCP':
                 print('recovering vertex index...')
                 #translate javascript indeing to python
                 lctm, rctm = cortex.utils.get_ctmmap(subj, method='mg2', level=9)
@@ -468,12 +479,15 @@ class visualize_results(object):
                     subjects = [item for item in analysis_res.items() if item[0] in subject_ids] 
                 for subj, subj_res in subjects:
                     
+                    pycortex_subj = subj
                     
-                    if subj not in cortex.db.subjects:
+                    if subj not in cortex.db.subjects and os.path.exists(opj(self.fs_dir,subj)):
                         print("subject not present in pycortex database. attempting to import...")
                         cortex.freesurfer.import_subj(subj, freesurfer_subject_dir=self.fs_dir, 
                               whitematter_surf='smoothwm')
-                    
+                    elif subj.isdigits() and space == 'HCP':
+                        pycortex_subj = '999999'
+
                     p_r = subj_res['Processed Results']
                     models = p_r['RSq'].keys()
                     
@@ -481,8 +495,7 @@ class visualize_results(object):
                         tc_stats = subj_res['Timecourse Stats']
                         mask = subj_res['mask']
 
-
-              
+         
                     if rois != 'all':
                         for key in p_r['Alpha']:
                             p_r['Alpha'][key] = roi_mask(np.concatenate(tuple([self.idx_rois[subj][r] for r in rois])), p_r['Alpha'][key])
@@ -532,11 +545,11 @@ class visualize_results(object):
                         
                     ##START PYCORTEX VISUALIZATIONS                            
                     #data quality/stats cortex visualization 
-                    if space == 'fsnative' and self.plot_stats_cortex and not plotted_stats[subj] :
+                    if self.plot_stats_cortex and not plotted_stats[subj] :
                         
-                        mean_ts_vert = cortex.Vertex2D(tc_stats['Mean'], mask*(tc_stats['Mean']>self.tc_min[subj]), subject=subj, cmap='Jet_2D_alpha')
-                        var_ts_vert = cortex.Vertex2D(tc_stats['Variance'], mask*(tc_stats['Mean']>self.tc_min[subj]), subject=subj, cmap='Jet_2D_alpha')
-                        tsnr_vert = cortex.Vertex2D(tc_stats['TSNR'], mask*(tc_stats['Mean']>self.tc_min[subj]), subject=subj, cmap='Jet_2D_alpha')
+                        mean_ts_vert = cortex.Vertex2D(tc_stats['Mean'], mask*(tc_stats['Mean']>self.tc_min[subj]), subject=pycortex_subj, cmap='Jet_2D_alpha')
+                        var_ts_vert = cortex.Vertex2D(tc_stats['Variance'], mask*(tc_stats['Mean']>self.tc_min[subj]), subject=pycortex_subj, cmap='Jet_2D_alpha')
+                        tsnr_vert = cortex.Vertex2D(tc_stats['TSNR'], mask*(tc_stats['Mean']>self.tc_min[subj]), subject=pycortex_subj, cmap='Jet_2D_alpha')
         
                         data_stats ={'mean':mean_ts_vert.raw, 'var':var_ts_vert.raw, 'tsnr':tsnr_vert.raw}
         
@@ -550,15 +563,18 @@ class visualize_results(object):
                         ds_rois = {}
                         data = np.zeros_like(mask).astype('int')
                         custom_rois_data = np.zeros_like(mask).astype('int')
+                        hcp_rois_data = np.zeros_like(mask).astype('int')
         
                         for i, roi in enumerate(self.idx_rois[subj]):
         
                             roi_data = np.zeros_like(mask)
                             roi_data[self.idx_rois[subj][roi]] = 1
-                            if 'custom' not in roi and 'visual' not in roi:
+                            if 'custom' not in roi and 'visual' not in roi and 'HCP' not in roi:
                                 data[self.idx_rois[subj][roi]] = i+1
                             if 'custom' in roi and 'Pole' not in roi:
                                 custom_rois_data[self.idx_rois[subj][roi]] = i+1
+                            if 'HCPQ1Q6' in roi:
+                                hcp_rois_data[self.idx_rois[subj][roi]] = i+1
 
                             ds_rois[roi] = cortex.Vertex2D(roi_data, roi_data.astype('bool'), subj, cmap='RdBu_r_alpha').raw
         
@@ -566,6 +582,7 @@ class visualize_results(object):
         
                         ds_rois['Wang2015Atlas'] = cortex.Vertex2D(data, data.astype('bool'), subj, cmap='Retinotopy_HSV_2x_alpha').raw
                         ds_rois['Custom ROIs'] = cortex.Vertex2D(custom_rois_data, custom_rois_data.astype('bool'), subj, cmap='Retinotopy_HSV_2x_alpha').raw 
+                        ds_rois['HCP ROIs'] = cortex.Vertex2D(hcp_rois_data, custom_rois_data.astype('bool'), subj, cmap='Retinotopy_HSV_2x_alpha').raw 
                         
                         self.js_handle_dict[space][analysis][subj]['js_handle_rois'] = cortex.webgl.show(ds_rois, pickerfun=clicker_function, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)
         
@@ -580,37 +597,37 @@ class visualize_results(object):
                         
                         best_model = np.argmax([p_r['RSq'][model] for model in ['Gauss','Norm_abcd','CSS','DoG']],axis=0)
 
-                        ds_rsq['Best model'] = cortex.Vertex2D(best_model, p_r['Alpha']['all'], subject=subj,
+                        ds_rsq['Best model'] = cortex.Vertex2D(best_model, p_r['Alpha']['all'], subject=pycortex_subj,
                                                                       vmin2=rsq_thresh, vmax2=0.6, cmap='BROYG_2D').raw 
 
 
                         for model in self.only_models:
-                            ds_rsq[model] = cortex.Vertex2D(p_r['RSq'][model], p_r['Alpha'][model], subject=subj, 
+                            ds_rsq[model] = cortex.Vertex2D(p_r['RSq'][model], p_r['Alpha'][model], subject=pycortex_subj, 
                                                             vmin=rsq_thresh, vmax=0.8, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw
                             
                         if 'CSS' in models and 'Gauss' in self.only_models:
-                            ds_rsq['CSS - Gauss'] = cortex.Vertex2D(p_r['RSq']['CSS']-p_r['RSq']['Gauss'], p_r['Alpha']['all'], subject=subj,
+                            ds_rsq['CSS - Gauss'] = cortex.Vertex2D(p_r['RSq']['CSS']-p_r['RSq']['Gauss'], p_r['Alpha']['all'], subject=pycortex_subj,
                                                                       vmin=-0.1, vmax=0.1, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw   
                             
                         if 'DoG' in models and 'Gauss' in self.only_models:
-                            ds_rsq['DoG - Gauss'] = cortex.Vertex2D(p_r['RSq']['DoG']-p_r['RSq']['Gauss'], p_r['Alpha']['all'], subject=subj,
+                            ds_rsq['DoG - Gauss'] = cortex.Vertex2D(p_r['RSq']['DoG']-p_r['RSq']['Gauss'], p_r['Alpha']['all'], subject=pycortex_subj,
                                                                   vmin=-0.1, vmax=0.1, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw
                         
                         if 'Norm_abcd' in self.only_models and 'CSS' in self.only_models and 'DoG' in self.only_models and 'Gauss' in self.only_models:
 
-                            ds_rsq[f'Norm_abcd - Gauss'] = cortex.Vertex2D(p_r['RSq']['Norm_abcd']-p_r['RSq']['Gauss'], p_r['Alpha']['all'], subject=subj,
+                            ds_rsq[f'Norm_abcd - Gauss'] = cortex.Vertex2D(p_r['RSq']['Norm_abcd']-p_r['RSq']['Gauss'], p_r['Alpha']['all'], subject=pycortex_subj,
                                                                       vmin=-0.1, vmax=0.1, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw
 
-                            ds_rsq[f'Norm_abcd - DoG'] = cortex.Vertex2D(p_r['RSq']['Norm_abcd']-p_r['RSq']['DoG'], p_r['Alpha']['all'], subject=subj,
+                            ds_rsq[f'Norm_abcd - DoG'] = cortex.Vertex2D(p_r['RSq']['Norm_abcd']-p_r['RSq']['DoG'], p_r['Alpha']['all'], subject=pycortex_subj,
                                                                       vmin=-0.1, vmax=0.1, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw
 
-                            ds_rsq[f'Norm_abcd - CSS'] = cortex.Vertex2D(p_r['RSq']['Norm_abcd']-p_r['RSq']['CSS'], p_r['Alpha']['all'], subject=subj, 
+                            ds_rsq[f'Norm_abcd - CSS'] = cortex.Vertex2D(p_r['RSq']['Norm_abcd']-p_r['RSq']['CSS'], p_r['Alpha']['all'], subject=pycortex_subj, 
                                                                       vmin=-0.1, vmax=0.1, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw
  
 
                         for model in [model for model in self.only_models if 'Norm' in model and 'Norm_abcd' != model]:
 
-                            ds_rsq[f'{model} - Norm_abcd'] = cortex.Vertex2D(p_r['RSq'][model]-p_r['RSq']['Norm_abcd'], p_r['Alpha']['all'], subject=subj,
+                            ds_rsq[f'{model} - Norm_abcd'] = cortex.Vertex2D(p_r['RSq'][model]-p_r['RSq']['Norm_abcd'], p_r['Alpha']['all'], subject=pycortex_subj,
                                                                       vmin=-0.1, vmax=0.1, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw
                             
                             
@@ -627,7 +644,7 @@ class visualize_results(object):
                             
                             ds_rsq_comp['Norm_abcd CV rsq (volume fit)'] = cortex.Volume2D(volume_rsq.T, volume_rsq.T, subj, 'func_space_transform',
                                                                       vmin=rsq_thresh, vmax=0.6, vmin2=0.05, vmax2=rsq_thresh, cmap='Jet_2D_alpha')
-                            ds_rsq_comp['Norm_abcd CV rsq (surface fit)'] = cortex.Vertex2D(p_r['RSq']['Norm_abcd'], p_r['RSq']['Norm_abcd'], subject=subj,
+                            ds_rsq_comp['Norm_abcd CV rsq (surface fit)'] = cortex.Vertex2D(p_r['RSq']['Norm_abcd'], p_r['RSq']['Norm_abcd'], subject=pycortex_subj,
                                                                       vmin=rsq_thresh, vmax=0.6, vmin2=0.05, vmax2=rsq_thresh, cmap='Jet_2D_alpha').raw
                             self.js_handle_dict[space][analysis][subj]['js_handle_rsq_comp'] = cortex.webgl.show(ds_rsq_comp, pickerfun=clicker_function, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)
                         
@@ -638,7 +655,7 @@ class visualize_results(object):
                         ds_ecc = dict()
                         
                         for model in self.only_models:
-                            ds_ecc[model] = cortex.Vertex2D(p_r['Eccentricity'][model], p_r['Alpha'][model], subject=subj, 
+                            ds_ecc[model] = cortex.Vertex2D(p_r['Eccentricity'][model], p_r['Alpha'][model], subject=pycortex_subj, 
                                                             vmin=self.ecc_min, vmax=self.ecc_max-1, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_r_2D_alpha').raw
         
                         self.js_handle_dict[space][analysis][subj]['js_handle_ecc'] = cortex.webgl.show(ds_ecc, pickerfun=clicker_function, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)
@@ -647,7 +664,7 @@ class visualize_results(object):
                         ds_polar = dict()
                         
                         for model in self.only_models:
-                            ds_polar[model] = cortex.Vertex2D(p_r['Polar Angle'][model], p_r['Alpha'][model], subject=subj, 
+                            ds_polar[model] = cortex.Vertex2D(p_r['Polar Angle'][model], p_r['Alpha'][model], subject=pycortex_subj, 
                                                               vmin2=rsq_thresh, vmax2=0.6, cmap='Retinotopy_HSV_2x_alpha').raw
                         
                         if 'Processed Results' in self.main_dict['T1w'][analysis][subj] and self.compare_volume_surface:
@@ -662,7 +679,7 @@ class visualize_results(object):
                             
                             ds_polar_comp['Norm_abcd CV polar (volume fit)'] = cortex.Volume2D(volume_polar.T, volume_rsq.T, subj, 'func_space_transform',
                                                                       vmin2=0.05, vmax2=rsq_thresh, cmap='Retinotopy_HSV_2x_alpha')
-                            ds_polar_comp['Norm_abcd CV polar (surface fit)'] = cortex.Vertex2D(p_r['Polar Angle']['Norm_abcd'], p_r['RSq']['Norm_abcd'], subject=subj,
+                            ds_polar_comp['Norm_abcd CV polar (surface fit)'] = cortex.Vertex2D(p_r['Polar Angle']['Norm_abcd'], p_r['RSq']['Norm_abcd'], subject=pycortex_subj,
                                                                       vmin2=0.05, vmax2=rsq_thresh, cmap='Retinotopy_HSV_2x_alpha').raw
                             self.js_handle_dict[space][analysis][subj]['js_handle_polar_comp'] = cortex.webgl.show(ds_polar_comp, pickerfun=clicker_function, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)
 
@@ -673,9 +690,9 @@ class visualize_results(object):
                         ds_size = dict()
                         
                         for model in self.only_models:
-                            ds_size[f"{model} fwhmax"] = cortex.Vertex2D(p_r['Size (fwhmax)'][model], p_r['Alpha'][model], subject=subj, 
+                            ds_size[f"{model} fwhmax"] = cortex.Vertex2D(p_r['Size (fwhmax)'][model], p_r['Alpha'][model], subject=pycortex_subj, 
                                                              vmin=0, vmax=6, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw
-                            ds_size[f"{model} sigma_1"] = cortex.Vertex2D(p_r['Size (sigma_1)'][model], p_r['Alpha'][model], subject=subj, 
+                            ds_size[f"{model} sigma_1"] = cortex.Vertex2D(p_r['Size (sigma_1)'][model], p_r['Alpha'][model], subject=pycortex_subj, 
                                                              vmin=0, vmax=6, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw
                             
                         self.js_handle_dict[space][analysis][subj]['js_handle_size'] = cortex.webgl.show(ds_size, pickerfun=clicker_function, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)
@@ -685,7 +702,7 @@ class visualize_results(object):
                         ds_amp = dict()
                         
                         for model in self.only_models:
-                            ds_amp[model] = cortex.Vertex2D(p_r['Amplitude'][model], p_r['Alpha'][model], subject=subj, 
+                            ds_amp[model] = cortex.Vertex2D(p_r['Amplitude'][model], p_r['Alpha'][model], subject=pycortex_subj, 
                                                             vmin=-1, vmax=1, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw
         
                         self.js_handle_dict[space][analysis][subj]['js_handle_amp'] = cortex.webgl.show(ds_amp, pickerfun=clicker_function, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)
@@ -693,7 +710,7 @@ class visualize_results(object):
                     if self.plot_css_exp_cortex and 'CSS' in self.only_models:
                         ds_css_exp = dict()
                         
-                        ds_css_exp['CSS Exponent'] = cortex.Vertex2D(p_r['CSS Exponent']['CSS'], p_r['Alpha']['CSS'], subject=subj, 
+                        ds_css_exp['CSS Exponent'] = cortex.Vertex2D(p_r['CSS Exponent']['CSS'], p_r['Alpha']['CSS'], subject=pycortex_subj, 
                                                                      vmin=0, vmax=1, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw
         
                         self.js_handle_dict[space][analysis][subj]['js_handle_css_exp'] = cortex.webgl.show(ds_css_exp, pickerfun=clicker_function, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)
@@ -704,14 +721,14 @@ class visualize_results(object):
                         
                         for model in self.only_models:
                             if model == 'DoG':
-                                ds_surround_size[f'DoG fwatmin'] = cortex.Vertex2D(p_r['Surround Size (fwatmin)']['DoG'], p_r['Alpha']['DoG'], subject=subj, 
+                                ds_surround_size[f'DoG fwatmin'] = cortex.Vertex2D(p_r['Surround Size (fwatmin)']['DoG'], p_r['Alpha']['DoG'], subject=pycortex_subj, 
                                                                      vmin=0, vmax=50, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw
-                                ds_surround_size[f'DoG sigma_2'] = cortex.Vertex2D(p_r['Size (sigma_2)']['DoG'], p_r['Alpha']['DoG'], subject=subj, 
+                                ds_surround_size[f'DoG sigma_2'] = cortex.Vertex2D(p_r['Size (sigma_2)']['DoG'], p_r['Alpha']['DoG'], subject=pycortex_subj, 
                                                                      vmin=0, vmax=50, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw
                             elif 'Norm' in model:
-                                ds_surround_size[f"{model} fwatmin"] = cortex.Vertex2D(p_r['Surround Size (fwatmin)'][model], p_r['Alpha'][model], subject=subj, 
+                                ds_surround_size[f"{model} fwatmin"] = cortex.Vertex2D(p_r['Surround Size (fwatmin)'][model], p_r['Alpha'][model], subject=pycortex_subj, 
                                                                      vmin=0, vmax=50, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw                    
-                                ds_surround_size[f"{model} sigma_2"] = cortex.Vertex2D(p_r['Size (sigma_2)'][model], p_r['Alpha'][model], subject=subj, 
+                                ds_surround_size[f"{model} sigma_2"] = cortex.Vertex2D(p_r['Size (sigma_2)'][model], p_r['Alpha'][model], subject=pycortex_subj, 
                                                                      vmin=0, vmax=10, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw    
                                 
                         self.js_handle_dict[space][analysis][subj]['js_handle_surround_size'] = cortex.webgl.show(ds_surround_size, pickerfun=clicker_function, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)    
@@ -722,14 +739,14 @@ class visualize_results(object):
                         
                         for model in self.only_models:
                             if model == 'DoG':
-                                ds_suppression_index[f'{model} SI (full)'] = cortex.Vertex2D(p_r['Suppression Index (full)'][model], p_r['Alpha'][model], subject=subj, 
+                                ds_suppression_index[f'{model} SI (full)'] = cortex.Vertex2D(p_r['Suppression Index (full)'][model], p_r['Alpha'][model], subject=pycortex_subj, 
                                                                      vmin=0, vmax=10, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw
-                                ds_suppression_index[f'{model} SI (aperture)'] = cortex.Vertex2D(p_r['Suppression Index'][model], p_r['Alpha'][model], subject=subj, 
+                                ds_suppression_index[f'{model} SI (aperture)'] = cortex.Vertex2D(p_r['Suppression Index'][model], p_r['Alpha'][model], subject=pycortex_subj, 
                                                                      vmin=0, vmax=1.5, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw                                    
                             elif 'Norm' in model:
-                                ds_suppression_index[f'{model} NI (full)'] = cortex.Vertex2D(p_r['Suppression Index (full)'][model], p_r['Alpha'][model], subject=subj, 
+                                ds_suppression_index[f'{model} NI (full)'] = cortex.Vertex2D(p_r['Suppression Index (full)'][model], p_r['Alpha'][model], subject=pycortex_subj, 
                                                                      vmin=1, vmax=20, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw
-                                ds_suppression_index[f'{model} NI (aperture)'] = cortex.Vertex2D(p_r['Suppression Index'][model], p_r['Alpha'][model], subject=subj, 
+                                ds_suppression_index[f'{model} NI (aperture)'] = cortex.Vertex2D(p_r['Suppression Index'][model], p_r['Alpha'][model], subject=pycortex_subj, 
                                                                      vmin=0, vmax=1.5, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw                      
         
                         self.js_handle_dict[space][analysis][subj]['js_handle_suppression_index'] = cortex.webgl.show(ds_suppression_index, pickerfun=clicker_function, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)    
@@ -738,7 +755,7 @@ class visualize_results(object):
                         ds_size_ratio = dict()           
                         for model in self.only_models:
                             if model in p_r['Size ratio (sigma_2/sigma_1)']:
-                                ds_size_ratio[f'{model} size ratio'] = cortex.Vertex2D(p_r['Size ratio (sigma_2/sigma_1)'][model], p_r['Alpha'][model], subject=subj, 
+                                ds_size_ratio[f'{model} size ratio'] = cortex.Vertex2D(p_r['Size ratio (sigma_2/sigma_1)'][model], p_r['Alpha'][model], subject=pycortex_subj, 
                                                                      vmin=4, vmax=16, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw                                                      
         
                         self.js_handle_dict[space][analysis][subj]['js_handle_size_ratio'] = cortex.webgl.show(ds_size_ratio, pickerfun=clicker_function, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)    
@@ -748,7 +765,7 @@ class visualize_results(object):
                             ds_receptors = dict()           
                             for receptor in p_r['Receptor Maps']:
                                 
-                                ds_receptors[receptor] = cortex.Vertex2D(p_r['Receptor Maps'][receptor], p_r['Alpha']['all'], subject=subj, 
+                                ds_receptors[receptor] = cortex.Vertex2D(p_r['Receptor Maps'][receptor], p_r['Alpha']['all'], subject=pycortex_subj, 
                                                                          vmin=np.quantile(p_r['Receptor Maps'][receptor][p_r['Alpha']['all']>rsq_thresh],0.1), vmax=np.quantile(p_r['Receptor Maps'][receptor][p_r['Alpha']['all']>rsq_thresh],0.9), 
                                                                          vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw                                                      
             
@@ -761,11 +778,11 @@ class visualize_results(object):
                         
                         for model in [model for model in self.only_models if 'Norm' in model]:
 
-                            ds_norm_baselines[f'{model} Param. B'] = cortex.Vertex2D(p_r['Norm Param. B'][model], p_r['Alpha'][model], subject=subj, 
+                            ds_norm_baselines[f'{model} Param. B'] = cortex.Vertex2D(p_r['Norm Param. B'][model], p_r['Alpha'][model], subject=pycortex_subj, 
                                                                          vmin=5, vmax=100, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw                    
-                            ds_norm_baselines[f'{model} Param. D'] = cortex.Vertex2D(p_r['Norm Param. D'][model], p_r['Alpha'][model], subject=subj, 
+                            ds_norm_baselines[f'{model} Param. D'] = cortex.Vertex2D(p_r['Norm Param. D'][model], p_r['Alpha'][model], subject=pycortex_subj, 
                                                                          vmin=5, vmax=100, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw
-                            ds_norm_baselines[f'{model} Ratio (B/D)'] = cortex.Vertex2D(p_r['Ratio (B/D)'][model], p_r['Alpha'][model], subject=subj, 
+                            ds_norm_baselines[f'{model} Ratio (B/D)'] = cortex.Vertex2D(p_r['Ratio (B/D)'][model], p_r['Alpha'][model], subject=pycortex_subj, 
                                                                          vmin=0, vmax=5, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw
                         
                         self.js_handle_dict[space][analysis][subj]['js_handle_norm_baselines'] = cortex.webgl.show(ds_norm_baselines, pickerfun=clicker_function, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)    
