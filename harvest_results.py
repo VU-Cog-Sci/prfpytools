@@ -19,8 +19,9 @@ from shutil import copyfile as cp
 results_path = sys.argv[1]
 subjects = sys.argv[2]
 
-for subj in subjects:
-    with open(opj(results_path,f"{subj}_analysis_settings.yml")) as f:
+for subj in subjects.split(','):
+    analysis_settings = opj(results_path,f"{subj}_analysis_settings.yml")
+    with open(analysis_settings) as f:
         analysis_info = yaml.safe_load(f)
     
     
