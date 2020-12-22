@@ -16,11 +16,11 @@ from datetime import datetime
 from shutil import copyfile as cp
 
 
-analysis_settings = sys.argv[1]
+results_path = sys.argv[1]
 subjects = sys.argv[2]
 
 for subj in subjects:
-    with open(analysis_settings) as f:
+    with open(opj(results_path,f"{subj}_analysis_settings.yml")) as f:
         analysis_info = yaml.safe_load(f)
     
     
