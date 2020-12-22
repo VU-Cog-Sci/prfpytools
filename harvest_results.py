@@ -115,8 +115,9 @@ for subj in subjects.split(','):
         print("python array_submit_prf_fit_only.py "+subj+" analysis_settings_cartesius.yml "+str_resub)
         
     
-        sys.exit("harvest not completed. resubmit chunks.")
-    
+        print("harvest not completed. resubmit chunks.")
+        continue
+
     order = np.load(opj(data_path, subj+"_order_space-"+fitting_space+".npy"))
     
     for model in models_to_fit:
