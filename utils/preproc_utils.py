@@ -193,7 +193,8 @@ def prepare_data(subj,
                 if fitting_space == 'fsaverage' or fitting_space == 'fsnative':
                     tc_run_data = np.array([arr.data for arr in tc_run.darrays]).T[...,discard_volumes:]
                 elif fitting_space == 'HCP':
-                    tc_run_data = np.array(tc_run.get_data()).T[...,discard_volumes:]
+                    #cortex only HCP data
+                    tc_run_data = np.array(tc_run.get_data()).T[:118584,discard_volumes:]
                         
                 #no need to pass further args, only filtering 1 condition
                 if data_scaling in ["zsc", "z-score"]:
@@ -245,7 +246,8 @@ def prepare_data(subj,
                     if fitting_space == 'fsaverage' or fitting_space == 'fsnative':
                         tc_run_data = np.array([arr.data for arr in tc_run.darrays]).T[...,discard_volumes:]
                     elif fitting_space == 'HCP':
-                        tc_run_data = np.array(tc_run.get_data()).T[...,discard_volumes:]                    
+                        #cortex only HCP data
+                        tc_run_data = np.array(tc_run.get_data()).T[:118584,discard_volumes:]                    
                     
                     if data_scaling in ["zsc", "z-score"]:
                         tc_task.append(zscore(filter_predictions(tc_run_data,

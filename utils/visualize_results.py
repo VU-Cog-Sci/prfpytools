@@ -126,7 +126,7 @@ class visualize_results(object):
                     except Exception as e:
                         print(e)
                         pass
-            elif 'HCP' in self.spaces and subj.isdigits() and hcp_atlas_path != None:
+            elif 'HCP' in self.spaces and subj.isdecimal() and hcp_atlas_path != None:
                 #HCP data
                 print('Using HCP atlas to define ROIs')
                 atlas = np.concatenate((nb.load(hcp_atlas_path+'.L.gii').darrays[0].data,
@@ -134,8 +134,8 @@ class visualize_results(object):
                 with open(hcp_atlas_path+'.json') as f:
                     atlas_labels = yaml.safe_load(f)
                 for ke,va in atlas_labels.items():
-                    self.idx_rois[subj]['HCPQ1Q6'+ke] = np.where(atlas == va)
-                    self.idx_rois[subj]['HCPQ1Q6'+ke[:-1]] = np.where((atlas == atlas_labels[ke[:-1]+'R']) or (atlas == atlas_labels[ke[:-1]+'L']))
+                    self.idx_rois[subj]['HCPQ1Q6.'+ke] = np.where(atlas == va)
+                    self.idx_rois[subj]['HCPQ1Q6.'+ke[:-1]] = np.where((atlas == atlas_labels[ke[:-1]+'R']) | (atlas == atlas_labels[ke[:-1]+'L']))
           
                 
             if import_flatmaps:
@@ -485,7 +485,7 @@ class visualize_results(object):
                         print("subject not present in pycortex database. attempting to import...")
                         cortex.freesurfer.import_subj(subj, freesurfer_subject_dir=self.fs_dir, 
                               whitematter_surf='smoothwm')
-                    elif subj.isdigits() and space == 'HCP':
+                    elif subj.isdecimal() and space == 'HCP':
                         pycortex_subj = '999999'
 
                     p_r = subj_res['Processed Results']
@@ -573,7 +573,7 @@ class visualize_results(object):
                                 data[self.idx_rois[subj][roi]] = i+1
                             if 'custom' in roi and 'Pole' not in roi:
                                 custom_rois_data[self.idx_rois[subj][roi]] = i+1
-                            if 'HCPQ1Q6' in roi:
+                            if 'HCPQ1Q6.' in roi:
                                 hcp_rois_data[self.idx_rois[subj][roi]] = i+1
 
                             ds_rois[roi] = cortex.Vertex2D(roi_data, roi_data.astype('bool'), subj, cmap='RdBu_r_alpha').raw
@@ -971,12 +971,11 @@ class visualize_results(object):
         pl.rcParams['axes.spines.right'] = False
         pl.rcParams['axes.spines.top'] = False
         
-        if not os.path.exists(figure_path):
-            os.makedirs(figure_path)
+
         
-        cmap_values = list(np.linspace(0.9, 0.0, len([r for r in rois if 'custom.' in r])))
+        cmap_values = list(np.linspace(0.9, 0.0, len([r for r in rois if 'custom.' in r or 'HCP' in r])))
         
-        cmap_values += [0 for r in rois if 'custom.' not in r]
+        cmap_values += [0 for r in rois if 'custom.' not in r and 'HCP' not in r]
         
         cmap_rois = cm.get_cmap('nipy_spectral')(cmap_values)#
 
@@ -986,7 +985,7 @@ class visualize_results(object):
             spaces = [item for item in self.main_dict.items() if item[0] in space_names] 
 
         for space, space_res in spaces:
-            if 'fs' in space:
+            if 'fs' in space or 'HCP' in space:
                 
                 #upsampling correction: fsnative has approximately 3 times as many datapoints as original
                 upsampling_corr_factor = 3
@@ -1030,7 +1029,14 @@ class visualize_results(object):
                     if len(subjects)>1:
                         subjects.append(('Group', {}))
 
-
+                    if not os.path.exists(figure_path):
+                        os.makedirs(figure_path)
+                        figure_path = opj(figure_path, space)
+                        if not os.path.exists(figure_path):
+                            os.makedirs(figure_path)
+                            figure_path = opj(figure_path, analysis)
+                            if not os.path.exists(figure_path):
+                                os.makedirs(figure_path)                            
 
                     for subj, subj_res in subjects:
                         print(space+" "+analysis+" "+subj)
@@ -1049,7 +1055,7 @@ class visualize_results(object):
 
                                 
                                 if 'mean' not in analysis or 'fsaverage' in subj:
-                                    if 'sub' in subj or 'fsaverage' in subj:
+                                    if 'sub' in subj or 'fsaverage' in subj or (space=='HCP' and subj.isdecimal()):
                                         if 'rsq' in y_parameter.lower():
                                             #comparing same vertices for model performance
                                             curr_alpha = subj_res['Processed Results']['Alpha']['all']>rsq_thresh
@@ -1180,10 +1186,10 @@ class visualize_results(object):
         
                                     elif len(subjects)>1 and 'fsaverage' not in subjects:
                                         #group stats
-                                        x_par_group = np.concatenate(tuple([x_par[analysis][sid][model][roi] for sid in x_par[analysis] if 'sub' in sid]))
+                                        x_par_group = np.concatenate(tuple([x_par[analysis][sid][model][roi] for sid in x_par[analysis] if 'Group' not in sid]))
                                         
-                                        y_par_group = np.concatenate(tuple([y_par[analysis][sid][model][roi] for sid in y_par[analysis] if 'sub' in sid]))
-                                        rsq_group = np.concatenate(tuple([rsq[analysis][sid][model][roi] for sid in rsq[analysis] if 'sub' in sid]))
+                                        y_par_group = np.concatenate(tuple([y_par[analysis][sid][model][roi] for sid in y_par[analysis] if 'Group' not in sid]))
+                                        rsq_group = np.concatenate(tuple([rsq[analysis][sid][model][roi] for sid in rsq[analysis] if 'Group' not in sid]))
                                         
                                         x_par[analysis][subj][model][roi] = np.copy(x_par_group)
                                         y_par[analysis][subj][model][roi] = np.copy(y_par_group)
@@ -1198,7 +1204,7 @@ class visualize_results(object):
                                     rsq[analysis][subj][model][roi] = np.hstack(tuple([rsq[an][subj][model][roi] for an in ans]))
                                     
 
-                        for i, roi in enumerate([r for r in rois if 'custom.' in r]):
+                        for i, roi in enumerate([r for r in rois if 'custom.' in r or 'HCP' in r]):
                             if i>0:
                                 bar_position += (2*bar_or_violin_width)
                                 
@@ -1207,7 +1213,7 @@ class visualize_results(object):
                                 label_position+=bar_or_violin_width
                                 
                             x_ticks.append(label_position)
-                            x_labels.append(roi.replace('custom.','')+'\n')   
+                            x_labels.append(roi.replace('custom.','').replace('HCPQ1Q6.','')+'\n')   
                             
                             for model in self.only_models:    
                                                                 
@@ -1323,7 +1329,7 @@ class visualize_results(object):
                                                 
                                                 pvals = []
                                                 
-                                                for ccc in range(100000):                                         
+                                                for ccc in range(10000):                                         
                                                                                                                
                                                     #if ccc<50:
                                                     #    pl.figure(f"null distribs {analysis} {subj} {mod} {roi}")
@@ -1493,8 +1499,8 @@ class visualize_results(object):
                                 #     pl.legend(by_label.values(), by_label.keys())
                                     
                                 if save_figures:
-                                    os.makedirs(opj(figure_path, analysis), exist_ok=True)
-                                    pl.savefig(opj(figure_path, analysis, f"{subj} {model} Mean {y_parameter.replace('/','')}.pdf"), dpi=600, bbox_inches='tight')
+
+                                    pl.savefig(opj(figure_path, f"{subj} {model} Mean {y_parameter.replace('/','')}.pdf"), dpi=600, bbox_inches='tight')
                                                           
 
                         
@@ -1502,7 +1508,7 @@ class visualize_results(object):
                             for i, roi in enumerate(rois):
                                 ###################
                                 #x vs y param by ROI
-                                pl.figure(f"{analysis} {subj} {roi.replace('custom.','')} {y_parameter} VS {x_parameter}", figsize=(8, 8), frameon=True)
+                                pl.figure(f"{analysis} {subj} {roi.replace('custom.','').replace('HCPQ1Q6.','')} {y_parameter} VS {x_parameter}", figsize=(8, 8), frameon=True)
                                 if log_yaxis:
                                     pl.gca().set_yscale('log')
                                 if log_xaxis:
@@ -1564,7 +1570,7 @@ class visualize_results(object):
                                                 current_label = model
                                             else:
                                                 current_color = cmap_rois[i]
-                                                current_label = roi.replace('custom.','')
+                                                current_label = roi.replace('custom.','').replace('HCPQ1Q6.','')
                                                 
                                             pl.plot([ss.mean for ss in x_par_stats[analysis][subj][model][roi]],
                                                 WLS.predict(np.array([ss.mean for ss in x_par_stats[analysis][subj][model][roi]]).reshape(-1, 1)),
@@ -1606,7 +1612,7 @@ class visualize_results(object):
                                                 current_label = model
                                             else:
                                                 current_color = cmap_rois[i]
-                                                current_label = roi.replace('custom.','')
+                                                current_label = roi.replace('custom.','').replace('HCPQ1Q6.','')
                                                 
                                             scatter_cmap = colors.LinearSegmentedColormap.from_list(
                                                 'alpha_rsq', [(0, (*colors.to_rgb(current_color),0)), (1, current_color)])
@@ -1630,11 +1636,11 @@ class visualize_results(object):
                                     pl.xlabel(f"{x_param_model} {pl.gca().get_xlabel()}")
                                 
                                 if 'Eccentricity' in y_parameter or 'Size' in y_parameter:
-                                    pl.ylabel(f"{subj} {roi.replace('custom.','')} {y_parameter} (°)")
+                                    pl.ylabel(f"{subj} {roi.replace('custom.','').replace('HCPQ1Q6.','')} {y_parameter} (°)")
                                 elif 'B/D' in y_parameter:
-                                    pl.ylabel(f"{subj} {roi.replace('custom.','')} {y_parameter} (% signal change)")
+                                    pl.ylabel(f"{subj} {roi.replace('custom.','').replace('HCPQ1Q6.','')} {y_parameter} (% signal change)")
                                 else:
-                                    pl.ylabel(f"{subj} {roi.replace('custom.','')} {y_parameter}")
+                                    pl.ylabel(f"{subj} {roi.replace('custom.','').replace('HCPQ1Q6.','')} {y_parameter}")
                                 
                                 handles, labels = pl.gca().get_legend_handles_labels()
     
@@ -1648,13 +1654,12 @@ class visualize_results(object):
                                 # pl.legend([legend_dict[label] for label in legend_dict], legend_dict.keys())  
                                     
                                 if save_figures:
-                                    os.makedirs(opj(figure_path, analysis), exist_ok=True)
                                     
                                     if x_param_model != None:
-                                        pl.savefig(opj(figure_path, analysis, f"{subj} {roi.replace('custom.','')} {y_parameter.replace('/','')} VS {x_param_model} {x_parameter.replace('/','')}.pdf"), dpi=600, bbox_inches='tight')
+                                        pl.savefig(opj(figure_path, f"{subj} {roi.replace('custom.','').replace('HCPQ1Q6.','')} {y_parameter.replace('/','')} VS {x_param_model} {x_parameter.replace('/','')}.pdf"), dpi=600, bbox_inches='tight')
                                     
                                     else:      
-                                        pl.savefig(opj(figure_path, analysis, f"{subj} {roi.replace('custom.','')} {y_parameter.replace('/','')} VS {x_parameter.replace('/','')}.pdf"), dpi=600, bbox_inches='tight')
+                                        pl.savefig(opj(figure_path, f"{subj} {roi.replace('custom.','').replace('HCPQ1Q6.','')} {y_parameter.replace('/','')} VS {x_parameter.replace('/','')}.pdf"), dpi=600, bbox_inches='tight')
 
 
                         ########params by model (all rois)
@@ -1680,7 +1685,7 @@ class visualize_results(object):
                                             #WLS.fit(np.array([ss.mean for ss in x_par_stats[analysis][subj][model][roi]]).reshape(-1, 1), np.log(np.array([ss.mean for ss in y_par_stats[analysis][subj][model][roi]]).reshape(-1, 1)))
                                             
                                             current_color = cmap_rois[i]
-                                            current_label = roi.replace('custom.','')
+                                            current_label = roi.replace('custom.','').replace('HCPQ1Q6.','')
                                                     
                                             pl.plot([ss.mean for ss in x_par_stats[analysis][subj][model][roi]],
                                                 WLS.predict(np.array([ss.mean for ss in x_par_stats[analysis][subj][model][roi]]).reshape(-1, 1)),
@@ -1716,7 +1721,7 @@ class visualize_results(object):
                                         try:
     
                                             current_color = cmap_rois[i]
-                                            current_label = roi.replace('custom.','')
+                                            current_label = roi.replace('custom.','').replace('HCPQ1Q6.','')
                                             
                                             scatter_cmap = colors.LinearSegmentedColormap.from_list(
                                                 'alpha_rsq', [(0, (*colors.to_rgb(current_color),0)), (1, current_color)])
@@ -1759,11 +1764,11 @@ class visualize_results(object):
                                 # pl.legend([legend_dict[label] for label in legend_dict], legend_dict.keys())                      
     
                                 if save_figures:
-                                    os.makedirs(opj(figure_path, analysis), exist_ok=True)
+
                                     if x_param_model != None:
-                                        pl.savefig(opj(figure_path, analysis, f"{subj} {model} {y_parameter.replace('/','')} VS {x_param_model} {x_parameter.replace('/','')}.pdf"), dpi=600, bbox_inches='tight')
+                                        pl.savefig(opj(figure_path, f"{subj} {model} {y_parameter.replace('/','')} VS {x_param_model} {x_parameter.replace('/','')}.pdf"), dpi=600, bbox_inches='tight')
                                     else:
-                                        pl.savefig(opj(figure_path, analysis, f"{subj} {model} {y_parameter.replace('/','')} VS {x_parameter.replace('/','')}.pdf"), dpi=600, bbox_inches='tight')
+                                        pl.savefig(opj(figure_path,  f"{subj} {model} {y_parameter.replace('/','')} VS {x_parameter.replace('/','')}.pdf"), dpi=600, bbox_inches='tight')
 
         return
     
@@ -2197,13 +2202,13 @@ class visualize_results(object):
                                 
 
                                 if subj == 'Group':
-                                    pl.figure(f"Size response {roi.replace('custom.','')}", figsize = (8,8))
+                                    pl.figure(f"Size response {roi.replace('custom.','').replace('HCPQ1Q6.','')}", figsize = (8,8))
                                     
                                     if plot_curves:
-                                        pl.plot(stim_sizes, mean_srf, c=cmap_rois[i], label=roi.replace('custom.',''), linewidth=3)
+                                        pl.plot(stim_sizes, mean_srf, c=cmap_rois[i], label=roi.replace('custom.','').replace('HCPQ1Q6.',''), linewidth=3)
                                     
                                     if plot_data:
-                                        pl.errorbar([0.5, 1.25, 2.5], data_sr[np.r_[0,2,3]], yerr_data_sr[:,np.r_[0,2,3]], marker='s', mec='k', linestyle='-', c=cmap_rois[i], label=roi.replace('custom.',''))# label='Same speed')
+                                        pl.errorbar([0.5, 1.25, 2.5], data_sr[np.r_[0,2,3]], yerr_data_sr[:,np.r_[0,2,3]], marker='s', mec='k', linestyle='-', c=cmap_rois[i], label=roi.replace('custom.','').replace('HCPQ1Q6.',''))# label='Same speed')
                                         #pl.errorbar([0.5, 1.25, 2.5], data_sr[np.r_[1,2,4]], yerr_data_sr[:,np.r_[1,2,4]], marker='v',  mec='k',linestyle='-', c=cmap_rois[i], label='Same STCE')
                                     
                                     #pl.plot(stim_sizes,np.zeros(len(stim_sizes)),linestyle='--',linewidth=0.8, alpha=0.8, color='black',zorder=0)
@@ -2211,7 +2216,7 @@ class visualize_results(object):
                                     pl.xlabel("Stimulus size (°)")
                                     pl.legend(fontsize=28,loc=8)   
                                     if save_figures:
-                                        pl.savefig(opj(figure_path,f"sr_functions_{roi.replace('custom.','')}.pdf"),dpi=600, bbox_inches='tight')
+                                        pl.savefig(opj(figure_path,f"sr_functions_{roi.replace('custom.','').replace('HCPQ1Q6.','')}.pdf"),dpi=600, bbox_inches='tight')
                                     
                                     
                                     pl.figure(f'Size response all rois', figsize = (8,8))
@@ -2219,21 +2224,21 @@ class visualize_results(object):
                                     
                                     if roi == 'all_custom':
                                         if plot_data:
-                                            pl.errorbar([0.5, 1.25, 2.5], data_sr[np.r_[0,2,3]], yerr_data_sr[:,np.r_[0,2,3]], marker='s', mec='k', linestyle='-', c='grey', label=roi.replace('custom.',''))# label='Same speed')
+                                            pl.errorbar([0.5, 1.25, 2.5], data_sr[np.r_[0,2,3]], yerr_data_sr[:,np.r_[0,2,3]], marker='s', mec='k', linestyle='-', c='grey', label=roi.replace('custom.','').replace('HCPQ1Q6.',''))# label='Same speed')
                                             #pl.errorbar([0.5, 1.25, 2.5], data_sr[np.r_[1,2,4]], yerr_data_sr[:,np.r_[1,2,4]], marker='v',  mec='k',linestyle='', c='grey', label='Same STCE (all rois)')
                                                                                 
                                     else:
                                         if plot_data:
-                                            pl.errorbar([0.5, 1.25, 2.5], data_sr[np.r_[0,2,3]], 0, marker='s', markersize=6, zorder=len(rois)-i, mec='k', linestyle='-', c=cmap_rois[i], label=roi.replace('custom.',''))# label='Same speed')
+                                            pl.errorbar([0.5, 1.25, 2.5], data_sr[np.r_[0,2,3]], 0, marker='s', markersize=6, zorder=len(rois)-i, mec='k', linestyle='-', c=cmap_rois[i], label=roi.replace('custom.','').replace('HCPQ1Q6.',''))# label='Same speed')
                                         if plot_curves:
-                                            pl.plot(stim_sizes, mean_srf, c=cmap_rois[i], label=roi.replace('custom.',''), linewidth=2, zorder=len(rois))
+                                            pl.plot(stim_sizes, mean_srf, c=cmap_rois[i], label=roi.replace('custom.','').replace('HCPQ1Q6.',''), linewidth=2, zorder=len(rois))
                                     
                                     if confint:
                                         
                                         if normalize_response:
                                             response_functions[roi] /= mean_srf.max()
                                         pl.fill_between(stim_sizes, mean_srf+sem(response_functions[roi], axis=0),
-                                                        mean_srf-sem(response_functions[roi], axis=0), color=cmap_rois[i], label=roi.replace('custom.',''), alpha=0.2, zorder=len(rois))
+                                                        mean_srf-sem(response_functions[roi], axis=0), color=cmap_rois[i], label=roi.replace('custom.','').replace('HCPQ1Q6.',''), alpha=0.2, zorder=len(rois))
                                                                                 
                                         # pl.fill_between(stim_sizes, np.sort(response_functions[roi], axis=0)[1],
                                         #                 np.sort(response_functions[roi], axis=0)[-2], color=cmap_rois[i], alpha=0.2, zorder=len(rois)-i)
@@ -2261,7 +2266,7 @@ class visualize_results(object):
 
                                 else:
                                     #subject curves
-                                    pl.figure(f"Size response {roi.replace('custom.','')}", figsize = (8,8))
+                                    pl.figure(f"Size response {roi.replace('custom.','').replace('HCPQ1Q6.','')}", figsize = (8,8))
 
                                     if np.sum(alpha[analysis][subj][roi]) > 0:
                                         if plot_curves:

@@ -304,7 +304,7 @@ class results(object):
     
     def process_results(self, results_dict, return_norm_profiles=False):
         for k, v in tqdm(results_dict.items()):
-            if 'sub-' not in k:
+            if 'sub-' not in k and not k.isdecimal():
                 self.process_results(v, return_norm_profiles)
             elif 'Results' in v and 'Processed Results' not in v:
                 mask = v['mask']
@@ -338,6 +338,7 @@ class results(object):
                         if k2 == 'DoG':
                             processed_results['Surround Amplitude'][k2][mask] = np.copy(v2[:,5])
                             processed_results['Size (sigma_2)'][k2][mask] = np.copy(v2[:,6])
+                            processed_results['Size ratio (sigma_2/sigma_1)'][k2][mask] = v2[:,6]/v2[:,2]
                             (processed_results['Size (fwhmax)'][k2][mask],
                             processed_results['Surround Size (fwatmin)'][k2][mask]) = fwhmax_fwatmin(k2, v2, normalize_RFs)
                             processed_results['Suppression Index (full)'][k2][mask] = (v2[:,5] * v2[:,6]**2)/(v2[:,3] * v2[:,2]**2)
@@ -346,7 +347,8 @@ class results(object):
     
                         elif 'Norm' in k2:
                             processed_results['Surround Amplitude'][k2][mask] = np.copy(v2[:,5])
-                            processed_results['Size (sigma_2)'][k2][mask] = np.copy(v2[:,6])                            
+                            processed_results['Size (sigma_2)'][k2][mask] = np.copy(v2[:,6])    
+                            processed_results['Size ratio (sigma_2/sigma_1)'][k2][mask] = v2[:,6]/v2[:,2]
                             processed_results['Norm Param. B'][k2][mask] = np.copy(v2[:,7])
                             processed_results['Norm Param. D'][k2][mask] = np.copy(v2[:,8])
                             processed_results['Ratio (B/D)'][k2][mask] = v2[:,7]/v2[:,8]
