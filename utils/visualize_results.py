@@ -47,6 +47,29 @@ class visualize_results(object):
         
         self.prf_stims = dict()
         
+    def fix_hcp_ordering(self, curr_dict, hcp_atlas_mask_path):
+        f=nb.load(hcp_atlas_mask_path[0])
+        data_1 = np.array([arr.data for arr in f.darrays])[0].astype('bool')
+
+        f=nb.load(hcp_atlas_mask_path[1])
+        data_2 = np.array([arr.data for arr in f.darrays])[0].astype('bool')
+        for k, v in curr_dict.items():
+            if isinstance(v, np.ndarray) and v.ndim == 1:
+                lh_data = np.zeros(data_1.shape)
+                rh_data = np.zeros(data_2.shape)
+        
+                lh_data[data_1] = v[:np.sum(data_1)]
+                rh_data[data_2] = v[np.sum(data_1):(np.sum(data_1) + np.sum(data_2))]
+        
+                resample = np.concatenate((lh_data,rh_data))
+
+                curr_dict[k] = np.copy(resample)
+            elif isinstance(v, dict):      
+                self.fix_hcp_ordering(v, hcp_atlas_mask_path)
+            else:
+                pass
+        
+        
     def get_subjects(self, curr_dict, subject_list = []):
         for k, v in curr_dict.items():
             if 'fsaverage' not in k:
@@ -217,7 +240,7 @@ class visualize_results(object):
 
     def pycortex_plots(self, rois, rsq_thresh,
                        space_names = 'fsnative', analysis_names = 'all', subject_ids='all',
-                       timecourse_folder = None):        
+                       timecourse_folder = None, screenshot_paths = []):        
         pl.rcParams.update({'font.size': 16})
         pl.rcParams.update({'pdf.fonttype':42})        
         self.click=0
@@ -227,7 +250,7 @@ class visualize_results(object):
             if space == 'fsnative' or space == 'HCP':
                 print('recovering vertex index...')
                 #translate javascript indeing to python
-                lctm, rctm = cortex.utils.get_ctmmap(subj, method='mg2', level=9)
+                lctm, rctm = cortex.utils.get_ctmmap(pycortex_subj, method='mg2', level=9)
                 if hemi == 'left':
                     index = lctm[int(vertex)]
                     #print(f"{model} rsq {p_r['RSq'][model][index]}")
@@ -254,7 +277,8 @@ class visualize_results(object):
                 
     
                 if not hasattr(self, 'prf_stim') or self.prf_stim.task_names != an_info['task_names']:
-                    self.prf_stim = create_full_stim(screenshot_paths=[opj(timecourse_folder,f'task-{task}_screenshots') for task in an_info['task_names']],
+
+                    self.prf_stim = create_full_stim(screenshot_paths=screenshot_paths,
                                 n_pix=an_info['n_pix'],
                                 discard_volumes=an_info['discard_volumes'],
                                 baseline_volumes_begin_end=an_info['baseline_volumes_begin_end'],
@@ -262,7 +286,8 @@ class visualize_results(object):
                                 screen_size_cm=an_info['screen_size_cm'],
                                 screen_distance_cm=an_info['screen_distance_cm'],
                                 TR=an_info['TR'],
-                                task_names=an_info['task_names'])
+                                task_names=an_info['task_names'],
+                                normalize_integral_dx=an_info['normalize_integral_dx'])
     
                     
                 tc_paths = [str(path) for path in sorted(Path(timecourse_folder).glob(f"{subj}_timecourse_space-{an_info['fitting_space']}_task-*_run-*.npy"))]    
@@ -277,7 +302,7 @@ class visualize_results(object):
                 
                 for task in an_info['task_names']:
                     if task not in self.prf_stims:
-                        self.prf_stims[task] = create_full_stim(screenshot_paths=[opj(timecourse_folder,f'task-{task}_screenshots')],
+                        self.prf_stims[task] = create_full_stim(screenshot_paths=[s_p for s_p in screenshot_paths if task in s_p],
                                 n_pix=an_info['n_pix'],
                                 discard_volumes=an_info['discard_volumes'],
                                 baseline_volumes_begin_end=an_info['baseline_volumes_begin_end'],
@@ -285,7 +310,8 @@ class visualize_results(object):
                                 screen_size_cm=an_info['screen_size_cm'],
                                 screen_distance_cm=an_info['screen_distance_cm'],
                                 TR=an_info['TR'],
-                                task_names=[task])                    
+                                task_names=[task],
+                                normalize_integral_dx=an_info['normalize_integral_dx'])                    
                         
                     tc_runs=[]
                     
@@ -576,13 +602,15 @@ class visualize_results(object):
                             if 'HCPQ1Q6.' in roi:
                                 hcp_rois_data[self.idx_rois[subj][roi]] = i+1
 
-                            ds_rois[roi] = cortex.Vertex2D(roi_data, roi_data.astype('bool'), subj, cmap='RdBu_r_alpha').raw
+                            ds_rois[roi] = cortex.Vertex2D(roi_data, roi_data.astype('bool'), subject=pycortex_subj, cmap='RdBu_r_alpha').raw
         
 
-        
-                        ds_rois['Wang2015Atlas'] = cortex.Vertex2D(data, data.astype('bool'), subj, cmap='Retinotopy_HSV_2x_alpha').raw
-                        ds_rois['Custom ROIs'] = cortex.Vertex2D(custom_rois_data, custom_rois_data.astype('bool'), subj, cmap='Retinotopy_HSV_2x_alpha').raw 
-                        ds_rois['HCP ROIs'] = cortex.Vertex2D(hcp_rois_data, custom_rois_data.astype('bool'), subj, cmap='Retinotopy_HSV_2x_alpha').raw 
+                        if data.sum()>0:
+                            ds_rois['Wang2015Atlas'] = cortex.Vertex2D(data, data.astype('bool'), subject=pycortex_subj, cmap='Retinotopy_HSV_2x_alpha').raw
+                        if custom_rois_data.sum()>0:
+                            ds_rois['Custom ROIs'] = cortex.Vertex2D(custom_rois_data, custom_rois_data.astype('bool'), subject=pycortex_subj, cmap='Retinotopy_HSV_2x_alpha').raw 
+                        if hcp_rois_data.sum()>0:
+                            ds_rois['HCP ROIs'] = cortex.Vertex2D(hcp_rois_data, custom_rois_data.astype('bool'), subject=pycortex_subj, cmap='Retinotopy_HSV_2x_alpha').raw 
                         
                         self.js_handle_dict[space][analysis][subj]['js_handle_rois'] = cortex.webgl.show(ds_rois, pickerfun=clicker_function, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)
         
@@ -1031,12 +1059,12 @@ class visualize_results(object):
 
                     if not os.path.exists(figure_path):
                         os.makedirs(figure_path)
-                        figure_path = opj(figure_path, space)
-                        if not os.path.exists(figure_path):
-                            os.makedirs(figure_path)
-                            figure_path = opj(figure_path, analysis)
-                            if not os.path.exists(figure_path):
-                                os.makedirs(figure_path)                            
+                    figure_path = opj(figure_path, space)
+                    if not os.path.exists(figure_path):
+                        os.makedirs(figure_path)
+                    figure_path = opj(figure_path, analysis)
+                    if not os.path.exists(figure_path):
+                        os.makedirs(figure_path)                            
 
                     for subj, subj_res in subjects:
                         print(space+" "+analysis+" "+subj)

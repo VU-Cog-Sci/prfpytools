@@ -112,7 +112,7 @@ for subj in subjects.split(','):
         for value in np.unique(unfinished_chunks):
             str_resub+=(str(value)+' ')
         str_resub+=')"'
-        print("python array_submit_prf_fit_only.py "+subj+" analysis_settings_cartesius.yml "+str_resub)
+        print("python array_submit_prf_fit_only.py "+subj+" $analysis_redo_settings "+str_resub)
         
     
         print("harvest not completed. resubmit chunks.")
