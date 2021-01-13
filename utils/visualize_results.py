@@ -11,6 +11,7 @@ from tqdm import tqdm
 import yaml
 import matplotlib.pyplot as pl
 import cortex
+import cifti
 import nibabel as nb
 from matplotlib import cm, colors
 from mpl_toolkits.mplot3d import Axes3D
@@ -48,22 +49,31 @@ class visualize_results(object):
         self.prf_stims = dict()
         
     def fix_hcp_ordering(self, curr_dict, hcp_atlas_mask_path):
+        self.hcp_atlas_mask_path = hcp_atlas_mask_path
         f=nb.load(hcp_atlas_mask_path[0])
         data_1 = np.array([arr.data for arr in f.darrays])[0].astype('bool')
 
         f=nb.load(hcp_atlas_mask_path[1])
         data_2 = np.array([arr.data for arr in f.darrays])[0].astype('bool')
         for k, v in curr_dict.items():
-            if isinstance(v, np.ndarray) and v.ndim == 1:
-                lh_data = np.zeros(data_1.shape)
-                rh_data = np.zeros(data_2.shape)
-        
+            if isinstance(v, np.ndarray):
+                if v.ndim == 1:
+                    #processed results
+                    lh_data = np.zeros(data_1.shape, dtype=v.dtype)
+                    rh_data = np.zeros(data_2.shape, dtype=v.dtype)
+                else:
+                    #results
+                    lh_data = np.zeros((data_1.shape[0], v.shape[1]), dtype=v.dtype)
+                    rh_data = np.zeros((data_2.shape[0], v.shape[1]), dtype=v.dtype)
+                    
                 lh_data[data_1] = v[:np.sum(data_1)]
                 rh_data[data_2] = v[np.sum(data_1):(np.sum(data_1) + np.sum(data_2))]
         
                 resample = np.concatenate((lh_data,rh_data))
 
                 curr_dict[k] = np.copy(resample)
+           
+                
             elif isinstance(v, dict):      
                 self.fix_hcp_ordering(v, hcp_atlas_mask_path)
             else:
@@ -158,8 +168,11 @@ class visualize_results(object):
                     atlas_labels = yaml.safe_load(f)
                 for ke,va in atlas_labels.items():
                     self.idx_rois[subj]['HCPQ1Q6.'+ke] = np.where(atlas == va)
-                    self.idx_rois[subj]['HCPQ1Q6.'+ke[:-1]] = np.where((atlas == atlas_labels[ke[:-1]+'R']) | (atlas == atlas_labels[ke[:-1]+'L']))
-          
+                    self.idx_rois[subj]['HCPQ1Q6.'+ke[:-1]] = np.where((atlas == atlas_labels[ke[:-1]+'R']) | (atlas == atlas_labels[ke[:-1]+'L']))[0]
+                
+                self.idx_rois[subj]['HCPQ1Q6.V3AB'] = np.concatenate((self.idx_rois[subj]['HCPQ1Q6.V3A'],self.idx_rois[subj]['HCPQ1Q6.V3B']))
+                self.idx_rois[subj]['HCPQ1Q6.LO'] = np.concatenate((self.idx_rois[subj]['HCPQ1Q6.LO1'],self.idx_rois[subj]['HCPQ1Q6.LO2'],self.idx_rois[subj]['HCPQ1Q6.LO3']))
+                self.idx_rois[subj]['HCPQ1Q6.TO'] = np.concatenate((self.idx_rois[subj]['HCPQ1Q6.MST'],self.idx_rois[subj]['HCPQ1Q6.MT']))
                 
             if import_flatmaps:
                 for roi_name, roi_idx in self.idx_rois[subj].items():
@@ -317,12 +330,16 @@ class visualize_results(object):
                     
                     for run in all_runs:
                         mask_run = [np.load(mask_path) for mask_path in mask_paths if task in mask_path and f"run-{run}" in mask_path][0]
-                        masked_idx = np.sum(mask_run[:index])
                         
-                        tc_runs.append([np.load(tc_path)[masked_idx] for tc_path in tc_paths if task in tc_path and f"run-{run}" in tc_path][0])
+                        if space == 'HCP':
+                            tc_run_idx = np.sum(subj_res['mask'][:index])
+                        else:
+                            tc_run_idx = np.sum(mask_run[:index])
                         
-                        tc_runs[-1] *=(100/tc_runs[-1].mean(-1))[...,np.newaxis]
-                        tc_runs[-1] += (tc_runs[-1].mean(-1)-np.median(tc_runs[-1][...,self.prf_stims[task].late_iso_dict[task]], axis=-1))[...,np.newaxis]
+                        tc_runs.append([np.load(tc_path)[tc_run_idx] for tc_path in tc_paths if task in tc_path and f"run-{run}" in tc_path][0])
+                        
+                        #tc_runs[-1] *=(100/tc_runs[-1].mean(-1))[...,np.newaxis]
+                        #tc_runs[-1] += (tc_runs[-1].mean(-1)-np.median(tc_runs[-1][...,self.prf_stims[task].late_iso_dict[task]], axis=-1))[...,np.newaxis]
                       
                     tc[task] = np.mean(tc_runs, axis=0)
                     tc_err[task] = sem(tc_runs, axis=0)
@@ -342,12 +359,12 @@ class visualize_results(object):
                         
     
                     
-                tc_full = np.concatenate(tuple([tc[task] for task in tc]), axis=0) - 100
+                tc_full = np.concatenate(tuple([tc[task] for task in tc]), axis=0) - an_info['norm_bold_baseline']
                 tc_err = np.concatenate(tuple([tc_err[task] for task in tc_err]), axis=0)
                 
                 if an_info['crossvalidate'] and 'fit_runs' in an_info:
-                    tc_full_test = np.concatenate(tuple([tc_test[task] for task in tc_test]), axis=0) - 100
-                    tc_full_fit = np.concatenate(tuple([tc_fit[task] for task in tc_fit]), axis=0) - 100    
+                    tc_full_test = np.concatenate(tuple([tc_test[task] for task in tc_test]), axis=0) - an_info['norm_bold_baseline']
+                    tc_full_fit = np.concatenate(tuple([tc_fit[task] for task in tc_fit]), axis=0) - an_info['norm_bold_baseline']    
                     #timecourse reliability stats
                     vertex_info+=f"CV timecourse reliability stats\n"
                     vertex_info+=f"fit-test timecourses pearson R {pearsonr(tc_full_test,tc_full_fit)[0]:.4f}\n"
@@ -368,9 +385,13 @@ class visualize_results(object):
                                                                              "highpass",
                                                                              "add_mean"]},
                                        normalize_RFs=an_info['normalize_RFs'])
+                    if space == 'HCP':
+                        internal_idx = index
+                    else:
+                        internal_idx = np.sum(subj_res['mask'][:index])
                     
-                    params = subj_res['Results'][model][np.sum(subj_res['mask'][:index]),:-1]
-                    preds[model] = gg.return_prediction(*list(params))[0] - 100
+                    params = subj_res['Results'][model][internal_idx,:-1]
+                    preds[model] = gg.return_prediction(*list(params))[0] - an_info['norm_bold_baseline']
                     
                     np.set_printoptions(suppress=True, precision=4)
                     vertex_info+=f"{model} params: {params} \n"
@@ -513,6 +534,8 @@ class visualize_results(object):
                               whitematter_surf='smoothwm')
                     elif subj.isdecimal() and space == 'HCP':
                         pycortex_subj = '999999'
+                    elif space == 'fsaverage':
+                        pycortex_subj = 'fsaverage'
 
                     p_r = subj_res['Processed Results']
                     models = p_r['RSq'].keys()
@@ -610,7 +633,7 @@ class visualize_results(object):
                         if custom_rois_data.sum()>0:
                             ds_rois['Custom ROIs'] = cortex.Vertex2D(custom_rois_data, custom_rois_data.astype('bool'), subject=pycortex_subj, cmap='Retinotopy_HSV_2x_alpha').raw 
                         if hcp_rois_data.sum()>0:
-                            ds_rois['HCP ROIs'] = cortex.Vertex2D(hcp_rois_data, custom_rois_data.astype('bool'), subject=pycortex_subj, cmap='Retinotopy_HSV_2x_alpha').raw 
+                            ds_rois['HCP ROIs'] = cortex.Vertex2D(hcp_rois_data, hcp_rois_data.astype('bool'), subject=pycortex_subj, cmap='Retinotopy_HSV_2x_alpha').raw 
                         
                         self.js_handle_dict[space][analysis][subj]['js_handle_rois'] = cortex.webgl.show(ds_rois, pickerfun=clicker_function, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)
         
@@ -623,7 +646,7 @@ class visualize_results(object):
                         ds_rsq = dict()
                         
                         
-                        best_model = np.argmax([p_r['RSq'][model] for model in ['Gauss','Norm_abcd','CSS','DoG']],axis=0)
+                        best_model = np.argmax([p_r['RSq'][model] for model in self.only_models],axis=0)
 
                         ds_rsq['Best model'] = cortex.Vertex2D(best_model, p_r['Alpha']['all'], subject=pycortex_subj,
                                                                       vmin2=rsq_thresh, vmax2=0.6, cmap='BROYG_2D').raw 
@@ -633,23 +656,25 @@ class visualize_results(object):
                             ds_rsq[model] = cortex.Vertex2D(p_r['RSq'][model], p_r['Alpha'][model], subject=pycortex_subj, 
                                                             vmin=rsq_thresh, vmax=0.8, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw
                             
-                        if 'CSS' in models and 'Gauss' in self.only_models:
+                        if 'CSS' in models and p_r['RSq']['CSS'].sum()>0:
                             ds_rsq['CSS - Gauss'] = cortex.Vertex2D(p_r['RSq']['CSS']-p_r['RSq']['Gauss'], p_r['Alpha']['all'], subject=pycortex_subj,
                                                                       vmin=-0.1, vmax=0.1, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw   
                             
-                        if 'DoG' in models and 'Gauss' in self.only_models:
+                        if 'DoG' in models and p_r['RSq']['DoG'].sum()>0:
                             ds_rsq['DoG - Gauss'] = cortex.Vertex2D(p_r['RSq']['DoG']-p_r['RSq']['Gauss'], p_r['Alpha']['all'], subject=pycortex_subj,
                                                                   vmin=-0.1, vmax=0.1, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw
                         
-                        if 'Norm_abcd' in self.only_models and 'CSS' in self.only_models and 'DoG' in self.only_models and 'Gauss' in self.only_models:
+                        if 'Norm_abcd' in self.only_models and 'Gauss' in self.only_models:
 
                             ds_rsq[f'Norm_abcd - Gauss'] = cortex.Vertex2D(p_r['RSq']['Norm_abcd']-p_r['RSq']['Gauss'], p_r['Alpha']['all'], subject=pycortex_subj,
                                                                       vmin=-0.1, vmax=0.1, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw
 
-                            ds_rsq[f'Norm_abcd - DoG'] = cortex.Vertex2D(p_r['RSq']['Norm_abcd']-p_r['RSq']['DoG'], p_r['Alpha']['all'], subject=pycortex_subj,
+                            if 'CSS' in self.only_models and 'DoG' in self.only_models:
+                            
+                                ds_rsq[f'Norm_abcd - DoG'] = cortex.Vertex2D(p_r['RSq']['Norm_abcd']-p_r['RSq']['DoG'], p_r['Alpha']['all'], subject=pycortex_subj,
                                                                       vmin=-0.1, vmax=0.1, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw
 
-                            ds_rsq[f'Norm_abcd - CSS'] = cortex.Vertex2D(p_r['RSq']['Norm_abcd']-p_r['RSq']['CSS'], p_r['Alpha']['all'], subject=pycortex_subj, 
+                                ds_rsq[f'Norm_abcd - CSS'] = cortex.Vertex2D(p_r['RSq']['Norm_abcd']-p_r['RSq']['CSS'], p_r['Alpha']['all'], subject=pycortex_subj, 
                                                                       vmin=-0.1, vmax=0.1, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw
  
 
@@ -676,7 +701,7 @@ class visualize_results(object):
                                                                       vmin=rsq_thresh, vmax=0.6, vmin2=0.05, vmax2=rsq_thresh, cmap='Jet_2D_alpha').raw
                             self.js_handle_dict[space][analysis][subj]['js_handle_rsq_comp'] = cortex.webgl.show(ds_rsq_comp, pickerfun=clicker_function, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)
                         
-
+                        
                         self.js_handle_dict[space][analysis][subj]['js_handle_rsq'] = cortex.webgl.show(ds_rsq, pickerfun=clicker_function, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True) 
                         
                     if self.plot_ecc_cortex:
@@ -863,43 +888,52 @@ class visualize_results(object):
                 except:
                     pass
                 
-    def project_to_fsaverage(self, models, parameters, analysis_names = 'all', subject_ids='all'):
+    def project_to_fsaverage(self, models, parameters, space_names = 'all', analysis_names = 'all', subject_ids='all',
+                             hcp_cii_file_path = None, old_sphere = None, new_sphere = None, old_area = None, new_area = None,
+                             temp_folder = None):
         if 'fsaverage' not in self.main_dict:
             self.main_dict['fsaverage'] = dd(lambda:dd(lambda:dd(lambda:dd(dict))))
         
         if parameters[0] != 'RSq':
             parameters.insert(0,'RSq')
             
-        for space, space_res in self.main_dict.items():
-            if 'fsnative' in space:
-                if analysis_names == 'all':
-                    analyses = space_res.items()
+        if space_names == 'all':
+            spaces = [item for item in self.main_dict.items()]
+        else:
+            spaces = [item for item in self.main_dict.items() if item[0] in space_names] 
+            
+        for space, space_res in spaces:
+            
+            if analysis_names == 'all':
+                analyses = space_res.items()
+            else:
+                analyses = [item for item in space_res.items() if item[0] in analysis_names] 
+            for analysis, analysis_res in analyses:       
+                if subject_ids == 'all':
+                    subjects = [item for item in analysis_res.items()]
                 else:
-                    analyses = [item for item in space_res.items() if item[0] in analysis_names] 
-                for analysis, analysis_res in analyses:       
-                    if subject_ids == 'all':
-                        subjects = [item for item in analysis_res.items()]
-                    else:
-                        subjects = [item for item in analysis_res.items() if item[0] in subject_ids]
+                    subjects = [item for item in analysis_res.items() if item[0] in subject_ids]
                     
-
-                    for model in models:
-                        fsaverage_rsq = dict()
-                        for parameter in parameters:
+                
+                for model in models:
+                    #fsaverage_rsq = dict()
+                    for parameter in parameters:
+                        
+                        fsaverage_param = dict()
+                        
+                        for subj, subj_res in subjects:
+                            print(space+" "+analysis+" "+subj)
+                            p_r = subj_res['Processed Results']
                             
-                            fsaverage_param = dict()
+                            if space == 'fsnative':
                             
-                            for subj, subj_res in subjects:
-                                print(space+" "+analysis+" "+subj)
-                                p_r = subj_res['Processed Results']
-                                
                                 lh_c = read_morph_data(opj(self.fs_dir, f"{subj}/surf/lh.curv"))
                 
                                 param = np.copy(p_r[parameter][model])
                                 
                                 lh_file_path = opj(self.fs_dir, f"{subj}/surf/lh.{''.join(filter(str.isalnum, parameter))}_{model}")
                                 rh_file_path = opj(self.fs_dir, f"{subj}/surf/rh.{''.join(filter(str.isalnum, parameter))}_{model}")
-
+    
                                 write_morph_data(lh_file_path, param[:lh_c.shape[0]])
                                 write_morph_data(rh_file_path, param[lh_c.shape[0]:])
                                 
@@ -911,38 +945,77 @@ class visualize_results(object):
                                 os.system(f"export SUBJECTS_DIR={self.fs_dir}")
                                 os.system(f"mri_surf2surf --srcsubject {subj} --srcsurfval {lh_file_path} --trgsubject fsaverage --trgsurfval {lh_fsaverage_path} --hemi lh --trg_type curv")
                                 os.system(f"mri_surf2surf --srcsubject {subj} --srcsurfval {rh_file_path} --trgsubject fsaverage --trgsurfval {rh_fsaverage_path} --hemi rh --trg_type curv")
-
+    
                                 lh_fsaverage_param = read_morph_data(lh_fsaverage_path)
                                 rh_fsaverage_param = read_morph_data(rh_fsaverage_path)
+                                
                                 fsaverage_param[subj] = np.concatenate((lh_fsaverage_param,rh_fsaverage_param))
                                 self.main_dict['fsaverage'][analysis][subj]['Processed Results'][parameter][model] = np.copy(fsaverage_param[subj])
                                 
                                 #if parameter == 'RSq':
                                 #    fsaverage_rsq[subj] = np.nan_to_num(np.concatenate((lh_fsaverage_param,rh_fsaverage_param)))
                                 #    fsaverage_rsq[subj][fsaverage_rsq[subj]<0] = 0
-                                    
-                                    
-                            #fsaverage_group_average = np.ma.average(np.array([fsaverage_param[sid] for sid in fsaverage_param]),
-                            #                                      weights=np.array([fsaverage_rsq[sid] for sid in fsaverage_rsq]),
-                            #                                      axis=0)
-                            fsaverage_group_average = np.nanmean([fsaverage_param[sid] for sid in fsaverage_param], axis=0)
-                            
-                            # for i in range(len(fsaverage_group_average)):
-                            #     fsaverage_group_average[i] = weightstats.DescrStatsW(np.array([fsaverage_param[sid][i] for sid in fsaverage_param]),
-                            #                                                          weights=np.array([fsaverage_rsq[sid][i] for sid in fsaverage_rsq])).mean
-                            
-                            self.main_dict['fsaverage'][analysis]['fsaverage']['Processed Results'][parameter][model] = np.copy(fsaverage_group_average)
+                            elif space == 'HCP':
+                                f=nb.load(self.hcp_atlas_mask_path[0])
+                                data_1 = np.array([arr.data for arr in f.darrays])[0].astype('bool')
+                        
+                                f=nb.load(self.hcp_atlas_mask_path[1])
+                                data_2 = np.array([arr.data for arr in f.darrays])[0].astype('bool')
+                                
+                                
+                                cifti_brain_model = cifti.read(hcp_cii_file_path)[1][1]
+                                
+                                output = np.zeros(len(cifti_brain_model))
+                                output[:np.sum(data_1)] = p_r[parameter][model][:len(data_1)][data_1]
+                                output[np.sum(data_1):(np.sum(data_1) + np.sum(data_2))] = p_r[parameter][model][len(data_1):][data_2]
+                                
+                                temp_filenames = ['temp_cii.nii', 'temp_cii_subvol.nii.gz', 'temp_gii_L.func.gii',
+                                                  'temp_gii_R.func.gii', 'fsaverage_gii_L.func.gii', 'fsaverage_gii_R.func.gii']
+                                temp_paths = [opj(temp_folder, el) for el in temp_filenames]
+                                
+                                cifti.write(temp_paths[0], output.reshape(1,-1), 
+                                            (cifti.Scalar.from_names([parameter]), cifti_brain_model))
+                                
+                                os.system(f"wb_command -cifti-separate '{temp_paths[0]}' COLUMN -volume-all '{temp_paths[1]}' \
+                                          -metric CORTEX_LEFT '{temp_paths[2]}' -metric CORTEX_RIGHT '{temp_paths[3]}'")
+                                          
+                                os.system(f"wb_command -metric-resample '{temp_paths[2]}' '{old_sphere.replace('?','L')}' \
+                                          '{new_sphere.replace('?','L')}' ADAP_BARY_AREA '{temp_paths[4]}' \
+                                          -area-metrics '{old_area.replace('?','L')}' '{new_area.replace('?','L')}'")
+
+                                os.system(f"wb_command -metric-resample '{temp_paths[3]}' '{old_sphere.replace('?','R')}' \
+                                          '{new_sphere.replace('?','R')}' ADAP_BARY_AREA '{temp_paths[5]}' \
+                                          -area-metrics '{old_area.replace('?','R')}' '{new_area.replace('?','R')}'")
+                                
+                                a = nb.load(temp_paths[4])
+                                b = nb.load(temp_paths[5])
+                                
+                                fsaverage_param[subj] = np.concatenate((np.array([arr.data for arr in a.darrays])[0],np.array([arr.data for arr in b.darrays])[0]))
+                                self.main_dict['fsaverage'][analysis][subj]['Processed Results'][parameter][model] = np.copy(fsaverage_param[subj])
+                                          
+                
+                                
+                        #fsaverage_group_average = np.ma.average(np.array([fsaverage_param[sid] for sid in fsaverage_param]),
+                        #                                      weights=np.array([fsaverage_rsq[sid] for sid in fsaverage_rsq]),
+                        #                                      axis=0)
+                        fsaverage_group_average = np.nanmean([fsaverage_param[sid] for sid in fsaverage_param], axis=0)
+                        
+                        # for i in range(len(fsaverage_group_average)):
+                        #     fsaverage_group_average[i] = weightstats.DescrStatsW(np.array([fsaverage_param[sid][i] for sid in fsaverage_param]),
+                        #                                                          weights=np.array([fsaverage_rsq[sid][i] for sid in fsaverage_rsq])).mean
+                        
+                        self.main_dict['fsaverage'][analysis]['fsaverage']['Processed Results'][parameter][model] = np.copy(fsaverage_group_average)
  
 
-                            
-                    for model in models:
-                        if 'Norm' in model:
-                            self.main_dict['fsaverage'][analysis]['fsaverage']['Processed Results']['Ratio (B/D)'][model] = self.main_dict['fsaverage'][analysis]['fsaverage']['Processed Results']['Norm Param. B'][model]/self.main_dict['fsaverage'][analysis]['fsaverage']['Processed Results']['Norm Param. D'][model]
-
-                for model in models:
-                    for parameter in parameters:
-                        self.main_dict['fsaverage']['Mean analysis']['fsaverage']['Processed Results'][parameter][model] = np.nanmean([self.main_dict['fsaverage'][an[0]]['fsaverage']['Processed Results'][parameter][model] for an in analyses], axis=0)
                         
+                for model in models:
+                    if 'Norm' in model and 'Norm Param. B' in parameters and 'Norm Param. D' in parameters:
+                        self.main_dict['fsaverage'][analysis]['fsaverage']['Processed Results']['Ratio (B/D)'][model] = self.main_dict['fsaverage'][analysis]['fsaverage']['Processed Results']['Norm Param. B'][model]/self.main_dict['fsaverage'][analysis]['fsaverage']['Processed Results']['Norm Param. D'][model]
+
+            for model in models:
+                for parameter in parameters:
+                    self.main_dict['fsaverage']['Mean analysis']['fsaverage']['Processed Results'][parameter][model] = np.nanmean([self.main_dict['fsaverage'][an[0]]['fsaverage']['Processed Results'][parameter][model] for an in analyses], axis=0)
+                    
                         
         return
     
