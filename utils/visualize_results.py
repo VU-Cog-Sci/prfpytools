@@ -280,16 +280,24 @@ class visualize_results(object):
                 #both_vertices = [9372, 9383, 17766, 9384]#[161130, 9372, 9383, 302707, 17766, 9395, 9384]
                 #index = both_vertices[self.click]
                 
+                #subj 148133HCP
+                index = 87097 #(here dividind b and d for same value doesnt change timecure at all)
+                #index = 45089 #(here dividing b and d by same value changes timecourses greatly)
+                
+                #index = 136959
                 
                 print('recovering data and model timecourses...')
                 
                 vertex_info = f""
     
                 #recover needed information
-                an_info = subj_res['analysis_info']                
-                
+                an_info = subj_res['analysis_info']       
+                #this was added later
+                if 'normalize_integral_dx' not in an_info:
+                    an_info['normalize_integral_dx'] = False                
     
                 if not hasattr(self, 'prf_stim') or self.prf_stim.task_names != an_info['task_names']:
+        
 
                     self.prf_stim = create_full_stim(screenshot_paths=screenshot_paths,
                                 n_pix=an_info['n_pix'],
@@ -372,8 +380,11 @@ class visualize_results(object):
             
                 preds = dict()
                 prfs = dict()
+                
+                self.prf_models = dict()
+                
                 for model in self.only_models:
-                    gg = model_wrapper(model,
+                    self.prf_models[model] = model_wrapper(model,
                                        stimulus=self.prf_stim,
                                        hrf=an_info['hrf'],
                                        filter_predictions=an_info['filter_predictions'],
@@ -390,8 +401,9 @@ class visualize_results(object):
                     else:
                         internal_idx = np.sum(subj_res['mask'][:index])
                     
-                    params = subj_res['Results'][model][internal_idx,:-1]
-                    preds[model] = gg.return_prediction(*list(params))[0] - an_info['norm_bold_baseline']
+                    params = np.copy(subj_res['Results'][model][internal_idx,:-1])
+
+                    preds[model] = self.prf_models[model].return_prediction(*list(params))[0] - an_info['norm_bold_baseline']
                     
                     np.set_printoptions(suppress=True, precision=4)
                     vertex_info+=f"{model} params: {params} \n"
@@ -832,11 +844,14 @@ class visualize_results(object):
                         for model in [model for model in self.only_models if 'Norm' in model]:
 
                             ds_norm_baselines[f'{model} Param. B'] = cortex.Vertex2D(p_r['Norm Param. B'][model], p_r['Alpha'][model], subject=pycortex_subj, 
-                                                                         vmin=5, vmax=100, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw                    
+                                                                         vmin=np.quantile(p_r['Norm Param. B'][model][p_r['Alpha'][model]>rsq_thresh],0.1), 
+                                                                         vmax=np.quantile(p_r['Norm Param. B'][model][p_r['Alpha'][model]>rsq_thresh],0.9), vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw                    
                             ds_norm_baselines[f'{model} Param. D'] = cortex.Vertex2D(p_r['Norm Param. D'][model], p_r['Alpha'][model], subject=pycortex_subj, 
-                                                                         vmin=5, vmax=100, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw
+                                                                         vmin=np.quantile(p_r['Norm Param. D'][model][p_r['Alpha'][model]>rsq_thresh],0.1), 
+                                                                         vmax=np.quantile(p_r['Norm Param. D'][model][p_r['Alpha'][model]>rsq_thresh],0.9), vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw
                             ds_norm_baselines[f'{model} Ratio (B/D)'] = cortex.Vertex2D(p_r['Ratio (B/D)'][model], p_r['Alpha'][model], subject=pycortex_subj, 
-                                                                         vmin=0, vmax=5, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw
+                                                                         vmin=np.quantile(p_r['Ratio (B/D)'][model][p_r['Alpha'][model]>rsq_thresh],0.1), 
+                                                                         vmax=np.quantile(p_r['Ratio (B/D)'][model][p_r['Alpha'][model]>rsq_thresh],0.9), vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw
                         
                         self.js_handle_dict[space][analysis][subj]['js_handle_norm_baselines'] = cortex.webgl.show(ds_norm_baselines, pickerfun=clicker_function, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)    
         print('-----')                              

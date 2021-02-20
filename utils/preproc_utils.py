@@ -30,6 +30,7 @@ def create_dm_from_screenshots(screenshot_path,
     # there is one more MR image than screenshot
     design_matrix = np.zeros((n_pix, n_pix, 1+len(image_list)))
     for image_file in image_list:
+        
         # assuming last three numbers before .png are the screenshot number
         img_number = int(image_file[-7:-4])-1
         # subtract one to start from zero
@@ -85,14 +86,16 @@ def create_full_stim(screenshot_paths,
     for i, task_name in enumerate(task_names):
         # create stimulus
         if task_name in screenshot_paths[i]:
-            
+            #this is for hcp-format design matrix
             if screenshot_paths[i].endswith('hdf5'):
                 with h5py.File(screenshot_paths[i], 'r') as f:
                     dm_task = np.array(f.get('stim')).T
+                    dm_task /= dm_task.max()
                 dm_list.append(dm_task[::int(dm_task.shape[0]/n_pix),::int(dm_task.shape[0]/n_pix),:])
                 
-            
+            #this is for screenshots
             else:
+                
                 dm_list.append(create_dm_from_screenshots(screenshot_paths[i],
                                                   n_pix,
                                                   dm_edges_clipping)[..., discard_volumes:])
@@ -105,7 +108,7 @@ def create_full_stim(screenshot_paths,
     # late-empty DM periods (for calculation of BOLD baseline)
     shifted_dm = np.zeros_like(dm_full)
     
-    # number of TRs in which activity may linger (hrf)
+    # use timepoints where bar was gone from at least 7 TRs (this is a heuristic approximation)
     shifted_dm[..., 7:] = dm_full[..., :-7]
     
     late_iso_dict = {}
@@ -120,11 +123,6 @@ def create_full_stim(screenshot_paths,
         late_iso_dict[task_name] = late_iso_dict['periods'][np.where((late_iso_dict['periods']>=start) & (late_iso_dict['periods']<stop))]-start
             
         start+=task_lengths[i]
-
-    # late_iso_dict = {}
-    # for i, task_name in enumerate(task_names):
-    #     #to estimate baseline across conditions
-    #     late_iso_dict[task_name] = np.concatenate((np.arange(baseline_volumes_begin_end[0]),np.arange(task_lengths[i]-baseline_volumes_begin_end[1], task_lengths[i])))
 
     prf_stim = PRFStimulus2D(screen_size_cm=screen_size_cm,
                              screen_distance_cm=screen_distance_cm,
