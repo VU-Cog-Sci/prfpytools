@@ -387,36 +387,36 @@ ss = prf_stim.screen_size_degrees
 gauss_bounds, css_bounds, dog_bounds, norm_bounds = None, None, None, None
 
 if param_bounds:
-    gauss_bounds = [(-max_ecc_size, max_ecc_size),  # x
-                    (-max_ecc_size, max_ecc_size),  # y
-                    (eps, ss),  # prf size
-                    (0, +inf),  # prf amplitude
-                    (0, +inf)]  # bold baseline
+    gauss_bounds = [(-1.5*max_ecc_size, 1.5*max_ecc_size),  # x
+                    (-1.5*max_ecc_size, 1.5*max_ecc_size),  # y
+                    (eps, 1.5*ss),  # prf size
+                    (0, 1000),  # prf amplitude
+                    (0, 1000)]  # bold baseline
     
-    css_bounds = [(-max_ecc_size, max_ecc_size),  # x
-                  (-max_ecc_size, max_ecc_size),  # y
-                  (eps, ss),  # prf size
-                  (0, +inf),  # prf amplitude
-                  (0, +inf),  # bold baseline
-                  (0.01, 3)]  # CSS exponent
+    css_bounds = [(-1.5*max_ecc_size, 1.5*max_ecc_size),  # x
+                    (-1.5*max_ecc_size, 1.5*max_ecc_size),  # y
+                    (eps, 1.5*ss),  # prf size
+                    (0, 1000),  # prf amplitude
+                    (0, 1000),  # bold baseline
+                    (0.01, 3)]  # CSS exponent
     
-    dog_bounds = [(-max_ecc_size, max_ecc_size),  # x
-                  (-max_ecc_size, max_ecc_size),  # y
-                  (eps, ss),  # prf size
-                  (0, +inf),  # prf amplitude
-                  (0, +inf),  # bold baseline
-                  (0, +inf),  # surround amplitude
-                  (eps, 2*ss)]  # surround size
+    dog_bounds = [(-1.5*max_ecc_size, 1.5*max_ecc_size),  # x
+                    (-1.5*max_ecc_size, 1.5*max_ecc_size),  # y
+                    (eps, 1.5*ss),  # prf size
+                    (0, 1000),  # prf amplitude
+                    (0, 1000),  # bold baseline
+                    (0, 1000),  # surround amplitude
+                    (eps, 3*ss)]  # surround size
 
-    norm_bounds = [(-max_ecc_size, max_ecc_size),  # x
-               (-max_ecc_size, max_ecc_size),  # y
-               (eps, ss),  # prf size
-               (0, +inf),  # prf amplitude
-               (0, +inf),  # bold baseline
-               (0, +inf),  # surround amplitude
-               (eps, 2*ss),  # surround size
-               (0, +inf),  # neural baseline
-               (1e-6, +inf)]  # surround baseline
+    norm_bounds = [(-1.5*max_ecc_size, 1.5*max_ecc_size),  # x
+                    (-1.5*max_ecc_size, 1.5*max_ecc_size),  # y
+                    (eps, 1.5*ss),  # prf size
+                    (0, 1000),  # prf amplitude
+                    (0, 1000),  # bold baseline
+                    (0, 1000),  # surround amplitude
+                    (eps, 3*ss),  # surround size
+                    (0, 1000),  # neural baseline
+                    (1e-6, 1000)]  # surround baseline
 
 # norm grid params
 if norm_model_variant == "abcd":

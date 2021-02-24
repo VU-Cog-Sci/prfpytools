@@ -281,7 +281,7 @@ class visualize_results(object):
                 #index = both_vertices[self.click]
                 
                 #subj 148133HCP
-                index = 87097 #(here dividind b and d for same value doesnt change timecure at all)
+                #index = 87097 #(here dividind b and d for same value doesnt change timecure at all)
                 #index = 45089 #(here dividing b and d by same value changes timecourses greatly)
                 
                 #index = 136959
@@ -904,8 +904,8 @@ class visualize_results(object):
                     pass
                 
     def project_to_fsaverage(self, models, parameters, space_names = 'all', analysis_names = 'all', subject_ids='all',
-                             hcp_cii_file_path = None, old_sphere = None, new_sphere = None, old_area = None, new_area = None,
-                             temp_folder = None):
+                             hcp_cii_file_path = None, hcp_old_sphere = None, hcp_new_sphere = None, hcp_old_area = None, hcp_new_area = None,
+                             hcp_temp_folder = None):
         if 'fsaverage' not in self.main_dict:
             self.main_dict['fsaverage'] = dd(lambda:dd(lambda:dd(lambda:dd(dict))))
         
@@ -986,7 +986,7 @@ class visualize_results(object):
                                 
                                 temp_filenames = ['temp_cii.nii', 'temp_cii_subvol.nii.gz', 'temp_gii_L.func.gii',
                                                   'temp_gii_R.func.gii', 'fsaverage_gii_L.func.gii', 'fsaverage_gii_R.func.gii']
-                                temp_paths = [opj(temp_folder, el) for el in temp_filenames]
+                                temp_paths = [opj(hcp_temp_folder, el) for el in temp_filenames]
                                 
                                 cifti.write(temp_paths[0], output.reshape(1,-1), 
                                             (cifti.Scalar.from_names([parameter]), cifti_brain_model))
@@ -994,13 +994,13 @@ class visualize_results(object):
                                 os.system(f"wb_command -cifti-separate '{temp_paths[0]}' COLUMN -volume-all '{temp_paths[1]}' \
                                           -metric CORTEX_LEFT '{temp_paths[2]}' -metric CORTEX_RIGHT '{temp_paths[3]}'")
                                           
-                                os.system(f"wb_command -metric-resample '{temp_paths[2]}' '{old_sphere.replace('?','L')}' \
-                                          '{new_sphere.replace('?','L')}' ADAP_BARY_AREA '{temp_paths[4]}' \
-                                          -area-metrics '{old_area.replace('?','L')}' '{new_area.replace('?','L')}'")
+                                os.system(f"wb_command -metric-resample '{temp_paths[2]}' '{hcp_old_sphere.replace('?','L')}' \
+                                          '{hcp_new_sphere.replace('?','L')}' ADAP_BARY_AREA '{temp_paths[4]}' \
+                                          -area-metrics '{hcp_old_area.replace('?','L')}' '{hcp_new_area.replace('?','L')}'")
 
-                                os.system(f"wb_command -metric-resample '{temp_paths[3]}' '{old_sphere.replace('?','R')}' \
-                                          '{new_sphere.replace('?','R')}' ADAP_BARY_AREA '{temp_paths[5]}' \
-                                          -area-metrics '{old_area.replace('?','R')}' '{new_area.replace('?','R')}'")
+                                os.system(f"wb_command -metric-resample '{temp_paths[3]}' '{hcp_old_sphere.replace('?','R')}' \
+                                          '{hcp_new_sphere.replace('?','R')}' ADAP_BARY_AREA '{temp_paths[5]}' \
+                                          -area-metrics '{hcp_old_area.replace('?','R')}' '{hcp_new_area.replace('?','R')}'")
                                 
                                 a = nb.load(temp_paths[4])
                                 b = nb.load(temp_paths[5])
@@ -1111,6 +1111,8 @@ class visualize_results(object):
                 supp_max=1000
                 #css max
                 css_max=1
+                #max b and d
+                bd_max=1000
                 #bar or violin width
                 bar_or_violin_width = 0.3
 
@@ -1225,7 +1227,14 @@ class visualize_results(object):
                                                 
                                         if 'CSS Exponent' in x_parameter:
                                             alpha[analysis][subj][model][roi] *= (subj_res['Processed Results'][x_parameter][x_param_model]<css_max)
-                                                
+                                        
+                                        if 'Norm Param.' in y_parameter:
+                                            alpha[analysis][subj][model][roi] *= (subj_res['Processed Results'][y_parameter][model]<bd_max)                                            
+                                        if 'Norm Param.' in x_parameter:
+                                            alpha[analysis][subj][model][roi] *= (subj_res['Processed Results'][x_parameter][model]<bd_max)                                            
+                                            if x_param_model!=None:
+                                                alpha[analysis][subj][model][roi] *= (subj_res['Processed Results'][x_parameter][x_param_model]<bd_max)
+                                                                    
          
                                         #if 'ccrsq' in y_parameter.lower():
                                         #    alpha[analysis][subj][model][roi] *= (subj_res['Processed Results'][y_parameter][model]>0)
@@ -1793,7 +1802,7 @@ class visualize_results(object):
                                 if model in xlim:
                                     pl.xlim(xlim[model])
                                     
-                                for i, roi in enumerate([r for r in rois if 'custom.' in r]):
+                                for i, roi in enumerate([r for r in rois if 'custom.' in r or 'HCP' in r]):
                                     if not scatter:
                                         try:
                                             WLS = LinearRegression()
