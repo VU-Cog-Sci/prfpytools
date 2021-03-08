@@ -1,36 +1,39 @@
 #settings intended for single subject analysis
 #data scaling (for now only option allowed is "psc" or equivalently "percent_signal_change".
-data_scaling: "psc"
+data_scaling: "zsc"
 
-crossvalidate: False
+crossvalidate: True
 #always specify only one of these two
 #fit_task: "2R"
 fit_runs: [1,3,5]
-
+save_noise_ceiling: False
 return_noise_ceiling_fraction: False
+save_runs: []
+save_raw_timecourse: False
+
 #if fitting the hrf, set single_hrf to True to use median hrf when crossvalidating. also applies when iterating
-#however, if iterating but hrf was not previously fit, set this to False
-single_hrf: True
+#however, if  hrf is not being fit at all, set this to False
+single_hrf: False
 
 norm_model_variant: "abcd"
 
 #how to handle existing outputs (overwrite, iterate, skip)
-refit_mode: "overwrite"
+refit_mode: "skip"
 
 #expected max duration in hours:minutes
-duration: "0:10"
+duration: "4:55"
 
 #data chunks (50 good number for V1V2V3, 500 whole brain)
-n_chunks: 500
+n_chunks: 100
 #choices: fsnative, fsaverage (surface fitting), T1w (volume fitting)      
 fitting_space: "fsnative"
-data_path: ""
+data_path: "/scratch-shared/marcoaq/PRFMapping/PRFMapping-Deriv-hires"
 #path to file with ROI indices
-#roi_idx_path: ""
-save_raw_timecourse: True
+#roi_idx_path: "/home/marcoaq/$subj$_OccPole.npy"
+
 #fitting tolerance
-xtol: 0.00000001
-ftol: 0.00000001
+xtol: 0.00001
+ftol: 0.00001
 #grid fit will only allow positive prfs
 pos_prfs_only: True
 
@@ -39,10 +42,10 @@ param_bounds: True
 
 #set bold baseline to 100 for all models, norm to value below
 fix_bold_baseline: True
-norm_bold_baseline: 100
+norm_bold_baseline: 0
 
 #constraints on surround models (positive center, large surround) (trust-constr minimizer)
-param_constraints: False 
+param_constraints: True
 positive_centre_only: False
 surround_sigma_larger_than_centre: False
 
@@ -58,6 +61,8 @@ hrf: [1,4.6,0]
 n_pix: 54 #54 #40,108
 #pixels to be set to zero in matrix (top, bottom, left, right)
 dm_edges_clipping: [6,1,0,1]
+#normalize prf*stim*dx**2 as an integral
+normalize_integral_dx: False
 
 #screen settings
 screen_size_cm: 39.3
@@ -103,18 +108,35 @@ models_to_fit:
            - "norm"           
 
 task_names:
-#           - "1R"
-#           - "1S"
+           - "1R"
+           - "1S"
            - "2R"
-#           - "4F"
-#           - "4R"
+           - "4F"
+           - "4R"
 
 screenshot_paths:
-#                  - ""
-#                  - ""
-                  - ""
-#                  - ""
-#                  - ""
+                  - "/scratch-shared/marcoaq/PRFMapping/sub-001_ses-1_Logs/sub-001_ses-1_task-1R_run-1_Logs/Screenshots"
+                  - "/scratch-shared/marcoaq/PRFMapping/sub-001_ses-1_Logs/sub-001_ses-1_task-1S_run-1_Logs/Screenshots"
+                  - "/scratch-shared/marcoaq/PRFMapping/sub-001_ses-1_Logs/sub-001_ses-1_task-2R_run-1_Logs/Screenshots"
+                  - "/scratch-shared/marcoaq/PRFMapping/sub-001_ses-1_Logs/sub-001_ses-1_task-4F_run-1_Logs/Screenshots"
+                  - "/scratch-shared/marcoaq/PRFMapping/sub-001_ses-1_Logs/sub-001_ses-1_task-4R_run-1_Logs/Screenshots"
+
 
 verbose: False
 
+
+#if timecourse was already preprocessed, specify
+#timecourse_data_path: "/home/marcoaq/PRFMapping/PRFMapping-Deriv-hires/sub-006_timecourse_space-fsnative-part2.npy"
+
+#if gaussian grid data was already obtained, can specify path
+#grid_data_path: "/home/marcoaq/PRFMapping/PRFMapping-Deriv-hires/prfpy/sub-006_gridparams-gauss_space-fsnative2020-02-05-17-27-16.npy"
+#gauss iterparams (or specific model start params)
+#gauss_iterparams_path: "/home/marcoaq/PRFMapping/PRFMapping-Deriv-hires/sub-006_iterparams-gauss_space-fsnative2020-02-05-17-27-16.npy"
+#css iterparams (or specific model start params)
+#css_iterparams_path: "/home/marcoaq/PRFMapping/PRFMapping-Deriv-hires/sub-006_iterparams-css_space-fsnative2020-02-05-17-27-16.npy"
+#dog iterparams (or specific model start params)
+#dog_iterparams_path: "/home/marcoaq/PRFMapping/PRFMapping-Deriv-hires/sub-006_iterparams-dog_space-fsnative2020-02-05-17-27-16.npy"
+#norm gridparams path
+#norm_gridparams_path: "/home/marcoaq/PRFMapping/PRFMapping-Deriv-hires/sub-006_gridparams-norm_space-fsnative2020-02-05-17-27-16.npy"
+#norm iter params path
+#norm_iterparams_path: "/home/marcoaq/PRFMapping/PRFMapping-Deriv-hires/sub-006_iterparams-norm_space-fsnative2020-02-05-17-27-16.npy"
