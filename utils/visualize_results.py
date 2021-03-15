@@ -49,7 +49,7 @@ class visualize_results(object):
         self.prf_stims = dict()
         
     def fix_hcp_ordering(self, curr_dict, hcp_atlas_mask_path):
-        self.hcp_atlas_mask_path = hcp_atlas_mask_path
+        
         f=nb.load(hcp_atlas_mask_path[0])
         data_1 = np.array([arr.data for arr in f.darrays])[0].astype('bool')
 
@@ -197,11 +197,16 @@ class visualize_results(object):
                     pass    
         return
 
-    def set_alpha(self, only_models=None, ecc_min=0, ecc_max=5):
+    def set_alpha(self, space_names='all', only_models=None, ecc_min=0, ecc_max=5):
         
         self.only_models=only_models
         self.tc_min = dict()
-        for space, space_res in self.main_dict.items():
+        if space_names == 'all':
+            spaces = [item for item in self.main_dict.items()]
+        else:
+            spaces = [item for item in self.main_dict.items() if item[0] in space_names] 
+
+        for space, space_res in spaces:
             if 'fs' in space or 'HCP' in space:
                 for analysis, analysis_res in space_res.items():       
                     for subj, subj_res in analysis_res.items():
@@ -904,6 +909,7 @@ class visualize_results(object):
                     pass
                 
     def project_to_fsaverage(self, models, parameters, space_names = 'all', analysis_names = 'all', subject_ids='all',
+                             hcp_atlas_mask_path = None,
                              hcp_cii_file_path = None, hcp_old_sphere = None, hcp_new_sphere = None, hcp_old_area = None, hcp_new_area = None,
                              hcp_temp_folder = None):
         if 'fsaverage' not in self.main_dict:
@@ -971,10 +977,10 @@ class visualize_results(object):
                                 #    fsaverage_rsq[subj] = np.nan_to_num(np.concatenate((lh_fsaverage_param,rh_fsaverage_param)))
                                 #    fsaverage_rsq[subj][fsaverage_rsq[subj]<0] = 0
                             elif space == 'HCP':
-                                f=nb.load(self.hcp_atlas_mask_path[0])
+                                f=nb.load(hcp_atlas_mask_path[0])
                                 data_1 = np.array([arr.data for arr in f.darrays])[0].astype('bool')
                         
-                                f=nb.load(self.hcp_atlas_mask_path[1])
+                                f=nb.load(hcp_atlas_mask_path[1])
                                 data_2 = np.array([arr.data for arr in f.darrays])[0].astype('bool')
                                 
                                 
@@ -1037,9 +1043,9 @@ class visualize_results(object):
     
     def quant_plots(self, x_parameter, y_parameter, rois, rsq_thresh, save_figures, figure_path,
                     space_names = 'fsnative', analysis_names = 'all', subject_ids='all', y_parameter_toplevel=None, 
-                    ylim={}, xlim={}, log_yaxis=False, log_xaxis = False, nr_bins = 8,
+                    ylim={}, xlim={}, log_yaxis=False, log_xaxis = False, nr_bins = 8, rsq_weights=True,
                     x_param_model=None, violin=False, scatter=False, diff_gauss=False, diff_gauss_x=False,
-                    means_only=False, stats_on_plot=False, bin_by='size'):
+                    means_only=False, stats_on_plot=False, bin_by='size', zscore_ydata=False, zscore_xdata=False):
         """
         
 
@@ -1327,7 +1333,15 @@ class visualize_results(object):
                                     x_par[analysis][subj][model][roi] = np.hstack(tuple([x_par[an][subj][model][roi] for an in ans]))
                                     y_par[analysis][subj][model][roi] = np.hstack(tuple([y_par[an][subj][model][roi] for an in ans]))
                                     rsq[analysis][subj][model][roi] = np.hstack(tuple([rsq[an][subj][model][roi] for an in ans]))
+                        
                                     
+                                if zscore_xdata:
+                                    x_par[analysis][subj][model][roi] = zscore(x_par[analysis][subj][model][roi])
+                                if zscore_ydata:
+                                    y_par[analysis][subj][model][roi] = zscore(y_par[analysis][subj][model][roi])
+                                if not rsq_weights:
+                                    rsq[analysis][subj][model][roi] = np.ones_like(rsq[analysis][subj][model][roi])
+                            
 
                         for i, roi in enumerate([r for r in rois if 'custom.' in r or 'HCP' in r]):
                             if i>0:
@@ -1410,7 +1424,7 @@ class visualize_results(object):
                                     else:
                                         
                                         pl.bar(bar_position, bar_height, width=bar_or_violin_width, yerr=bar_err, 
-                                               edgecolor='black', label=model, color=model_colors[model])
+                                               edgecolor=model_colors[model], label=model, color=model_colors[model])
                                     
 
                                     
@@ -1612,7 +1626,7 @@ class visualize_results(object):
                                                     
                                     else:
                                         pl.bar(bar_position, bar_height, width=bar_or_violin_width, yerr=bar_err, 
-                                               edgecolor='black', color=cmap_rois[i])                                        
+                                               edgecolor=cmap_rois[i], color=cmap_rois[i])                                        
                                 
                                 bar_position += bar_or_violin_width
 
@@ -1890,7 +1904,7 @@ class visualize_results(object):
     
                                 if save_figures:
 
-                                    if x_param_model != None:
+                                    if x_param_model is not None:
                                         pl.savefig(opj(figure_path, f"{subj} {model} {y_parameter.replace('/','')} VS {x_param_model} {x_parameter.replace('/','')}.pdf"), dpi=600, bbox_inches='tight')
                                     else:
                                         pl.savefig(opj(figure_path,  f"{subj} {model} {y_parameter.replace('/','')} VS {x_parameter.replace('/','')}.pdf"), dpi=600, bbox_inches='tight')
@@ -1899,7 +1913,10 @@ class visualize_results(object):
     
     def multidim_analysis(self, parameters, rois, rsq_thresh, save_figures, figure_path, space_names = 'fsnative',
                     analysis_names = 'all', subject_ids='all', y_parameter_toplevel=None,
-                    x_dims_idx=None, y_dims_idx=None):
+                    x_dims_idx=None, y_dims_idx=None, zscore_data=False, size_response_curves = False,
+                    plot_corr_matrix = False, regress_params=False, multidim_y = False, cv_regression = False):
+        
+        np.set_printoptions(precision=4,suppress=True)
 
         if not os.path.exists(figure_path):
             os.makedirs(figure_path)
@@ -1948,8 +1965,6 @@ class visualize_results(object):
             multidim_param_array = dd(lambda:dd(lambda:dd(list)))
             dimensions = dd(lambda:dd(lambda:dd(list)))
             
-            rsq_predictions = []
-            corr_predictions = []
             
             response_functions = dd(list)
                
@@ -1960,7 +1975,7 @@ class visualize_results(object):
                 else:
                     subjects = [item for item in analysis_res.items() if item[0] in subject_ids]
                 
-                if len(subjects)>1:
+                if len(subjects)>1 and space != 'fsaverage':
                     subjects.append(('Group', {}))
 
                 for subj, subj_res in subjects:
@@ -2032,29 +2047,35 @@ class visualize_results(object):
                                     for model in self.only_models:
                                         if model in subj_res['Processed Results'][param]:                       
                                             dimensions[analysis][subj][roi].append(f"{param} {model}")
- 
-                                            multidim_param_array[analysis][subj][roi].append(subj_res['Processed Results'][param][model][alpha[analysis][subj][roi]])
+                                            
+                                            if zscore_data:
+                                                multidim_param_array[analysis][subj][roi].append(zscore(subj_res['Processed Results'][param][model][alpha[analysis][subj][roi]]))
+                                            else:
+                                                multidim_param_array[analysis][subj][roi].append(subj_res['Processed Results'][param][model][alpha[analysis][subj][roi]])
+                                                
                                     
                                     if y_parameter_toplevel != None:
                                         if param in subj_res['Processed Results'][y_parameter_toplevel]:
                                             dimensions[analysis][subj][roi].append(f"{param}")
-                                            multidim_param_array[analysis][subj][roi].append(subj_res['Processed Results'][y_parameter_toplevel][param][alpha[analysis][subj][roi]])
-                                    
-                                            
-                                            
-                                            
+                                            if zscore_data:
+                                                multidim_param_array[analysis][subj][roi].append(zscore(subj_res['Processed Results'][y_parameter_toplevel][param][alpha[analysis][subj][roi]]))
+                                            else:
+                                                multidim_param_array[analysis][subj][roi].append(subj_res['Processed Results'][y_parameter_toplevel][param][alpha[analysis][subj][roi]])
+                                                
+
                                 #multidim_param_array[analysis][subj][roi] = zscore(np.array([x for _,x in sorted(zip(dimensions[analysis][subj][roi],multidim_param_array[analysis][subj][roi]))]), axis=1)
+                                
                                 multidim_param_array[analysis][subj][roi] = np.array([x for _,x in sorted(zip(dimensions[analysis][subj][roi],multidim_param_array[analysis][subj][roi]))])
 
                                 
-                            elif len(subjects)>1 and 'fsaverage' not in subjects:
+                            elif len(subjects)>1 and space != 'fsaverage':
                                 #group data
                                 dimensions[analysis][subj][roi] = dimensions[analysis][subjects[0][0]][roi]
                                 alpha[analysis][subj][roi] = np.hstack(tuple([alpha[analysis][sid][roi] for sid in alpha[analysis] if 'sub' in sid]))
                                 multidim_param_array[analysis][subj][roi] = np.hstack(tuple([multidim_param_array[analysis][sid][roi] for sid in multidim_param_array[analysis] if 'sub' in sid]))
  
                                 
-                        elif 'fsaverage' not in subjects:
+                        elif space != 'fsaverage':
                             #all analyses data
                             ans = [an[0] for an in analyses if 'mean' not in an[0]]
                             dimensions[analysis][subj][roi] = dimensions[analyses[0][0]][subj][roi]
@@ -2065,12 +2086,14 @@ class visualize_results(object):
                     
                         ordered_dimensions = sorted(dimensions[analysis][subj][roi])
                         
+                for subj, subj_res in subjects:
+                    for i, roi in enumerate(rois):  
                         
-                        if ('mean' in analysis) or subj == 'fsaverage':
+                        if ('mean' in analysis) or 'fsaverage' in subj:
                             print(f"{analysis} {subj} {roi}")
                             
                             #print(multidim_param_array[analysis][subj][roi].shape)
-                            plot_corr_matrix = False
+                            
                             if plot_corr_matrix:
                                 pl.figure(figsize=(12,12))
                                 correlation_matrix = np.corrcoef(multidim_param_array[analysis][subj][roi])
@@ -2105,39 +2128,34 @@ class visualize_results(object):
                                     tick_x.set_color(tick_color)
                                     tick_y.set_color(tick_color)
                                 
-                            regress_params=False
+                            
                             if regress_params:
                                 if x_dims_idx is None or y_dims_idx is None:    
                                     if y_parameter_toplevel != None:
                                         x_dims = [dim for dim, _ in enumerate(ordered_dimensions) if dim not in rec_dims]
                                         y_dims = rec_dims
                                     else:
-                                        x_dims = [dim for dim, dim_name in enumerate(ordered_dimensions) if 'Norm_abcd' in dim_name]
-                                        y_dims = [dim for dim, dim_name in enumerate(ordered_dimensions) if 'Norm_abcd' not in dim_name]
+                                        x_dims = list(set([dim for dim, dim_name in enumerate(ordered_dimensions) if 'Norm_abcd' in dim_name]))
+                                        y_dims = list(set([dim for dim, dim_name in enumerate(ordered_dimensions) if 'Norm_abcd' not in dim_name]))
                                 else:
                                     
-                                    x_dims = [dim for dim, dim_name in enumerate(ordered_dimensions) for x in x_dims_idx if parameters[x] in dim_name]
-                                    y_dims = [dim for dim, dim_name in enumerate(ordered_dimensions) for y in y_dims_idx if parameters[y] in dim_name]
+                                    x_dims = list(set([dim for dim, dim_name in enumerate(ordered_dimensions) for x in x_dims_idx if dim_name.startswith(parameters[x])]))
+                                    y_dims = list(set([dim for dim, dim_name in enumerate(ordered_dimensions) for y in y_dims_idx if dim_name.startswith(parameters[y])]))
                                     
-                                print(f"{[ordered_dimensions[x_dim] for x_dim in x_dims]}")
-                                print(f"{[ordered_dimensions[y_dim] for y_dim in y_dims]}")
+                                print(f"X-dims: {[ordered_dimensions[x_dim] for x_dim in x_dims]}")
+                                print(f"Y-dims: {[ordered_dimensions[y_dim] for y_dim in y_dims]}")
                                 
                                 X = multidim_param_array[analysis][subj][roi][x_dims].T
+                                print(f"Sample size: {X.shape[0]}")
                                 
-                                y_1d = True
-                                if y_1d:
-                                    print("1D y")
-                                    for y_dim in y_dims:
-                                        
-                                        y = multidim_param_array[analysis][subj][roi][y_dim].T
-        
-                                        # pls1 = PLSRegression(n_components=2)
-                                        # pls1.fit(X, y)
+                                try:
+                                    if not multidim_y:
+                                        print("1D y")
+                                        for y_dim in y_dims:
                                             
-                                        # print(f"Estimated betas {ordered_dimensions[y_dim]} {pls1.coef_}")     
-                                        # print(f"RSq {pls1.score(X,y)}")
-                                        
-                                        if len(y)>0:
+                                            y = multidim_param_array[analysis][subj][roi][y_dim].T
+                                            
+                                            
                                             ls1 = LinearRegression()
                                             ls1.fit(X,y)
                                             print(f"Estimated betas {ordered_dimensions[y_dim]} {ls1.coef_}") 
@@ -2145,20 +2163,67 @@ class visualize_results(object):
                                             print(f"RSq {rsq_prediction}")
                                             corr_prediction = np.corrcoef(ls1.predict(X), y)[0,1]
                                             print(f"corr prediction {corr_prediction}")
-                                            rsq_predictions.append(rsq_prediction)
-                                            corr_predictions.append(corr_prediction)
-                                else:
-                                    
-                                    print("Multidim Y")
-                                    Y = multidim_param_array[analysis][subj][roi][y_dims].T
-        
-                                    pls1 = PLSRegression(n_components=2)
-                                    pls1.fit(X, Y)
                                             
-                                    print(f"Estimated betas {[ordered_dimensions[y_dim] for y_dim in y_dims]} {pls1.coef_}")     
-                                    print(f"RSq {pls1.score(X,Y)}")
+                                            if cv_regression == True:
+                                                for cv_subj in [s for s,_ in subjects if s!='fsaverage' and s!='Group' and s!=subj]:
+                                                    print(f"CV regression (fit on {subj}, test on {cv_subj})")
+                                                    X_cv = multidim_param_array[analysis][cv_subj][roi][x_dims].T
+                                                    y_cv = multidim_param_array[analysis][cv_subj][roi][y_dim].T
+                                                    rsq_prediction = ls1.score(X_cv,y_cv)
+                                                    print(f"CV RSq {rsq_prediction}")
+                                                    corr_prediction = np.corrcoef(ls1.predict(X), y)[0,1]
+                                                    print(f"CV corr prediction {corr_prediction}")                                                    
+
+
+                                    else:
+                                        
+                                        print("Multidim Y")
+                                        Y = multidim_param_array[analysis][subj][roi][y_dims].T
+                                        
+
+                                        
+                                        for n_components in range(1, 1+X.shape[1]):
+                                            print(f"Performing PLS with {n_components} components")
+                                            pls = PLSRegression(n_components)
+                                            pls.fit(X, Y)
+                                            
+                                            print(f"Estimated betas \n {[ordered_dimensions[y_dim] for y_dim in y_dims]} \n {np.array(pls.coef_)}")
+                                            print(f"beta sums: {np.abs(np.array(pls.coef_)).sum(1)}")
+                                            pred = pls.predict(X)
+                                            corr_prediction = []
+                                            rsq_prediction = []
+                                            
+                                            for p in range(pred.shape[1]):
+                                                corr_prediction.append(np.corrcoef(pred[:,p], Y[:,p])[0,1])
+                                                rsq_prediction.append(1-np.sum((pred[:,p]-Y[:,p])**2)/(pred.shape[0]*Y[:,p].var()))
+                                                
+                                            print(f"RSq total {pls.score(X,Y)}")
+                                            print(f"RSq predictions {np.array(rsq_prediction)}")
+                                            print(f"corr predictions {np.array(corr_prediction)}")
+                                            
+                                            if cv_regression == True:
+                                                for cv_subj in [s for s,_ in subjects if s!='fsaverage' and s!='Group' and s!=subj]:
+                                                    print(f"CV regression (fit on {subj}, test on {cv_subj})")
+                                                    X_cv = multidim_param_array[analysis][cv_subj][roi][x_dims].T
+                                                    Y_cv = multidim_param_array[analysis][cv_subj][roi][y_dims].T
+                                                    
+                                                    pred = pls.predict(X_cv)
+                                                    corr_prediction = []
+                                                    rsq_prediction = []
+                                                    
+                                                    for p in range(pred.shape[1]):
+                                                        corr_prediction.append(np.corrcoef(pred[:,p], Y_cv[:,p])[0,1])
+                                                        rsq_prediction.append(1-np.sum((pred[:,p]-Y_cv[:,p])**2)/(pred.shape[0]*Y_cv[:,p].var()))
+                                                        
+                                                    print(f"CVRSq total {pls.score(X_cv,Y_cv)}")
+                                                    print(f"CVRSq predictions {np.array(rsq_prediction)}")
+                                                    print(f"CV corr predictions {np.array(corr_prediction)}")
+                                        
+                                except Exception as e:
+                                    print(e)
+                                    pass
                             
-                            size_response_curves = True
+                            
                             if size_response_curves:
                                 
                                 curve_par_dict = dict()
@@ -2231,7 +2296,7 @@ class visualize_results(object):
                                     #curve_par_dict[par] = np.median(multidim_param_array[analysis][subj][roi][ordered_dimensions.index(f'{par} Norm_abcd')])
                                     
                                     curve_par_dict[par] = weightstats.DescrStatsW(multidim_param_array[analysis][subj][roi][ordered_dimensions.index(f'{par} Norm_abcd')],
-                                                        weights=multidim_param_array[analysis][subj][roi][ordered_dimensions.index(f'RSq Norm_abcd')])
+                                                        weights=multidim_param_array[analysis][subj][roi][ordered_dimensions.index('RSq Norm_abcd')])
                                     
                                     #curve_par_dict[par] = np.copy(multidim_param_array[analysis][subj][roi][ordered_dimensions.index(f'{par} Norm_abcd')])
                                     #print(f"{roi} {par} {curve_par_dict[par]}")
@@ -2299,32 +2364,32 @@ class visualize_results(object):
                                     
                                     
 
-
-                                actual_response_1R = weightstats.DescrStatsW(multidim_param_array['fit-task-1R_fit-runs-all'][subj][roi][ordered_dimensions.index(resp_measure)],
-                                                                          weights=multidim_param_array['fit-task-1R_fit-runs-all'][subj][roi][ordered_dimensions.index(f'RSq Norm_abcd')])
-                                actual_response_2R = weightstats.DescrStatsW(multidim_param_array['fit-task-2R_fit-runs-all'][subj][roi][ordered_dimensions.index(resp_measure)],
-                                                                          weights=multidim_param_array['fit-task-2R_fit-runs-all'][subj][roi][ordered_dimensions.index(f'RSq Norm_abcd')])
-                                actual_response_4R = weightstats.DescrStatsW(multidim_param_array['fit-task-4R_fit-runs-all'][subj][roi][ordered_dimensions.index(resp_measure)],
-                                                                          weights=multidim_param_array['fit-task-4R_fit-runs-all'][subj][roi][ordered_dimensions.index(f'RSq Norm_abcd')])
-                                actual_response_1S = weightstats.DescrStatsW(multidim_param_array['fit-task-1S_fit-runs-all'][subj][roi][ordered_dimensions.index(resp_measure)],
-                                                                          weights=multidim_param_array['fit-task-1S_fit-runs-all'][subj][roi][ordered_dimensions.index(f'RSq Norm_abcd')])
-                                actual_response_4F = weightstats.DescrStatsW(multidim_param_array['fit-task-4F_fit-runs-all'][subj][roi][ordered_dimensions.index(resp_measure)],
-                                                                          weights=multidim_param_array['fit-task-4F_fit-runs-all'][subj][roi][ordered_dimensions.index(f'RSq Norm_abcd')])
-                               
-                                actual_response_1 = weightstats.DescrStatsW(np.concatenate((multidim_param_array['fit-task-1R_fit-runs-all'][subj][roi][ordered_dimensions.index(resp_measure)],
-                                                                                          multidim_param_array['fit-task-1S_fit-runs-all'][subj][roi][ordered_dimensions.index(resp_measure)])),
-                                                                          weights=np.concatenate((multidim_param_array['fit-task-1R_fit-runs-all'][subj][roi][ordered_dimensions.index(f'RSq Norm_abcd')],
-                                                                                                  multidim_param_array['fit-task-1S_fit-runs-all'][subj][roi][ordered_dimensions.index(f'RSq Norm_abcd')])))
-                                actual_response_4 = weightstats.DescrStatsW(np.concatenate((multidim_param_array['fit-task-4R_fit-runs-all'][subj][roi][ordered_dimensions.index(resp_measure)],
-                                                                                          multidim_param_array['fit-task-4F_fit-runs-all'][subj][roi][ordered_dimensions.index(resp_measure)])),
-                                                                        weights=np.concatenate((multidim_param_array['fit-task-4R_fit-runs-all'][subj][roi][ordered_dimensions.index(f'RSq Norm_abcd')],
-                                                                                                  multidim_param_array['fit-task-4F_fit-runs-all'][subj][roi][ordered_dimensions.index(f'RSq Norm_abcd')])))
-                               
-                                
-                                data_sr = [actual_response_1.mean, actual_response_1.mean,actual_response_2R.mean,actual_response_4.mean,actual_response_4.mean]/np.max([actual_response_1.mean, actual_response_1.mean,actual_response_2R.mean,actual_response_4.mean,actual_response_4.mean])
-                                yerr_data_sr = np.array([np.abs(ss.zconfint_mean(alpha=0.01/upsampling_corr_factor)-ss.mean) for ss in [actual_response_1,actual_response_1,actual_response_2R,actual_response_4,actual_response_4]]).T
-                                #yerr_data_sr /= np.max([actual_response_1R.mean,actual_response_1S.mean,actual_response_2R.mean,actual_response_4R.mean,actual_response_4F.mean])
-                                
+                                if plot_data:
+                                    actual_response_1R = weightstats.DescrStatsW(multidim_param_array['fit-task-1R_fit-runs-all'][subj][roi][ordered_dimensions.index(resp_measure)],
+                                                                              weights=multidim_param_array['fit-task-1R_fit-runs-all'][subj][roi][ordered_dimensions.index('RSq Norm_abcd')])
+                                    actual_response_2R = weightstats.DescrStatsW(multidim_param_array['fit-task-2R_fit-runs-all'][subj][roi][ordered_dimensions.index(resp_measure)],
+                                                                              weights=multidim_param_array['fit-task-2R_fit-runs-all'][subj][roi][ordered_dimensions.index('RSq Norm_abcd')])
+                                    actual_response_4R = weightstats.DescrStatsW(multidim_param_array['fit-task-4R_fit-runs-all'][subj][roi][ordered_dimensions.index(resp_measure)],
+                                                                              weights=multidim_param_array['fit-task-4R_fit-runs-all'][subj][roi][ordered_dimensions.index('RSq Norm_abcd')])
+                                    actual_response_1S = weightstats.DescrStatsW(multidim_param_array['fit-task-1S_fit-runs-all'][subj][roi][ordered_dimensions.index(resp_measure)],
+                                                                              weights=multidim_param_array['fit-task-1S_fit-runs-all'][subj][roi][ordered_dimensions.index('RSq Norm_abcd')])
+                                    actual_response_4F = weightstats.DescrStatsW(multidim_param_array['fit-task-4F_fit-runs-all'][subj][roi][ordered_dimensions.index(resp_measure)],
+                                                                              weights=multidim_param_array['fit-task-4F_fit-runs-all'][subj][roi][ordered_dimensions.index('RSq Norm_abcd')])
+                                   
+                                    actual_response_1 = weightstats.DescrStatsW(np.concatenate((multidim_param_array['fit-task-1R_fit-runs-all'][subj][roi][ordered_dimensions.index(resp_measure)],
+                                                                                              multidim_param_array['fit-task-1S_fit-runs-all'][subj][roi][ordered_dimensions.index(resp_measure)])),
+                                                                              weights=np.concatenate((multidim_param_array['fit-task-1R_fit-runs-all'][subj][roi][ordered_dimensions.index('RSq Norm_abcd')],
+                                                                                                      multidim_param_array['fit-task-1S_fit-runs-all'][subj][roi][ordered_dimensions.index('RSq Norm_abcd')])))
+                                    actual_response_4 = weightstats.DescrStatsW(np.concatenate((multidim_param_array['fit-task-4R_fit-runs-all'][subj][roi][ordered_dimensions.index(resp_measure)],
+                                                                                              multidim_param_array['fit-task-4F_fit-runs-all'][subj][roi][ordered_dimensions.index(resp_measure)])),
+                                                                            weights=np.concatenate((multidim_param_array['fit-task-4R_fit-runs-all'][subj][roi][ordered_dimensions.index('RSq Norm_abcd')],
+                                                                                                      multidim_param_array['fit-task-4F_fit-runs-all'][subj][roi][ordered_dimensions.index('RSq Norm_abcd')])))
+                                   
+                                    
+                                    data_sr = [actual_response_1.mean, actual_response_1.mean,actual_response_2R.mean,actual_response_4.mean,actual_response_4.mean]/np.max([actual_response_1.mean, actual_response_1.mean,actual_response_2R.mean,actual_response_4.mean,actual_response_4.mean])
+                                    yerr_data_sr = np.array([np.abs(ss.zconfint_mean(alpha=0.01/upsampling_corr_factor)-ss.mean) for ss in [actual_response_1,actual_response_1,actual_response_2R,actual_response_4,actual_response_4]]).T
+                                    #yerr_data_sr /= np.max([actual_response_1R.mean,actual_response_1S.mean,actual_response_2R.mean,actual_response_4R.mean,actual_response_4F.mean])
+                                    
 
                                 if subj == 'Group':
                                     pl.figure(f"Size response {roi.replace('custom.','').replace('HCPQ1Q6.','')}", figsize = (8,8))
@@ -2344,7 +2409,7 @@ class visualize_results(object):
                                         pl.savefig(opj(figure_path,f"sr_functions_{roi.replace('custom.','').replace('HCPQ1Q6.','')}.pdf"),dpi=600, bbox_inches='tight')
                                     
                                     
-                                    pl.figure(f'Size response all rois', figsize = (8,8))
+                                    pl.figure('Size response all rois', figsize = (8,8))
 
                                     
                                     if roi == 'all_custom':
