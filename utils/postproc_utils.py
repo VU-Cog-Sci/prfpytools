@@ -429,27 +429,27 @@ def model_wrapper(model,**kwargs):
         return Norm_Iso2DGaussianModel(**kwargs)
 
 def create_model_rf_wrapper(model,stim,params,normalize_RFs=False):
-    prf = params[3]*np.rot90(gauss2D_iso_cart(x=stim.x_coordinates[...,np.newaxis],
+    prf = params[3][...,np.newaxis,np.newaxis]*np.rot90(gauss2D_iso_cart(x=stim.x_coordinates[...,np.newaxis],
                                y=stim.y_coordinates[...,np.newaxis],
                                mu=(params[0], params[1]),
                                sigma=params[2],
                               normalize_RFs=normalize_RFs).T, axes=(1,2))
     if model == 'CSS':
-        prf **= params[5]
+        prf **= params[5][...,np.newaxis,np.newaxis]
     elif model == 'DoG':
-        prf -= params[5]*np.rot90(gauss2D_iso_cart(x=stim.x_coordinates[...,np.newaxis],
+        prf -= params[5][...,np.newaxis,np.newaxis]*np.rot90(gauss2D_iso_cart(x=stim.x_coordinates[...,np.newaxis],
                                y=stim.y_coordinates[...,np.newaxis],
                                mu=(params[0], params[1]),
                                sigma=params[6],
                               normalize_RFs=normalize_RFs).T, axes=(1,2))
     elif 'Norm' in model:
-        prf += params[7]
-        prf /= (params[5]*np.rot90(gauss2D_iso_cart(x=stim.x_coordinates[...,np.newaxis],
+        prf += params[7][...,np.newaxis,np.newaxis]
+        prf /= (params[5][...,np.newaxis,np.newaxis]*np.rot90(gauss2D_iso_cart(x=stim.x_coordinates[...,np.newaxis],
                                y=stim.y_coordinates[...,np.newaxis],
                                mu=(params[0], params[1]),
                                sigma=params[6],
-                              normalize_RFs=normalize_RFs).T, axes=(1,2)) + params[8])
-        prf -= params[7]/params[8]
+                              normalize_RFs=normalize_RFs).T, axes=(1,2)) + params[8][...,np.newaxis,np.newaxis])
+        prf -= (params[7]/params[8])[...,np.newaxis,np.newaxis]
 
     return prf
 
