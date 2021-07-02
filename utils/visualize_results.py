@@ -24,7 +24,8 @@ from utils.preproc_utils import create_full_stim
 #import seaborn as sns
 
 import time
-from scipy.stats import sem, ks_2samp, ttest_1samp, wilcoxon, pearsonr, ttest_ind, ttest_rel, zscore
+from scipy.stats import sem, ks_2samp, ttest_1samp, wilcoxon, pearsonr, ttest_ind, ttest_rel, zscore, spearmanr
+from scipy.optimize import minimize
 
 opj = os.path.join
 
@@ -89,7 +90,13 @@ class visualize_results(object):
                     if k not in subject_list:
                         subject_list.append(k)
             else:
-                subject_list.append('fsaverage')
+                
+                if 'fsaverage' == k and 'fsaverage' not in subject_list:
+                    subject_list.append('fsaverage')
+                    self.get_subjects(v, subject_list)
+                else:
+                    if k not in subject_list:
+                        subject_list.append(k)
         
         self.subjects = subject_list
         return
@@ -146,7 +153,11 @@ class visualize_results(object):
                 self.idx_rois[subj]['V1']=np.concatenate((self.idx_rois[subj]['V1v'],self.idx_rois[subj]['V1d']))
                 self.idx_rois[subj]['V2']=np.concatenate((self.idx_rois[subj]['V2v'],self.idx_rois[subj]['V2d']))
                 self.idx_rois[subj]['V3']=np.concatenate((self.idx_rois[subj]['V3v'],self.idx_rois[subj]['V3d']))
-            
+                self.idx_rois[subj]['VO'] = np.concatenate((self.idx_rois[subj]['VO1'],self.idx_rois[subj]['VO2']))
+                self.idx_rois[subj]['TO'] = np.concatenate((self.idx_rois[subj]['TO1'],self.idx_rois[subj]['TO2']))
+                self.idx_rois[subj]['LO'] = np.concatenate((self.idx_rois[subj]['LO1'],self.idx_rois[subj]['LO2']))
+                self.idx_rois[subj]['V3AB'] = np.concatenate((self.idx_rois[subj]['V3A'],self.idx_rois[subj]['V3B']))
+                self.idx_rois[subj]['IPS'] = np.concatenate(tuple([self.idx_rois[subj][rroi] for rroi in self.idx_rois[subj].keys() if 'IPS' in rroi]))            
                 #parse custom ROIs if they have been created
                 for roi in [el for el in os.listdir(opj(self.fs_dir, subj, 'label')) if 'custom' in el]:
                     roi = roi.replace('lh.','').replace('rh.','').replace('.label','')
@@ -174,6 +185,8 @@ class visualize_results(object):
                 self.idx_rois[subj]['HCPQ1Q6.LO'] = np.concatenate((self.idx_rois[subj]['HCPQ1Q6.LO1'],self.idx_rois[subj]['HCPQ1Q6.LO2'],self.idx_rois[subj]['HCPQ1Q6.LO3']))
                 self.idx_rois[subj]['HCPQ1Q6.TO'] = np.concatenate((self.idx_rois[subj]['HCPQ1Q6.MST'],self.idx_rois[subj]['HCPQ1Q6.MT']))
                 
+
+                
             if import_flatmaps:
                 for roi_name, roi_idx in self.idx_rois[subj].items():
                     if 'custom' in roi_name:
@@ -195,6 +208,11 @@ class visualize_results(object):
                 except Exception as e:
                     print(e)
                     pass    
+        
+        if 'fsaverage' in self.spaces and 'HCP' in self.spaces:
+            for sj in [s for s in self.subjects if 'fsaverage' in s and 'fsaverage' != s]:
+                self.idx_rois[sj] = deepcopy(self.idx_rois['fsaverage'])
+
         return
 
     def set_alpha(self, space_names='all', only_models=None, ecc_min=0, ecc_max=5):
@@ -277,10 +295,11 @@ class visualize_results(object):
                     #print(f"{model} rsq {p_r['RSq'][model][index]}") 
                 
                     
-                #sorting = np.argsort(subj_res['Processed Results']['RSq']['CSS']-subj_res['Processed Results']['RSq']['Norm_abcd'])
+                #sorting = np.argsort(subj_res['Processed Results']['RSq']['CSS'])[::-1]#-subj_res['Processed Results']['RSq']['Norm_abcd'])
                 #alpha_sort = subj_res['Processed Results']['Alpha']['all'][sorting]
-                #sorting = sorting[(alpha_sort>rsq_thresh)*(subj_res['Processed Results']['RSq']['Norm_abcd'][sorting]-subj_res['Processed Results']['RSq']['DoG'][sorting]>0.1)*(subj_res['Processed Results']['RSq']['Norm_abcd'][sorting]>0.6)]
+                #sorting = sorting[(alpha_sort>rsq_thresh)]#*(subj_res['Processed Results']['RSq']['Norm_abcd'][sorting]-subj_res['Processed Results']['RSq']['DoG'][sorting]>0.1)*(subj_res['Processed Results']['RSq']['Norm_abcd'][sorting]>0.6)]
                 #index = sorting[self.click]
+                ###
                 #surr_vertices = [2624, 285120, 5642, 144995, 5273, 2927, 1266]
                 #both_vertices = [9372, 9383, 17766, 9384]#[161130, 9372, 9383, 302707, 17766, 9395, 9384]
                 #index = both_vertices[self.click]
@@ -443,7 +462,7 @@ class visualize_results(object):
                 pl.ion()
     
                 if self.click==0:
-                    self.f, self.axes = pl.subplots(2,2,figsize=(10, 15),frameon=True, gridspec_kw={'width_ratios': [8, 2], 'height_ratios': [1,1]})
+                    self.f, self.axes = pl.subplots(2,2,figsize=(10, 30),frameon=True, gridspec_kw={'width_ratios': [8, 2], 'height_ratios': [1,1]})
                     self.f.set_tight_layout(True)
                 else:
                     self.cbar.remove()
@@ -560,6 +579,8 @@ class visualize_results(object):
                     if space != 'fsaverage':
                         tc_stats = subj_res['Timecourse Stats']
                         mask = subj_res['mask']
+                    else:
+                        mask = np.ones_like(p_r['RSq'][list(models)[0]])
 
          
                     if rois != 'all':
@@ -773,7 +794,8 @@ class visualize_results(object):
                         
                         for model in self.only_models:
                             ds_amp[model] = cortex.Vertex2D(p_r['Amplitude'][model], p_r['Alpha'][model], subject=pycortex_subj, 
-                                                            vmin=-1, vmax=1, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw
+                                                            vmin=np.quantile(p_r['Amplitude'][model][p_r['Alpha'][model]>rsq_thresh],0.1), 
+                                                            vmax=np.quantile(p_r['Amplitude'][model][p_r['Alpha'][model]>rsq_thresh],0.9), vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw
         
                         self.js_handle_dict[space][analysis][subj]['js_handle_amp'] = cortex.webgl.show(ds_amp, pickerfun=clicker_function, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)
                         
@@ -854,9 +876,11 @@ class visualize_results(object):
                             ds_norm_baselines[f'{model} Param. D'] = cortex.Vertex2D(p_r['Norm Param. D'][model], p_r['Alpha'][model], subject=pycortex_subj, 
                                                                          vmin=np.quantile(p_r['Norm Param. D'][model][p_r['Alpha'][model]>rsq_thresh],0.1), 
                                                                          vmax=np.quantile(p_r['Norm Param. D'][model][p_r['Alpha'][model]>rsq_thresh],0.9), vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw
-                            ds_norm_baselines[f'{model} Ratio (B/D)'] = cortex.Vertex2D(p_r['Ratio (B/D)'][model], p_r['Alpha'][model], subject=pycortex_subj, 
-                                                                         vmin=np.quantile(p_r['Ratio (B/D)'][model][p_r['Alpha'][model]>rsq_thresh],0.1), 
-                                                                         vmax=np.quantile(p_r['Ratio (B/D)'][model][p_r['Alpha'][model]>rsq_thresh],0.9), vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw
+                            
+                            # if 'Ratio (B/D)' in p_r:
+                            #     ds_norm_baselines[f'{model} Ratio (B/D)'] = cortex.Vertex2D(p_r['Ratio (B/D)'][model], p_r['Alpha'][model], subject=pycortex_subj, 
+                            #                                              vmin=np.quantile(p_r['Ratio (B/D)'][model][p_r['Alpha'][model]>rsq_thresh],0.1), 
+                            #                                              vmax=np.quantile(p_r['Ratio (B/D)'][model][p_r['Alpha'][model]>rsq_thresh],0.9), vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw
                         
                         self.js_handle_dict[space][analysis][subj]['js_handle_norm_baselines'] = cortex.webgl.show(ds_norm_baselines, pickerfun=clicker_function, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)    
         print('-----')                              
@@ -1016,9 +1040,7 @@ class visualize_results(object):
                                           
                 
                                 
-                        #fsaverage_group_average = np.ma.average(np.array([fsaverage_param[sid] for sid in fsaverage_param]),
-                        #                                      weights=np.array([fsaverage_rsq[sid] for sid in fsaverage_rsq]),
-                        #                                      axis=0)
+
                         fsaverage_group_average = np.nanmean([fsaverage_param[sid] for sid in fsaverage_param], axis=0)
                         
                         # for i in range(len(fsaverage_group_average)):
@@ -1045,7 +1067,9 @@ class visualize_results(object):
                     space_names = 'fsnative', analysis_names = 'all', subject_ids='all', y_parameter_toplevel=None, 
                     ylim={}, xlim={}, log_yaxis=False, log_xaxis = False, nr_bins = 8, rsq_weights=True,
                     x_param_model=None, violin=False, scatter=False, diff_gauss=False, diff_gauss_x=False,
-                    means_only=False, stats_on_plot=False, bin_by='size', zscore_ydata=False, zscore_xdata=False):
+                    means_only=False, stats_on_plot=False, bin_by='size', zscore_ydata=False, zscore_xdata=False,
+                    bootstrap_means_errs = False, exp_fit = False, show_legend=False, each_subj_on_group=False,
+                    bold_voxel_volume = None):
         """
         
 
@@ -1093,11 +1117,11 @@ class visualize_results(object):
         pl.rcParams['axes.spines.right'] = False
         pl.rcParams['axes.spines.top'] = False
         
-
+        base_fig_path = figure_path
         
-        cmap_values = list(np.linspace(0.9, 0.0, len([r for r in rois if 'custom.' in r or 'HCP' in r])))
+        cmap_values = list(np.linspace(0.9, 0.0, len([r for r in rois if 'all' not in r and 'combined' not in r and 'Brain' not in r])))
         
-        cmap_values += [0 for r in rois if 'custom.' not in r and 'HCP' not in r]
+        cmap_values += [0 for r in rois if 'all' in r or 'combined' in r or 'Brain' in r]
         
         cmap_rois = cm.get_cmap('nipy_spectral')(cmap_values)#
 
@@ -1109,8 +1133,6 @@ class visualize_results(object):
         for space, space_res in spaces:
             if 'fs' in space or 'HCP' in space:
                 
-                #upsampling correction: fsnative has approximately 3 times as many datapoints as original
-                upsampling_corr_factor = 3
                 #surrounds larger than this are excluded from surround size calculations
                 w_max=60
                 #remove absurd suppression index values
@@ -1118,7 +1140,7 @@ class visualize_results(object):
                 #css max
                 css_max=1
                 #max b and d
-                bd_max=1000
+                #bd_max=1000
                 #bar or violin width
                 bar_or_violin_width = 0.3
 
@@ -1152,6 +1174,8 @@ class visualize_results(object):
                     
                     if len(subjects)>1:
                         subjects.append(('Group', {}))
+                        
+                    figure_path = base_fig_path
 
                     if not os.path.exists(figure_path):
                         os.makedirs(figure_path)
@@ -1161,9 +1185,47 @@ class visualize_results(object):
                     figure_path = opj(figure_path, analysis)
                     if not os.path.exists(figure_path):
                         os.makedirs(figure_path)                            
-
+                    
+                    upsampling_corr_factors = []
                     for subj, subj_res in subjects:
-                        print(space+" "+analysis+" "+subj)
+                        print(f"{space} {analysis} {subj}")
+                         
+                        #upsampling correction: fsnative has approximately 3 times as many datapoints as original
+                        if subj != 'Group':
+                            if bold_voxel_volume is not None:
+                                
+                                print("Make sure bold_voxel_volume is specified in mm^3")
+                                
+                                try:
+                                    if subj.isdecimal() and space == 'HCP':
+                                        pycortex_subj = '999999'
+                                    else:
+                                        pycortex_subj = subj
+                                        
+                                    aseg = nb.load(opj(cortex.database.default_filestore,pycortex_subj,'anatomicals','aseg.nii.gz'))
+                                    anat_vox_vol = aseg.header.get_zooms()[0]*aseg.header.get_zooms()[1]*aseg.header.get_zooms()[2]
+                                    cortex_volume = ((aseg.get_fdata()==42).sum()+(aseg.get_fdata()==3).sum())*anat_vox_vol
+                                    nr_bold_voxels = cortex_volume/bold_voxel_volume
+                                    nr_surf_vertices = cortex.db.get_surfinfo(pycortex_subj).data.shape
+            
+                                    upsampling_corr_factor = nr_surf_vertices / nr_bold_voxels
+                                    
+              
+                                except Exception as e:
+                                    print(e)
+                                    print("Unable to perform upsampling correction.")
+                                    upsampling_corr_factor = 1
+                                    pass
+                                    
+                            else:
+                                print("BOLD voxel volume not specified. Not performing upsampling correction.")
+                                upsampling_corr_factor = 1
+                            upsampling_corr_factors.append(upsampling_corr_factor)
+                        else:
+                            upsampling_corr_factor = np.mean(upsampling_corr_factors)
+                            
+                        print(f"Upsampling correction factor: {upsampling_corr_factor}")
+                        
                         x_ticks=[]
                         x_labels=[]    
                         bar_position = 0
@@ -1203,7 +1265,7 @@ class visualize_results(object):
                                             
                                             else:
                                                 #, otherwise none
-                                                print("undefined ROI")
+                                                print(f"{roi}: undefined ROI")
                                                 alpha[analysis][subj][model][roi] = np.zeros_like(curr_alpha).astype('bool')
 
                                         
@@ -1234,12 +1296,12 @@ class visualize_results(object):
                                         if 'CSS Exponent' in x_parameter:
                                             alpha[analysis][subj][model][roi] *= (subj_res['Processed Results'][x_parameter][x_param_model]<css_max)
                                         
-                                        if 'Norm Param.' in y_parameter:
-                                            alpha[analysis][subj][model][roi] *= (subj_res['Processed Results'][y_parameter][model]<bd_max)                                            
-                                        if 'Norm Param.' in x_parameter:
-                                            alpha[analysis][subj][model][roi] *= (subj_res['Processed Results'][x_parameter][model]<bd_max)                                            
-                                            if x_param_model!=None:
-                                                alpha[analysis][subj][model][roi] *= (subj_res['Processed Results'][x_parameter][x_param_model]<bd_max)
+                                        # if 'Norm Param.' in y_parameter:
+                                        #     alpha[analysis][subj][model][roi] *= (subj_res['Processed Results'][y_parameter][model]<bd_max)                                            
+                                        # if 'Norm Param.' in x_parameter:
+                                        #     alpha[analysis][subj][model][roi] *= (subj_res['Processed Results'][x_parameter][model]<bd_max)                                            
+                                        #     if x_param_model!=None:
+                                        #         alpha[analysis][subj][model][roi] *= (subj_res['Processed Results'][x_parameter][x_param_model]<bd_max)
                                                                     
          
                                         #if 'ccrsq' in y_parameter.lower():
@@ -1335,15 +1397,24 @@ class visualize_results(object):
                                     rsq[analysis][subj][model][roi] = np.hstack(tuple([rsq[an][subj][model][roi] for an in ans]))
                         
                                     
+                                
+                                
+                                
                                 if zscore_xdata:
                                     x_par[analysis][subj][model][roi] = zscore(x_par[analysis][subj][model][roi])
                                 if zscore_ydata:
                                     y_par[analysis][subj][model][roi] = zscore(y_par[analysis][subj][model][roi])
+                                
+                                    
+                                
                                 if not rsq_weights:
                                     rsq[analysis][subj][model][roi] = np.ones_like(rsq[analysis][subj][model][roi])
                             
 
-                        for i, roi in enumerate([r for r in rois if 'custom.' in r or 'HCP' in r]):
+                        for i, roi in enumerate([r for r in rois if 'all' not in r and 'combined' not in r and 'Brain' not in r]):
+                            
+                            samples_in_roi = len(y_par[analysis][subj][model][roi])
+                            
                             if i>0:
                                 bar_position += (2*bar_or_violin_width)
                                 
@@ -1373,13 +1444,24 @@ class visualize_results(object):
                                     
                                 if 'Mean' in ylim:
                                     pl.ylim(ylim['Mean'])
-                                                                           
-                                full_roi_stats = weightstats.DescrStatsW(y_par[analysis][subj][model][roi],
-                                                        weights=rsq[analysis][subj][model][roi])
+                                    
                                 
-                                bar_height = full_roi_stats.mean
-                                bar_err = np.abs(full_roi_stats.zconfint_mean(alpha=0.01/upsampling_corr_factor) - bar_height).reshape(2,1)
-                                
+                                if bootstrap_means_errs:
+                                    
+                                    full_roi_stats = []
+                                    for ccc in range(1000):
+                                        samp_idx = np.random.randint(0, samples_in_roi, int(samples_in_roi/upsampling_corr_factor))
+                                        full_roi_stats.append(weightstats.DescrStatsW(y_par[analysis][subj][model][roi][samp_idx],
+                                                            weights=rsq[analysis][subj][model][roi][samp_idx]).mean)
+                                    
+                                    bar_height = np.mean(full_roi_stats)
+                                    bar_err = sem(full_roi_stats)
+                                else:
+                                    full_roi_stats = weightstats.DescrStatsW(y_par[analysis][subj][model][roi],
+                                                            weights=rsq[analysis][subj][model][roi])
+                                    bar_height = full_roi_stats.mean
+                                    bar_err = np.abs(full_roi_stats.zconfint_mean(alpha=0.01/upsampling_corr_factor) - bar_height).reshape(2,1)
+
 
                                 if len(self.only_models)>1:
                                     if violin:
@@ -1422,9 +1504,23 @@ class visualize_results(object):
                                             
                                         bar_height = y_par[analysis][subj][model][roi].max()
                                     else:
+                                        if subj == 'Group' and each_subj_on_group:
+                                            bar_err = None
                                         
                                         pl.bar(bar_position, bar_height, width=bar_or_violin_width, yerr=bar_err, 
                                                edgecolor=model_colors[model], label=model, color=model_colors[model])
+                                        
+                                        if subj == 'Group' and each_subj_on_group:
+                                            ssj_datapoints_x = np.linspace(bar_position-0.66*bar_or_violin_width, bar_position+0.66*bar_or_violin_width, len(subjects)-1)
+                                            for ssj_nr, ssj in enumerate(subjects[:-1]):
+                                                
+                                                ssj_stats = weightstats.DescrStatsW(y_par[analysis][ssj[0]][model][roi],
+                                                            weights=rsq[analysis][ssj[0]][model][roi])
+                                                
+                                                pl.errorbar(ssj_datapoints_x[ssj_nr],
+                                                ssj_stats.mean,
+                                                yerr=np.abs(ssj_stats.zconfint_mean(alpha=0.01/upsampling_corr_factor) - ssj_stats.mean).reshape(2,1),  
+                                                fmt='s',  mec='k', color=model_colors[model], ecolor='k')
                                     
 
                                     
@@ -1625,8 +1721,25 @@ class visualize_results(object):
                                             pass
                                                     
                                     else:
+                                        if subj == 'Group' and each_subj_on_group:
+                                            bar_err = None
+                                            
                                         pl.bar(bar_position, bar_height, width=bar_or_violin_width, yerr=bar_err, 
-                                               edgecolor=cmap_rois[i], color=cmap_rois[i])                                        
+                                               edgecolor=cmap_rois[i], color=cmap_rois[i])
+                                        
+                                        if subj == 'Group' and each_subj_on_group:
+                                            ssj_datapoints_x = np.linspace(bar_position-0.66*bar_or_violin_width, bar_position+0.66*bar_or_violin_width, len(subjects)-1)
+                                            for ssj_nr, ssj in enumerate(subjects[:-1]):
+                                                
+                                                ssj_stats = weightstats.DescrStatsW(y_par[analysis][ssj[0]][model][roi],
+                                                            weights=rsq[analysis][ssj[0]][model][roi])
+                                                
+                                                print(f"{roi} {cmap_rois[i]}")
+                                                
+                                                pl.errorbar(ssj_datapoints_x[ssj_nr],
+                                                ssj_stats.mean,
+                                                yerr=np.abs(ssj_stats.zconfint_mean(alpha=0.01/upsampling_corr_factor) - ssj_stats.mean).reshape(2,1),  
+                                                fmt='s',  mec='k', color=cmap_rois[i], ecolor='k')                                        
                                 
                                 bar_position += bar_or_violin_width
 
@@ -1685,6 +1798,9 @@ class visualize_results(object):
                                             
                                             rsq_stats[analysis][subj][model][roi].append(weightstats.DescrStatsW(rsq[analysis][subj][model][roi][x_par_quantile],
                                                                                                   weights=np.ones_like(rsq[analysis][subj][model][roi][x_par_quantile])))
+                                    
+                                        curr_x_bins = np.array([ss.mean for ss in x_par_stats[analysis][subj][model][roi]])
+                                        curr_y_bins = np.array([ss.mean for ss in y_par_stats[analysis][subj][model][roi]])
                                     except:
                                         pass    
     
@@ -1693,7 +1809,38 @@ class visualize_results(object):
                                             WLS = LinearRegression()
                                             WLS.fit(x_par[analysis][subj][model][roi].reshape(-1, 1), y_par[analysis][subj][model][roi], sample_weight=rsq[analysis][subj][model][roi])
 
-
+                                            wls_score = WLS.score(x_par[analysis][subj][model][roi].reshape(-1, 1),
+                                                                  y_par[analysis][subj][model][roi].reshape(-1, 1),
+                                                                sample_weight=rsq[analysis][subj][model][roi].reshape(-1, 1))
+                                            
+                                            _, pval_lin = spearmanr(x_par[analysis][subj][model][roi],y_par[analysis][subj][model][roi])
+                                            
+                                            print(f"{roi} {model} WLS score {wls_score}")
+                                            
+                                            
+                                            if exp_fit:
+                                                #start points for sigmoid fits
+                                                x0s = [[1,1,0.5,1],[-1,1,0.5,1],[-10,10,1,10],[10,10,1,10],[1,100,0.5,1],[-1,100,0.5,1],[-5,20,0.28,56]]
+                                                curr_min_res = np.inf
+                                                
+                                                for x0 in x0s:
+                                                                            
+                                                    res = minimize(lambda x,a,y:np.sum(rsq[analysis][subj][model][roi]*(y-x[0]/(x[1]*np.exp(-a*x[2])+1)-x[3])**2), x0=x0,
+                                                                   args=(x_par[analysis][subj][model][roi],
+                                                                         y_par[analysis][subj][model][roi]),
+                                                                   method='Powell', options={'ftol':1e-8, 'xtol':1e-8})
+                                                    if res['fun']<curr_min_res:
+                                                        exp_res = res
+                                                        curr_min_res = res['fun']
+                                                
+                                                
+                                                
+                                                exp_pred = exp_res['x'][3]+exp_res['x'][0]/(exp_res['x'][1]*np.exp(-exp_res['x'][2]*np.linspace(curr_x_bins.min(),curr_x_bins.max(),100))+1)
+                                                full_exp_pred = exp_res['x'][3]+exp_res['x'][0]/(exp_res['x'][1]*np.exp(-exp_res['x'][2]*x_par[analysis][subj][model][roi])+1)
+                                                
+                                                rsq_pred=1-(np.sum((y_par[analysis][subj][model][roi]-full_exp_pred)**2))/(len(y_par[analysis][subj][model][roi])*np.var(y_par[analysis][subj][model][roi]))
+                                                
+                                                        
                                             for c in range(200):
                                                 
                                                 sample = np.random.randint(0, len(x_par[analysis][subj][model][roi]), int(len(x_par[analysis][subj][model][roi])/upsampling_corr_factor))
@@ -1701,7 +1848,7 @@ class visualize_results(object):
                                                 WLS_bootstrap = LinearRegression()
                                                 WLS_bootstrap.fit(x_par[analysis][subj][model][roi][sample].reshape(-1, 1), y_par[analysis][subj][model][roi][sample], sample_weight=rsq[analysis][subj][model][roi][sample])
                                                 
-                                                bootstrap_fits[analysis][subj][model][roi].append(WLS_bootstrap.predict(np.array([ss.mean for ss in x_par_stats[analysis][subj][model][roi]]).reshape(-1, 1)))
+                                                bootstrap_fits[analysis][subj][model][roi].append(WLS_bootstrap.predict(curr_x_bins.reshape(-1, 1)))
                                         
 
                                             if len(self.only_models)>1:
@@ -1711,21 +1858,24 @@ class visualize_results(object):
                                                 current_color = cmap_rois[i]
                                                 current_label = roi.replace('custom.','').replace('HCPQ1Q6.','')
                                                 
-                                            pl.plot([ss.mean for ss in x_par_stats[analysis][subj][model][roi]],
-                                                WLS.predict(np.array([ss.mean for ss in x_par_stats[analysis][subj][model][roi]]).reshape(-1, 1)),
-                                                color=current_color, label=current_label)
+                                                
+                                                
+                                            pl.plot(curr_x_bins,
+                                                WLS.predict(curr_x_bins.reshape(-1, 1)),
+                                                color=current_color, label=f"Lin. R2={wls_score:.2f}")# p={pval_lin:.2e}")
+                                            
+                                            if exp_fit:
+                                                pl.plot(np.linspace(curr_x_bins.min(),curr_x_bins.max(),100), exp_pred, 
+                                                        color=current_color, label=f"Sigm. R2={rsq_pred:.2f}", ls='--')
                                       
-                                            #conf interval shading
-                                            pl.fill_between([ss.mean for ss in x_par_stats[analysis][subj][model][roi]],
+                                            #conf interval shading s
+                                            pl.fill_between(curr_x_bins,
                                                         np.min(bootstrap_fits[analysis][subj][model][roi], axis=0),
                                                         np.max(bootstrap_fits[analysis][subj][model][roi], axis=0),
-                                                        alpha=0.2, color=current_color, label=current_label)
+                                                        alpha=0.2, color=current_color, label=f"Lin. R2={wls_score:.2f}")# p={pval_lin:.2e}")
                                             
                                             
-                                            wls_score = WLS.score(np.array([ss.mean for ss in x_par_stats[analysis][subj][model][roi]]).reshape(-1, 1),
-                                                                  np.array([ss.mean for ss in y_par_stats[analysis][subj][model][roi]]).reshape(-1, 1),
-                                                                sample_weight=np.array([ss.mean for ss in rsq_stats[analysis][subj][model][roi]]).reshape(-1, 1))
-                                            print(f"{roi} {model} WLS score {wls_score}")
+
                                                     
                                         except Exception as e:
                                             print(e)
@@ -1733,8 +1883,8 @@ class visualize_results(object):
                                         
                                         try:
 
-                                            pl.errorbar([ss.mean for ss in x_par_stats[analysis][subj][model][roi]],
-                                                [ss.mean for ss in y_par_stats[analysis][subj][model][roi]],
+                                            pl.errorbar(curr_x_bins,
+                                                curr_y_bins,
                                                 yerr=np.array([np.abs(ss.zconfint_mean(alpha=0.01/upsampling_corr_factor)-ss.mean) for ss in y_par_stats[analysis][subj][model][roi]]).T,
                                                 xerr=np.array([np.abs(ss.zconfint_mean(alpha=0.01/upsampling_corr_factor)-ss.mean) for ss in x_par_stats[analysis][subj][model][roi]]).T,
                                                 fmt='s',  mec='black', label=current_label, color=current_color)#, mfc=model_colors[model], ecolor=model_colors[model])
@@ -1780,17 +1930,21 @@ class visualize_results(object):
                                     pl.ylabel(f"{subj} {roi.replace('custom.','').replace('HCPQ1Q6.','')} {y_parameter} (% signal change)")
                                 else:
                                     pl.ylabel(f"{subj} {roi.replace('custom.','').replace('HCPQ1Q6.','')} {y_parameter}")
-                                
-                                handles, labels = pl.gca().get_legend_handles_labels()
-    
-                                # legend_dict = dd(list)
-                                # for cc, label in enumerate(labels):
-                                #     legend_dict[label].append(handles[cc])
                                     
-                                # for label in legend_dict:
-                                #     legend_dict[label] = tuple(legend_dict[label])
-    
-                                # pl.legend([legend_dict[label] for label in legend_dict], legend_dict.keys())  
+                                
+                                    
+                                if show_legend:
+                                
+                                    handles, labels = pl.gca().get_legend_handles_labels()
+        
+                                    legend_dict = dd(list)
+                                    for cc, label in enumerate(labels):
+                                        legend_dict[label].append(handles[cc])
+                                        
+                                    for label in legend_dict:
+                                        legend_dict[label] = tuple(legend_dict[label])
+        
+                                    pl.legend([legend_dict[label] for label in legend_dict], legend_dict.keys())  
                                     
                                 if save_figures:
                                     
@@ -1816,23 +1970,26 @@ class visualize_results(object):
                                 if model in xlim:
                                     pl.xlim(xlim[model])
                                     
-                                for i, roi in enumerate([r for r in rois if 'custom.' in r or 'HCP' in r]):
+                                for i, roi in enumerate([r for r in rois if 'all' not in r and 'combined' not in r and 'Brain' not in r]):
                                     if not scatter:
+                                        curr_x_bins = np.array([ss.mean for ss in x_par_stats[analysis][subj][model][roi]])
+                                        curr_y_bins = np.array([ss.mean for ss in y_par_stats[analysis][subj][model][roi]])
                                         try:
                                             WLS = LinearRegression()
                                             WLS.fit(x_par[analysis][subj][model][roi].reshape(-1, 1), y_par[analysis][subj][model][roi], sample_weight=rsq[analysis][subj][model][roi])
-                                            #WLS.fit(np.array([ss.mean for ss in x_par_stats[analysis][subj][model][roi]]).reshape(-1, 1), np.log(np.array([ss.mean for ss in y_par_stats[analysis][subj][model][roi]]).reshape(-1, 1)))
                                             
+                                                                    
                                             current_color = cmap_rois[i]
                                             current_label = roi.replace('custom.','').replace('HCPQ1Q6.','')
                                                     
-                                            pl.plot([ss.mean for ss in x_par_stats[analysis][subj][model][roi]],
-                                                WLS.predict(np.array([ss.mean for ss in x_par_stats[analysis][subj][model][roi]]).reshape(-1, 1)),
+                                            pl.plot(curr_x_bins,
+                                                WLS.predict(curr_x_bins.reshape(-1, 1)),
                                                 color=current_color, label=current_label)
                                                 #color=roi_colors[roi]) 
+
                                                                               
-                                            wls_score = WLS.score(np.array([ss.mean for ss in x_par_stats[analysis][subj][model][roi]]).reshape(-1, 1),
-                                                                  np.array([ss.mean for ss in y_par_stats[analysis][subj][model][roi]]).reshape(-1, 1),
+                                            wls_score = WLS.score(curr_x_bins.reshape(-1, 1),
+                                                                  curr_y_bins.reshape(-1, 1),
                                                                 sample_weight=np.array([ss.mean for ss in rsq_stats[analysis][subj][model][roi]]).reshape(-1, 1))
                                             print(f"{roi} {model} WLS score {wls_score}")
                                         except Exception as e:
@@ -1841,14 +1998,14 @@ class visualize_results(object):
                                         
                                         try:
                                             #conf interval shading
-                                            pl.fill_between([ss.mean for ss in x_par_stats[analysis][subj][model][roi]],
+                                            pl.fill_between(curr_x_bins,
                                                             np.min(bootstrap_fits[analysis][subj][model][roi], axis=0),
                                                             np.max(bootstrap_fits[analysis][subj][model][roi], axis=0),
                                                             alpha=0.2, color=current_color, label=current_label)
                                             
                                             #data points with errors
-                                            pl.errorbar([ss.mean for ss in x_par_stats[analysis][subj][model][roi]],
-                                            [ss.mean for ss in y_par_stats[analysis][subj][model][roi]],
+                                            pl.errorbar(curr_x_bins,
+                                             curr_y_bins,
                                             yerr=np.array([np.abs(ss.zconfint_mean(alpha=0.01/upsampling_corr_factor)-ss.mean) for ss in y_par_stats[analysis][subj][model][roi]]).T,
                                             xerr=np.array([np.abs(ss.zconfint_mean(alpha=0.01/upsampling_corr_factor)-ss.mean) for ss in x_par_stats[analysis][subj][model][roi]]).T,
                                             fmt='s', mec='black', label=current_label, color=current_color)#, mfc=roi_colors[roi], ecolor=roi_colors[roi])
@@ -1949,6 +2106,8 @@ class visualize_results(object):
             supp_max=1000
             #css max
             css_max=1
+            #max b and d
+            #bd_max=1000
             
             dimensions = []
                     
@@ -2012,7 +2171,7 @@ class visualize_results(object):
                                                                                         
                                         else:
                                             #, otherwise none
-                                            print("undefined ROI")
+                                            print(f"{roi}: undefined ROI")
                                             alpha[analysis][subj][roi] = np.zeros_like(curr_alpha).astype('bool')
                                             
                                             
@@ -2029,6 +2188,15 @@ class visualize_results(object):
                                                 alpha[analysis][subj][roi] *= (subj_res['Processed Results'][param][model]<css_max)
                                             if 'Suppression' in param:
                                                 alpha[analysis][subj][roi] *= (subj_res['Processed Results'][param][model]<supp_max)
+                                                
+                                                
+                                            # if 'Amplitude' in param:
+                                            #     print(param)
+                                            #     print(subj_res['Processed Results'][param][model][alpha[analysis][subj][roi]].max())
+                                            #     alpha[analysis][subj][roi] *= (subj_res['Processed Results'][param][model]<bd_max)   
+                                                
+                                            #     print(subj_res['Processed Results'][param][model][alpha[analysis][subj][roi]].max())
+                                         
 
                                             # param_max = subj_res['Processed Results'][param][model][alpha[analysis][subj][roi]].mean()+3*np.std(subj_res['Processed Results'][param][model][alpha[analysis][subj][roi]])
                                             # param_min = subj_res['Processed Results'][param][model][alpha[analysis][subj][roi]].mean()-3*np.std(subj_res['Processed Results'][param][model][alpha[analysis][subj][roi]])
@@ -2047,6 +2215,8 @@ class visualize_results(object):
                                     for model in self.only_models:
                                         if model in subj_res['Processed Results'][param]:                       
                                             dimensions[analysis][subj][roi].append(f"{param} {model}")
+                                            #print(param)
+                                            #print(subj_res['Processed Results'][param][model][alpha[analysis][subj][roi]].max())
                                             
                                             if zscore_data:
                                                 multidim_param_array[analysis][subj][roi].append(zscore(subj_res['Processed Results'][param][model][alpha[analysis][subj][roi]]))
@@ -2085,16 +2255,19 @@ class visualize_results(object):
                             
                     
                         ordered_dimensions = sorted(dimensions[analysis][subj][roi])
-                        
+                
                 for subj, subj_res in subjects:
+                    
+                    
                     for i, roi in enumerate(rois):  
                         
                         if ('mean' in analysis) or 'fsaverage' in subj:
-                            print(f"{analysis} {subj} {roi}")
+                            
                             
                             #print(multidim_param_array[analysis][subj][roi].shape)
                             
                             if plot_corr_matrix:
+                                print(f"{analysis} {subj} {roi}")
                                 pl.figure(figsize=(12,12))
                                 correlation_matrix = np.corrcoef(multidim_param_array[analysis][subj][roi])
                                 im = pl.imshow(correlation_matrix, vmin=-0.5, vmax=0.5, cmap='RdBu_r')
@@ -2127,9 +2300,19 @@ class visualize_results(object):
                                 for tick_x, tick_y, tick_color in zip(pl.gca().get_xticklabels(), pl.gca().get_yticklabels(), tick_colors):
                                     tick_x.set_color(tick_color)
                                     tick_y.set_color(tick_color)
-                                
+
+                #regressions
+                pls_result_dict = dd(lambda:dd(list))
+                for subj, subj_res in subjects:
+                    
+                    
+                    for i, roi in enumerate(rois):  
+                        
+                        if ('mean' in analysis) or 'fsaverage' in subj:
+                                                            
                             
                             if regress_params:
+                                print(f"{analysis} {subj} {roi}")
                                 if x_dims_idx is None or y_dims_idx is None:    
                                     if y_parameter_toplevel != None:
                                         x_dims = [dim for dim, _ in enumerate(ordered_dimensions) if dim not in rec_dims]
@@ -2148,6 +2331,7 @@ class visualize_results(object):
                                 X = multidim_param_array[analysis][subj][roi][x_dims].T
                                 print(f"Sample size: {X.shape[0]}")
                                 
+                                
                                 try:
                                     if not multidim_y:
                                         print("1D y")
@@ -2164,7 +2348,7 @@ class visualize_results(object):
                                             corr_prediction = np.corrcoef(ls1.predict(X), y)[0,1]
                                             print(f"corr prediction {corr_prediction}")
                                             
-                                            if cv_regression == True:
+                                            if cv_regression:
                                                 for cv_subj in [s for s,_ in subjects if s!='fsaverage' and s!='Group' and s!=subj]:
                                                     print(f"CV regression (fit on {subj}, test on {cv_subj})")
                                                     X_cv = multidim_param_array[analysis][cv_subj][roi][x_dims].T
@@ -2183,12 +2367,15 @@ class visualize_results(object):
 
                                         
                                         for n_components in range(1, 1+X.shape[1]):
-                                            print(f"Performing PLS with {n_components} components")
                                             pls = PLSRegression(n_components)
                                             pls.fit(X, Y)
-                                            
-                                            print(f"Estimated betas \n {[ordered_dimensions[y_dim] for y_dim in y_dims]} \n {np.array(pls.coef_)}")
-                                            print(f"beta sums: {np.abs(np.array(pls.coef_)).sum(1)}")
+                                            print(f"Performing PLS with {n_components} components")
+
+                                            print(f"Estimated betas: {[ordered_dimensions[y_dim] for y_dim in y_dims]}")
+                                            for i,x_dim in enumerate(x_dims):
+                                                print(f"{ordered_dimensions[x_dim]}: {np.array(pls.coef_)[i]}, total beta: {np.abs(np.array(pls.coef_)[i]).sum():.3f}")
+                                                
+
                                             pred = pls.predict(X)
                                             corr_prediction = []
                                             rsq_prediction = []
@@ -2199,9 +2386,12 @@ class visualize_results(object):
                                                 
                                             print(f"RSq total {pls.score(X,Y)}")
                                             print(f"RSq predictions {np.array(rsq_prediction)}")
-                                            print(f"corr predictions {np.array(corr_prediction)}")
+                                            print(f"corr predictions {np.array(corr_prediction)}\n")
                                             
                                             if cv_regression == True:
+                                                cv_corr_pred = []
+                                                cv_rsq_pred = []
+                                                cv_rsq_total = []
                                                 for cv_subj in [s for s,_ in subjects if s!='fsaverage' and s!='Group' and s!=subj]:
                                                     print(f"CV regression (fit on {subj}, test on {cv_subj})")
                                                     X_cv = multidim_param_array[analysis][cv_subj][roi][x_dims].T
@@ -2215,16 +2405,37 @@ class visualize_results(object):
                                                         corr_prediction.append(np.corrcoef(pred[:,p], Y_cv[:,p])[0,1])
                                                         rsq_prediction.append(1-np.sum((pred[:,p]-Y_cv[:,p])**2)/(pred.shape[0]*Y_cv[:,p].var()))
                                                         
-                                                    print(f"CVRSq total {pls.score(X_cv,Y_cv)}")
-                                                    print(f"CVRSq predictions {np.array(rsq_prediction)}")
-                                                    print(f"CV corr predictions {np.array(corr_prediction)}")
+                                                    cv_rsq_total.append(pls.score(X_cv,Y_cv))
+                                                    cv_corr_pred.append(corr_prediction)
+                                                    cv_rsq_pred.append(rsq_prediction)
+                                                        
+                                                print(f"CVRSq total {np.mean(cv_rsq_total,axis=0)}")
+                                                print(f"CVRSq predictions {np.array(cv_rsq_pred).mean(0)}")
+                                                print(f"CV corr predictions {np.array(cv_corr_pred).mean(0)}")
+                                                
+                                                pls_result_dict[roi][f"{n_components} components"].append(np.mean(cv_rsq_total,axis=0))
                                         
                                 except Exception as e:
                                     print(e)
                                     pass
-                            
-                            
+                
+                for key in pls_result_dict:
+                    for key2 in pls_result_dict[key]:
+                        print(f"{key} {key2} CVRSq total {np.mean(pls_result_dict[key][key2]):.3f}")
+                #size response curves
+                for subj, subj_res in subjects:
+                    if 'analysis_info' in subj_res:
+                        an_info = subj_res['analysis_info']
+                        ss_deg = 2.0 * np.degrees(np.arctan(an_info['screen_size_cm'] /(2.0*an_info['screen_distance_cm'])))
+                        n_pix = an_info['n_pix']                    
+                    
+                    for i, roi in enumerate(rois):  
+                        
+                        if ('mean' in analysis) or 'fsaverage' in subj:
+                                                      
                             if size_response_curves:
+                                print(f"{analysis} {subj} {roi}")  
+
                                 
                                 curve_par_dict = dict()
                                 
@@ -2237,9 +2448,9 @@ class visualize_results(object):
                                 normalize_response = True
                                 confint = True
                                 
-                                x = np.linspace(-5.3,5.3,540)
-                                #this is used in 2D because in fitting i used a design matrix of size 54, and the screen size is 10.6s
-                                dx = (np.max(x)-np.min(x))/len(x) *54/10.6
+                                x = np.linspace(-ss_deg/2,ss_deg/2,500)
+                                #correcting for the real size of design matrix VS smoother space used for better size-response curves
+                                dx = n_pix/len(x)
                                 
                                 #1d stims
                                 if dim_stim == 1:
