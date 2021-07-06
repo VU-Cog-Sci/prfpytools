@@ -1068,7 +1068,7 @@ class visualize_results(object):
                     ylim={}, xlim={}, log_yaxis=False, log_xaxis = False, nr_bins = 8, rsq_weights=True,
                     x_param_model=None, violin=False, scatter=False, diff_gauss=False, diff_gauss_x=False,
                     means_only=False, stats_on_plot=False, bin_by='size', zscore_ydata=False, zscore_xdata=False,
-                    bootstrap_means_errs = False, exp_fit = False, show_legend=False, each_subj_on_group=False,
+                    zconfint_err_alpha = None, exp_fit = False, show_legend=False, each_subj_on_group=False,
                     bold_voxel_volume = None):
         """
         
@@ -1124,6 +1124,9 @@ class visualize_results(object):
         cmap_values += [0 for r in rois if 'all' in r or 'combined' in r or 'Brain' in r]
         
         cmap_rois = cm.get_cmap('nipy_spectral')(cmap_values)#
+        
+        #making black into dark gray for visualization reasons
+        cmap_rois[(cmap_rois == [0,0,0,1]).sum(1)==4] = [0.33,0.33,0.33,1]
 
         if space_names == 'all':
             spaces = [item for item in self.main_dict.items()]
@@ -1445,22 +1448,15 @@ class visualize_results(object):
                                 if 'Mean' in ylim:
                                     pl.ylim(ylim['Mean'])
                                     
-                                
-                                if bootstrap_means_errs:
-                                    
-                                    full_roi_stats = []
-                                    for ccc in range(1000):
-                                        samp_idx = np.random.randint(0, samples_in_roi, int(samples_in_roi/upsampling_corr_factor))
-                                        full_roi_stats.append(weightstats.DescrStatsW(y_par[analysis][subj][model][roi][samp_idx],
-                                                            weights=rsq[analysis][subj][model][roi][samp_idx]).mean)
-                                    
-                                    bar_height = np.mean(full_roi_stats)
-                                    bar_err = sem(full_roi_stats)
-                                else:
-                                    full_roi_stats = weightstats.DescrStatsW(y_par[analysis][subj][model][roi],
+                                full_roi_stats = weightstats.DescrStatsW(y_par[analysis][subj][model][roi],
                                                             weights=rsq[analysis][subj][model][roi])
-                                    bar_height = full_roi_stats.mean
-                                    bar_err = np.abs(full_roi_stats.zconfint_mean(alpha=0.01/upsampling_corr_factor) - bar_height).reshape(2,1)
+                                bar_height = full_roi_stats.mean
+                                
+                                if zconfint_err_alpha is not None:                                    
+                                    bar_err = (np.abs(full_roi_stats.zconfint_mean(alpha=zconfint_err_alpha) - bar_height)*upsampling_corr_factor**0.5).reshape(2,1)                                    
+                                else:
+                                    bar_err = full_roi_stats.std_mean*upsampling_corr_factor**0.5
+                                    
 
 
                                 if len(self.only_models)>1:
@@ -1517,9 +1513,13 @@ class visualize_results(object):
                                                 ssj_stats = weightstats.DescrStatsW(y_par[analysis][ssj[0]][model][roi],
                                                             weights=rsq[analysis][ssj[0]][model][roi])
                                                 
-                                                pl.errorbar(ssj_datapoints_x[ssj_nr],
-                                                ssj_stats.mean,
-                                                yerr=np.abs(ssj_stats.zconfint_mean(alpha=0.01/upsampling_corr_factor) - ssj_stats.mean).reshape(2,1),  
+                                                if zconfint_err_alpha is not None:
+                                                    yerr_sj = (np.abs(ssj_stats.zconfint_mean(alpha=zconfint_err_alpha) - ssj_stats.mean)*upsampling_corr_factor**0.5).reshape(2,1)
+                                                else:
+                                                    yerr_sj = ssj_stats.std_mean*upsampling_corr_factor**0.5
+                                                    
+                                                pl.errorbar(ssj_datapoints_x[ssj_nr], ssj_stats.mean,
+                                                yerr=yerr_sj,  
                                                 fmt='s',  mec='k', color=model_colors[model], ecolor='k')
                                     
 
@@ -1734,11 +1734,13 @@ class visualize_results(object):
                                                 ssj_stats = weightstats.DescrStatsW(y_par[analysis][ssj[0]][model][roi],
                                                             weights=rsq[analysis][ssj[0]][model][roi])
                                                 
-                                                print(f"{roi} {cmap_rois[i]}")
-                                                
-                                                pl.errorbar(ssj_datapoints_x[ssj_nr],
-                                                ssj_stats.mean,
-                                                yerr=np.abs(ssj_stats.zconfint_mean(alpha=0.01/upsampling_corr_factor) - ssj_stats.mean).reshape(2,1),  
+                                                if zconfint_err_alpha is not None:
+                                                    yerr_sj = (np.abs(ssj_stats.zconfint_mean(alpha=zconfint_err_alpha) - ssj_stats.mean)*upsampling_corr_factor**0.5).reshape(2,1)
+                                                else:
+                                                    yerr_sj = ssj_stats.std_mean*upsampling_corr_factor**0.5
+                                                    
+                                                pl.errorbar(ssj_datapoints_x[ssj_nr], ssj_stats.mean,
+                                                yerr=yerr_sj,   
                                                 fmt='s',  mec='k', color=cmap_rois[i], ecolor='k')                                        
                                 
                                 bar_position += bar_or_violin_width
@@ -1882,11 +1884,18 @@ class visualize_results(object):
                                             pass
                                         
                                         try:
-
+                                            if zconfint_err_alpha is not None:
+                                                curr_yerr = np.array([np.abs(ss.zconfint_mean(alpha=zconfint_err_alpha)-ss.mean)*upsampling_corr_factor**0.5 for ss in y_par_stats[analysis][subj][model][roi]]).T
+                                                curr_xerr = np.array([np.abs(ss.zconfint_mean(alpha=zconfint_err_alpha)-ss.mean)*upsampling_corr_factor**0.5 for ss in x_par_stats[analysis][subj][model][roi]]).T
+                                            else:
+                                                curr_yerr = np.array([ss.std_mean*upsampling_corr_factor**0.5 for ss in y_par_stats[analysis][subj][model][roi]]).T
+                                                curr_xerr = np.array([ss.std_mean*upsampling_corr_factor**0.5 for ss in x_par_stats[analysis][subj][model][roi]]).T
+                                           
+                                            
                                             pl.errorbar(curr_x_bins,
                                                 curr_y_bins,
-                                                yerr=np.array([np.abs(ss.zconfint_mean(alpha=0.01/upsampling_corr_factor)-ss.mean) for ss in y_par_stats[analysis][subj][model][roi]]).T,
-                                                xerr=np.array([np.abs(ss.zconfint_mean(alpha=0.01/upsampling_corr_factor)-ss.mean) for ss in x_par_stats[analysis][subj][model][roi]]).T,
+                                                yerr=curr_yerr,
+                                                xerr=curr_xerr,
                                                 fmt='s',  mec='black', label=current_label, color=current_color)#, mfc=model_colors[model], ecolor=model_colors[model])
 
                                            
@@ -2004,10 +2013,18 @@ class visualize_results(object):
                                                             alpha=0.2, color=current_color, label=current_label)
                                             
                                             #data points with errors
+                                            if zconfint_err_alpha is not None:
+                                                curr_yerr = np.array([np.abs(ss.zconfint_mean(alpha=zconfint_err_alpha)-ss.mean)*upsampling_corr_factor**0.5 for ss in y_par_stats[analysis][subj][model][roi]]).T
+                                                curr_xerr = np.array([np.abs(ss.zconfint_mean(alpha=zconfint_err_alpha)-ss.mean)*upsampling_corr_factor**0.5 for ss in x_par_stats[analysis][subj][model][roi]]).T
+                                            else:
+                                                curr_yerr = np.array([ss.std_mean*upsampling_corr_factor**0.5 for ss in y_par_stats[analysis][subj][model][roi]]).T
+                                                curr_xerr = np.array([ss.std_mean*upsampling_corr_factor**0.5 for ss in x_par_stats[analysis][subj][model][roi]]).T
+                                           
+                                            
                                             pl.errorbar(curr_x_bins,
-                                             curr_y_bins,
-                                            yerr=np.array([np.abs(ss.zconfint_mean(alpha=0.01/upsampling_corr_factor)-ss.mean) for ss in y_par_stats[analysis][subj][model][roi]]).T,
-                                            xerr=np.array([np.abs(ss.zconfint_mean(alpha=0.01/upsampling_corr_factor)-ss.mean) for ss in x_par_stats[analysis][subj][model][roi]]).T,
+                                                curr_y_bins,
+                                                yerr=curr_yerr,
+                                                xerr=curr_xerr,
                                             fmt='s', mec='black', label=current_label, color=current_color)#, mfc=roi_colors[roi], ecolor=roi_colors[roi])
                                         except Exception as e:
                                             print(e)
@@ -2071,7 +2088,8 @@ class visualize_results(object):
     def multidim_analysis(self, parameters, rois, rsq_thresh, save_figures, figure_path, space_names = 'fsnative',
                     analysis_names = 'all', subject_ids='all', y_parameter_toplevel=None,
                     x_dims_idx=None, y_dims_idx=None, zscore_data=False, size_response_curves = False,
-                    plot_corr_matrix = False, regress_params=False, multidim_y = False, cv_regression = False):
+                    plot_corr_matrix = False, regress_params=False, multidim_y = False, cv_regression = False,
+                    zconfint_err_alpha = None):
         
         np.set_printoptions(precision=4,suppress=True)
 
@@ -2089,6 +2107,9 @@ class visualize_results(object):
         cmap_values += [0 for r in rois if 'custom.' not in r]
         
         cmap_rois = cm.get_cmap('nipy_spectral')(cmap_values)#
+        
+        #making black into dark gray for visualization reasons
+        cmap_rois[(cmap_rois == [0,0,0,1]).sum(1)==4] = [0.33,0.33,0.33,1]
 
         if space_names == 'all':
             spaces = [item for item in self.main_dict.items()]
@@ -2598,7 +2619,11 @@ class visualize_results(object):
                                    
                                     
                                     data_sr = [actual_response_1.mean, actual_response_1.mean,actual_response_2R.mean,actual_response_4.mean,actual_response_4.mean]/np.max([actual_response_1.mean, actual_response_1.mean,actual_response_2R.mean,actual_response_4.mean,actual_response_4.mean])
-                                    yerr_data_sr = np.array([np.abs(ss.zconfint_mean(alpha=0.01/upsampling_corr_factor)-ss.mean) for ss in [actual_response_1,actual_response_1,actual_response_2R,actual_response_4,actual_response_4]]).T
+                                    if zconfint_err_alpha is not None:
+                                        yerr_data_sr = np.array([np.abs(ss.zconfint_mean(alpha=zconfint_err_alpha)-ss.mean)*upsampling_corr_factor**0.5 for ss in [actual_response_1,actual_response_1,actual_response_2R,actual_response_4,actual_response_4]]).T
+                                    else:
+                                        yerr_data_sr = np.array([ss.std_mean*upsampling_corr_factor**0.5 for ss in [actual_response_1,actual_response_1,actual_response_2R,actual_response_4,actual_response_4]]).T
+                                    
                                     #yerr_data_sr /= np.max([actual_response_1R.mean,actual_response_1S.mean,actual_response_2R.mean,actual_response_4R.mean,actual_response_4F.mean])
                                     
 

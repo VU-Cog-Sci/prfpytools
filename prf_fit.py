@@ -418,6 +418,13 @@ if param_bounds:
                     (0, 1000),  # neural baseline
                     (1e-6, 1000)]  # surround baseline
 
+if dog_grid:
+    dog_surround_amplitude_grid=np.array([0.01,0.1,0.5,1,2,10], dtype='float32')
+    dog_surround_size_grid=np.array([5,8,11,14,18,25], dtype='float32')
+    
+if css_grid:
+    css_exponent_grid=np.array([0.05,0.1,0.25,0.5,0.75,1], dtype='float32')
+    
 # norm grid params
 if norm_model_variant == "abcd":
     surround_amplitude_grid=np.array([0.01,0.1,1,10], dtype='float32')
