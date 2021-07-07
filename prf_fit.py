@@ -50,15 +50,12 @@ save_raw_timecourse = analysis_info["save_raw_timecourse"]
 
 filter_predictions = analysis_info["filter_predictions"]
 filter_type = analysis_info["filter_type"]
-
 first_modes_to_remove = analysis_info["first_modes_to_remove"]
 last_modes_to_remove_percent = analysis_info["last_modes_to_remove_percent"]
-
 window_length = analysis_info["window_length"]
 polyorder = analysis_info["polyorder"]
 highpass = analysis_info["highpass"]
 add_mean = analysis_info["add_mean"]
-
 filter_params = {x:analysis_info[x] for x in ["first_modes_to_remove",
                                               "last_modes_to_remove_percent",
                                               "window_length",
@@ -76,7 +73,9 @@ fit_hrf = analysis_info["fit_hrf"]
 fix_bold_baseline = analysis_info["fix_bold_baseline"]
 if fix_bold_baseline:
     norm_bold_baseline = analysis_info["norm_bold_baseline"]
-
+    
+dog_grid = analysis_info["dog_grid"]
+css_grid = analysis_info["css_grid"]
 
 crossvalidate = analysis_info["crossvalidate"]
 save_noise_ceiling = False #just to set default
@@ -419,11 +418,11 @@ if param_bounds:
                     (1e-6, 1000)]  # surround baseline
 
 if dog_grid:
-    dog_surround_amplitude_grid=np.array([0.01,0.1,0.5,1,2,10], dtype='float32')
-    dog_surround_size_grid=np.array([5,8,11,14,18,25], dtype='float32')
+    dog_surround_amplitude_grid=np.array([0.05,0.1,0.25,0.5,0.75,1,2], dtype='float32')
+    dog_surround_size_grid=np.array([3,5,8,11,14,17,20,23,26], dtype='float32')
     
 if css_grid:
-    css_exponent_grid=np.array([0.05,0.1,0.25,0.5,0.75,1], dtype='float32')
+    css_exponent_grid=np.array([0.05,0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1,1.1], dtype='float32')
     
 # norm grid params
 if norm_model_variant == "abcd":
@@ -568,8 +567,8 @@ gg = Iso2DGaussianModel(stimulus=prf_stim,
 gf = Iso2DGaussianFitter(
     data=tc_full_iso_nonzerovar_dict['tc'], model=gg, n_jobs=n_jobs, fit_hrf=fit_hrf)
 
-# gaussian fit
-if "grid_data_path" not in analysis_info and "gauss_iterparams_path" not in analysis_info:
+# gaussian grid fit
+if "gauss_gridparams_path" not in analysis_info and "gauss_iterparams_path" not in analysis_info:
     save_path = opj(data_path, subj+"_gridparams-gauss_space-"+fitting_space+str(chunk_nr))
 
     if not os.path.exists(save_path+".npy") or refit_mode == "overwrite":
@@ -584,15 +583,15 @@ if "grid_data_path" not in analysis_info and "gauss_iterparams_path" not in anal
         print("Gaussian gridfit completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+
           ". voxels/vertices above "+str(rsq_threshold)+": "+str(np.sum(gf.gridsearch_params[:, -1]>rsq_threshold))+" out of "+
           str(gf.data.shape[0]))
-        print("Median rsq>"+str(rsq_threshold)+": "+str(np.median(gf.gridsearch_params[gf.gridsearch_params[:, -1]>rsq_threshold, -1])))
+        print("Mean rsq>"+str(rsq_threshold)+": "+str(np.mean(gf.gridsearch_params[gf.gridsearch_params[:, -1]>rsq_threshold, -1])))
 
         np.save(save_path, gf.gridsearch_params)
 
     elif os.path.exists(save_path+".npy") and refit_mode in ["iterate", "skip"]:
         gf.gridsearch_params = np.load(save_path+".npy")
 
-elif "grid_data_path" in analysis_info:
-    gf.gridsearch_params = np.array_split(np.load(analysis_info["grid_data_path"]), n_chunks)[chunk_nr]
+elif "gauss_gridparams_path" in analysis_info:
+    gf.gridsearch_params = np.array_split(np.load(analysis_info["gauss_gridparams_path"]), n_chunks)[chunk_nr]
 
 
 
@@ -612,18 +611,18 @@ if "gauss_iterparams_path" in analysis_info:
                              xtol=xtol,
                              ftol=ftol)
 
-        print("Gaussian iterfit completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Median rsq>"+str(rsq_threshold)+": "+str(np.median(gf.iterative_search_params[gf.rsq_mask, -1])))
+        print("Gaussian iterfit completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Mean rsq>"+str(rsq_threshold)+": "+str(np.mean(gf.iterative_search_params[gf.rsq_mask, -1])))
       
         if crossvalidate:
             gf.crossvalidate_fit(tc_full_iso_nonzerovar_dict['tc_test'],
                                  test_stimulus=test_prf_stim,
                                  single_hrf=single_hrf)
-            print("Gaussian Crossvalidation completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Median rsq>"+str(rsq_threshold)+": "+str(np.median(gf.iterative_search_params[gf.rsq_mask, -1])))
+            print("Gaussian Crossvalidation completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Mean rsq>"+str(rsq_threshold)+": "+str(np.mean(gf.iterative_search_params[gf.rsq_mask, -1])))
             
             if hasattr(gf, 'noise_ceiling'):
-                print("Median noise-ceiling >"+str(rsq_threshold)+": "+str(np.median(gf.noise_ceiling[gf.rsq_mask])))                
+                print("Mean noise-ceiling >"+str(rsq_threshold)+": "+str(np.mean(gf.noise_ceiling[gf.rsq_mask])))                
                 noise_ceiling_fraction = gf.iterative_search_params[gf.rsq_mask, -1]/gf.noise_ceiling[gf.rsq_mask]
-                print("Median noise-ceiling-fraction rsq>"+str(rsq_threshold)+": "+str(np.median(noise_ceiling_fraction)))
+                print("Mean noise-ceiling-fraction rsq>"+str(rsq_threshold)+": "+str(np.mean(noise_ceiling_fraction)))
                 
                 if return_noise_ceiling_fraction:
                     gf.iterative_search_params[gf.rsq_mask, -1] = noise_ceiling_fraction
@@ -643,18 +642,18 @@ else:
                              xtol=xtol,
                              ftol=ftol)
         
-        print("Gaussian iterfit completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Median rsq>"+str(rsq_threshold)+": "+str(np.median(gf.iterative_search_params[gf.rsq_mask, -1])))
+        print("Gaussian iterfit completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Mean rsq>"+str(rsq_threshold)+": "+str(np.mean(gf.iterative_search_params[gf.rsq_mask, -1])))
       
         if crossvalidate:
             gf.crossvalidate_fit(tc_full_iso_nonzerovar_dict['tc_test'],
                                  test_stimulus=test_prf_stim,
                                  single_hrf=single_hrf)
-            print("Gaussian Crossvalidation completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Median rsq>"+str(rsq_threshold)+": "+str(np.median(gf.iterative_search_params[gf.rsq_mask, -1])))
+            print("Gaussian Crossvalidation completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Mean rsq>"+str(rsq_threshold)+": "+str(np.mean(gf.iterative_search_params[gf.rsq_mask, -1])))
 
             if hasattr(gf, 'noise_ceiling'):
-                print("Median noise-ceiling >"+str(rsq_threshold)+": "+str(np.median(gf.noise_ceiling[gf.rsq_mask])))   
+                print("Mean noise-ceiling >"+str(rsq_threshold)+": "+str(np.mean(gf.noise_ceiling[gf.rsq_mask])))   
                 noise_ceiling_fraction = gf.iterative_search_params[gf.rsq_mask, -1]/gf.noise_ceiling[gf.rsq_mask]
-                print("Median noise-ceiling-fraction rsq>"+str(rsq_threshold)+": "+str(np.median(noise_ceiling_fraction)))
+                print("Mean noise-ceiling-fraction rsq>"+str(rsq_threshold)+": "+str(np.mean(noise_ceiling_fraction)))
                 
                 if return_noise_ceiling_fraction:
                     gf.iterative_search_params[gf.rsq_mask, -1] = noise_ceiling_fraction            
@@ -680,19 +679,19 @@ else:
                              xtol=xtol,
                              ftol=ftol)
             
-            print("Gaussian iterfit completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Median rsq>"+str(rsq_threshold)+": "+str(np.median(gf.iterative_search_params[gf.rsq_mask, -1])))
+            print("Gaussian iterfit completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Mean rsq>"+str(rsq_threshold)+": "+str(np.mean(gf.iterative_search_params[gf.rsq_mask, -1])))
       
             if crossvalidate:
                 gf.crossvalidate_fit(tc_full_iso_nonzerovar_dict['tc_test'],
                                  test_stimulus=test_prf_stim,
                                  single_hrf=single_hrf)
 
-                print("Gaussian Crossvalidation completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Median rsq>"+str(rsq_threshold)+": "+str(np.median(gf.iterative_search_params[gf.rsq_mask, -1])))
+                print("Gaussian Crossvalidation completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Mean rsq>"+str(rsq_threshold)+": "+str(np.mean(gf.iterative_search_params[gf.rsq_mask, -1])))
 
                 if hasattr(gf, 'noise_ceiling'):
-                    print("Median noise-ceiling >"+str(rsq_threshold)+": "+str(np.median(gf.noise_ceiling[gf.rsq_mask])))   
+                    print("Mean noise-ceiling >"+str(rsq_threshold)+": "+str(np.mean(gf.noise_ceiling[gf.rsq_mask])))   
                     noise_ceiling_fraction = gf.iterative_search_params[gf.rsq_mask, -1]/gf.noise_ceiling[gf.rsq_mask]
-                    print("Median noise-ceiling-fraction rsq>"+str(rsq_threshold)+": "+str(np.median(noise_ceiling_fraction)))
+                    print("Mean noise-ceiling-fraction rsq>"+str(rsq_threshold)+": "+str(np.mean(noise_ceiling_fraction)))
                     
                     if return_noise_ceiling_fraction:
                         gf.iterative_search_params[gf.rsq_mask, -1] = noise_ceiling_fraction
@@ -719,6 +718,32 @@ if "CSS" in models_to_fit:
         data=tc_full_iso_nonzerovar_dict['tc'], model=gg_css, n_jobs=n_jobs, fit_hrf=fit_hrf,
         previous_gaussian_fitter=gf)
 
+
+    # CSS grid fit
+    if "css_gridparams_path" not in analysis_info and "css_iterparams_path" not in analysis_info and css_grid:
+        save_path = opj(data_path, subj+"_gridparams-css_space-"+fitting_space+str(chunk_nr))
+    
+        if not os.path.exists(save_path+".npy") or refit_mode == "overwrite":
+    
+            print("Starting CSS grid fit at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S'))
+            gf_css.grid_fit(exponent_grid=css_exponent_grid,
+                    verbose=verbose,
+                    n_batches=n_batches,
+                    pos_prfs_only=pos_prfs_only)
+            print("CSS gridfit completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+
+              ". voxels/vertices above "+str(rsq_threshold)+": "+str(np.sum(gf_css.gridsearch_params[:, -1]>rsq_threshold))+" out of "+
+              str(gf_css.data.shape[0]))
+            print("Mean rsq>"+str(rsq_threshold)+": "+str(np.mean(gf_css.gridsearch_params[gf_css.gridsearch_params[:, -1]>rsq_threshold, -1])))
+    
+            np.save(save_path, gf_css.gridsearch_params)
+    
+        elif os.path.exists(save_path+".npy") and refit_mode in ["iterate", "skip"]:
+            gf_css.gridsearch_params = np.load(save_path+".npy")
+    
+    elif "css_gridparams_path" in analysis_info:
+        gf_css.gridsearch_params = np.array_split(np.load(analysis_info["css_gridparams_path"]), n_chunks)[chunk_nr]
+    
+    
     save_path = opj(data_path, subj+"_iterparams-css_space-"+fitting_space+str(chunk_nr))
 
     if "css_iterparams_path" in analysis_info:
@@ -733,18 +758,18 @@ if "CSS" in models_to_fit:
                              constraints=constraints_css,
                              xtol=xtol,
                              ftol=ftol)
-            print("CSS iterfit completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Median rsq>"+str(rsq_threshold)+": "+str(np.median(gf_css.iterative_search_params[gf_css.rsq_mask, -1])))
+            print("CSS iterfit completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Mean rsq>"+str(rsq_threshold)+": "+str(np.mean(gf_css.iterative_search_params[gf_css.rsq_mask, -1])))
             
             if crossvalidate:
                 gf_css.crossvalidate_fit(tc_full_iso_nonzerovar_dict['tc_test'],
                                  test_stimulus=test_prf_stim,
                                  single_hrf=single_hrf)
-                print("CSS Crossvalidation completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Median rsq>"+str(rsq_threshold)+": "+str(np.median(gf_css.iterative_search_params[gf_css.rsq_mask, -1])))
+                print("CSS Crossvalidation completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Mean rsq>"+str(rsq_threshold)+": "+str(np.mean(gf_css.iterative_search_params[gf_css.rsq_mask, -1])))
 
                 if hasattr(gf_css, 'noise_ceiling'):
-                    print("Median noise-ceiling >"+str(rsq_threshold)+": "+str(np.median(gf_css.noise_ceiling[gf_css.rsq_mask])))   
+                    print("Mean noise-ceiling >"+str(rsq_threshold)+": "+str(np.mean(gf_css.noise_ceiling[gf_css.rsq_mask])))   
                     noise_ceiling_fraction = gf_css.iterative_search_params[gf_css.rsq_mask, -1]/gf_css.noise_ceiling[gf_css.rsq_mask]
-                    print("Median noise-ceiling-fraction rsq>"+str(rsq_threshold)+": "+str(np.median(noise_ceiling_fraction)))
+                    print("Mean noise-ceiling-fraction rsq>"+str(rsq_threshold)+": "+str(np.mean(noise_ceiling_fraction)))
                     
                     if return_noise_ceiling_fraction:
                         gf_css.iterative_search_params[gf_css.rsq_mask, -1] = noise_ceiling_fraction
@@ -757,6 +782,7 @@ if "CSS" in models_to_fit:
 
 
         if not os.path.exists(save_path+".npy") or refit_mode == "overwrite":
+
             print("Starting CSS iterfit at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S'))
     
             gf_css.iterative_fit(rsq_threshold=rsq_threshold, verbose=verbose,
@@ -764,18 +790,18 @@ if "CSS" in models_to_fit:
                                  constraints=constraints_css,
                              xtol=xtol,
                              ftol=ftol)
-            print("CSS iterfit completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Median rsq>"+str(rsq_threshold)+": "+str(np.median(gf_css.iterative_search_params[gf_css.rsq_mask, -1])))
+            print("CSS iterfit completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Mean rsq>"+str(rsq_threshold)+": "+str(np.mean(gf_css.iterative_search_params[gf_css.rsq_mask, -1])))
             
             if crossvalidate:
                 gf_css.crossvalidate_fit(tc_full_iso_nonzerovar_dict['tc_test'],
                                  test_stimulus=test_prf_stim,
                                  single_hrf=single_hrf)
-                print("CSS Crossvalidation completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Median rsq>"+str(rsq_threshold)+": "+str(np.median(gf_css.iterative_search_params[gf_css.rsq_mask, -1])))
+                print("CSS Crossvalidation completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Mean rsq>"+str(rsq_threshold)+": "+str(np.mean(gf_css.iterative_search_params[gf_css.rsq_mask, -1])))
 
                 if hasattr(gf_css, 'noise_ceiling'):
-                    print("Median noise-ceiling >"+str(rsq_threshold)+": "+str(np.median(gf_css.noise_ceiling[gf_css.rsq_mask])))  
+                    print("Mean noise-ceiling >"+str(rsq_threshold)+": "+str(np.mean(gf_css.noise_ceiling[gf_css.rsq_mask])))  
                     noise_ceiling_fraction = gf_css.iterative_search_params[gf_css.rsq_mask, -1]/gf_css.noise_ceiling[gf_css.rsq_mask]
-                    print("Median noise-ceiling-fraction rsq>"+str(rsq_threshold)+": "+str(np.median(noise_ceiling_fraction)))
+                    print("Mean noise-ceiling-fraction rsq>"+str(rsq_threshold)+": "+str(np.mean(noise_ceiling_fraction)))
                     
                     if return_noise_ceiling_fraction:
                         gf_css.iterative_search_params[gf_css.rsq_mask, -1] = noise_ceiling_fraction
@@ -799,18 +825,18 @@ if "CSS" in models_to_fit:
                                      constraints=constraints_css,
                              xtol=xtol,
                              ftol=ftol)
-                print("CSS iterfit completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Median rsq>"+str(rsq_threshold)+": "+str(np.median(gf_css.iterative_search_params[gf_css.rsq_mask, -1])))
+                print("CSS iterfit completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Mean rsq>"+str(rsq_threshold)+": "+str(np.mean(gf_css.iterative_search_params[gf_css.rsq_mask, -1])))
                 
                 if crossvalidate:
                     gf_css.crossvalidate_fit(tc_full_iso_nonzerovar_dict['tc_test'],
                                  test_stimulus=test_prf_stim,
                                  single_hrf=single_hrf)
-                    print("CSS Crossvalidation completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Median rsq>"+str(rsq_threshold)+": "+str(np.median(gf_css.iterative_search_params[gf_css.rsq_mask, -1])))
+                    print("CSS Crossvalidation completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Mean rsq>"+str(rsq_threshold)+": "+str(np.mean(gf_css.iterative_search_params[gf_css.rsq_mask, -1])))
 
                     if hasattr(gf_css, 'noise_ceiling'):
-                        print("Median noise-ceiling >"+str(rsq_threshold)+": "+str(np.median(gf_css.noise_ceiling[gf_css.rsq_mask])))  
+                        print("Mean noise-ceiling >"+str(rsq_threshold)+": "+str(np.mean(gf_css.noise_ceiling[gf_css.rsq_mask])))  
                         noise_ceiling_fraction = gf_css.iterative_search_params[gf_css.rsq_mask, -1]/gf_css.noise_ceiling[gf_css.rsq_mask]
-                        print("Median noise-ceiling-fraction rsq>"+str(rsq_threshold)+": "+str(np.median(noise_ceiling_fraction)))
+                        print("Mean noise-ceiling-fraction rsq>"+str(rsq_threshold)+": "+str(np.mean(noise_ceiling_fraction)))
                         
                         if return_noise_ceiling_fraction:
                             gf_css.iterative_search_params[gf_css.rsq_mask, -1] = noise_ceiling_fraction
@@ -840,6 +866,32 @@ if "DoG" in models_to_fit:
                                      fit_hrf=fit_hrf,
                                      previous_gaussian_fitter=gf)
 
+    # DoG grid fit
+    if "dog_gridparams_path" not in analysis_info and "dog_iterparams_path" not in analysis_info and dog_grid:
+        save_path = opj(data_path, subj+"_gridparams-dog_space-"+fitting_space+str(chunk_nr))
+    
+        if not os.path.exists(save_path+".npy") or refit_mode == "overwrite":
+    
+            print("Starting DoG grid fit at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S'))
+            gf_dog.grid_fit(surround_amplitude_grid=dog_surround_amplitude_grid,
+                            surround_size_grid=dog_surround_size_grid,
+                            verbose=verbose,
+                            n_batches=n_batches,
+                            pos_prfs_only=pos_prfs_only)
+            print("DoG gridfit completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+
+              ". voxels/vertices above "+str(rsq_threshold)+": "+str(np.sum(gf_dog.gridsearch_params[:, -1]>rsq_threshold))+" out of "+
+              str(gf_dog.data.shape[0]))
+            print("Mean rsq>"+str(rsq_threshold)+": "+str(np.mean(gf_dog.gridsearch_params[gf_dog.gridsearch_params[:, -1]>rsq_threshold, -1])))
+    
+            np.save(save_path, gf_dog.gridsearch_params)
+    
+        elif os.path.exists(save_path+".npy") and refit_mode in ["iterate", "skip"]:
+            gf_dog.gridsearch_params = np.load(save_path+".npy")
+    
+    elif "dog_gridparams_path" in analysis_info:
+        gf_dog.gridsearch_params = np.array_split(np.load(analysis_info["dog_gridparams_path"]), n_chunks)[chunk_nr]
+    
+   
     save_path = opj(data_path, subj+"_iterparams-dog_space-"+fitting_space+str(chunk_nr))
 
     if "dog_iterparams_path" in analysis_info:
@@ -854,18 +906,18 @@ if "DoG" in models_to_fit:
                              constraints=constraints_dog,
                              xtol=xtol,
                              ftol=ftol)
-            print("DoG iterfit completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Median rsq>"+str(rsq_threshold)+": "+str(np.median(gf_dog.iterative_search_params[gf_dog.rsq_mask, -1])))
+            print("DoG iterfit completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Mean rsq>"+str(rsq_threshold)+": "+str(np.mean(gf_dog.iterative_search_params[gf_dog.rsq_mask, -1])))
             
             if crossvalidate:
                 gf_dog.crossvalidate_fit(tc_full_iso_nonzerovar_dict['tc_test'],
                                  test_stimulus=test_prf_stim,
                                  single_hrf=single_hrf)
-                print("DoG Crossvalidation completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Median rsq>"+str(rsq_threshold)+": "+str(np.median(gf_dog.iterative_search_params[gf_dog.rsq_mask, -1])))
+                print("DoG Crossvalidation completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Mean rsq>"+str(rsq_threshold)+": "+str(np.mean(gf_dog.iterative_search_params[gf_dog.rsq_mask, -1])))
 
                 if hasattr(gf_dog, 'noise_ceiling'):
-                    print("Median noise-ceiling >"+str(rsq_threshold)+": "+str(np.median(gf_dog.noise_ceiling[gf_dog.rsq_mask])))  
+                    print("Mean noise-ceiling >"+str(rsq_threshold)+": "+str(np.mean(gf_dog.noise_ceiling[gf_dog.rsq_mask])))  
                     noise_ceiling_fraction = gf_dog.iterative_search_params[gf_dog.rsq_mask, -1]/gf_dog.noise_ceiling[gf_dog.rsq_mask]
-                    print("Median noise-ceiling-fraction rsq>"+str(rsq_threshold)+": "+str(np.median(noise_ceiling_fraction)))
+                    print("Mean noise-ceiling-fraction rsq>"+str(rsq_threshold)+": "+str(np.mean(noise_ceiling_fraction)))
                     
                     if return_noise_ceiling_fraction:
                         gf_dog.iterative_search_params[gf_dog.rsq_mask, -1] = noise_ceiling_fraction
@@ -884,18 +936,18 @@ if "DoG" in models_to_fit:
                                          constraints=constraints_dog,
                                          xtol=xtol,
                                          ftol=ftol)
-            print("DoG iterfit completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Median rsq>"+str(rsq_threshold)+": "+str(np.median(gf_dog.iterative_search_params[gf_dog.rsq_mask, -1])))
+            print("DoG iterfit completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Mean rsq>"+str(rsq_threshold)+": "+str(np.mean(gf_dog.iterative_search_params[gf_dog.rsq_mask, -1])))
             
             if crossvalidate:
                 gf_dog.crossvalidate_fit(tc_full_iso_nonzerovar_dict['tc_test'],
                                  test_stimulus=test_prf_stim,
                                  single_hrf=single_hrf)
-                print("DoG Crossvalidation completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Median rsq>"+str(rsq_threshold)+": "+str(np.median(gf_dog.iterative_search_params[gf_dog.rsq_mask, -1])))
+                print("DoG Crossvalidation completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Mean rsq>"+str(rsq_threshold)+": "+str(np.mean(gf_dog.iterative_search_params[gf_dog.rsq_mask, -1])))
                 
                 if hasattr(gf_dog, 'noise_ceiling'):
-                    print("Median noise-ceiling >"+str(rsq_threshold)+": "+str(np.median(gf_dog.noise_ceiling[gf_dog.rsq_mask])))  
+                    print("Mean noise-ceiling >"+str(rsq_threshold)+": "+str(np.mean(gf_dog.noise_ceiling[gf_dog.rsq_mask])))  
                     noise_ceiling_fraction = gf_dog.iterative_search_params[gf_dog.rsq_mask, -1]/gf_dog.noise_ceiling[gf_dog.rsq_mask]
-                    print("Median noise-ceiling-fraction rsq>"+str(rsq_threshold)+": "+str(np.median(noise_ceiling_fraction)))
+                    print("Mean noise-ceiling-fraction rsq>"+str(rsq_threshold)+": "+str(np.mean(noise_ceiling_fraction)))
                     
                     if return_noise_ceiling_fraction:
                         gf_dog.iterative_search_params[gf_dog.rsq_mask, -1] = noise_ceiling_fraction
@@ -922,18 +974,18 @@ if "DoG" in models_to_fit:
                                      constraints=constraints_dog,
                                      xtol=xtol,
                                      ftol=ftol)
-                print("DoG iterfit completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Median rsq>"+str(rsq_threshold)+": "+str(np.median(gf_dog.iterative_search_params[gf_dog.rsq_mask, -1])))
+                print("DoG iterfit completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Mean rsq>"+str(rsq_threshold)+": "+str(np.mean(gf_dog.iterative_search_params[gf_dog.rsq_mask, -1])))
                 
                 if crossvalidate:
                     gf_dog.crossvalidate_fit(tc_full_iso_nonzerovar_dict['tc_test'],
                                  test_stimulus=test_prf_stim,
                                  single_hrf=single_hrf)
-                    print("DoG Crossvalidation completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Median rsq>"+str(rsq_threshold)+": "+str(np.median(gf_dog.iterative_search_params[gf_dog.rsq_mask, -1])))
+                    print("DoG Crossvalidation completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Mean rsq>"+str(rsq_threshold)+": "+str(np.mean(gf_dog.iterative_search_params[gf_dog.rsq_mask, -1])))
 
                     if hasattr(gf_dog, 'noise_ceiling'):
-                        print("Median noise-ceiling >"+str(rsq_threshold)+": "+str(np.median(gf_dog.noise_ceiling[gf_dog.rsq_mask])))  
+                        print("Mean noise-ceiling >"+str(rsq_threshold)+": "+str(np.mean(gf_dog.noise_ceiling[gf_dog.rsq_mask])))  
                         noise_ceiling_fraction = gf_dog.iterative_search_params[gf_dog.rsq_mask, -1]/gf_dog.noise_ceiling[gf_dog.rsq_mask]
-                        print("Median noise-ceiling-fraction rsq>"+str(rsq_threshold)+": "+str(np.median(noise_ceiling_fraction)))
+                        print("Mean noise-ceiling-fraction rsq>"+str(rsq_threshold)+": "+str(np.mean(noise_ceiling_fraction)))
                         
                         if return_noise_ceiling_fraction:
                             gf_dog.iterative_search_params[gf_dog.rsq_mask, -1] = noise_ceiling_fraction
@@ -983,7 +1035,7 @@ if "norm" in models_to_fit:
                          rsq_threshold=rsq_threshold,
                          pos_prfs_only=pos_prfs_only)
         
-            print("Norm gridfit completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Median rsq>"+str(rsq_threshold)+": "+str(np.median(gf_norm.gridsearch_params[gf_norm.gridsearch_rsq_mask, -1])))
+            print("Norm gridfit completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Mean rsq>"+str(rsq_threshold)+": "+str(np.mean(gf_norm.gridsearch_params[gf_norm.gridsearch_rsq_mask, -1])))
         
             np.save(save_path, gf_norm.gridsearch_params)
         elif os.path.exists(save_path+".npy") and refit_mode in ["iterate","skip"]:
@@ -1007,18 +1059,18 @@ if "norm" in models_to_fit:
                              constraints=constraints_norm,
                              xtol=xtol,
                              ftol=ftol)
-            print("Norm iterfit completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Median rsq>"+str(rsq_threshold)+": "+str(np.median(gf_norm.iterative_search_params[gf_norm.rsq_mask, -1])))
+            print("Norm iterfit completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Mean rsq>"+str(rsq_threshold)+": "+str(np.mean(gf_norm.iterative_search_params[gf_norm.rsq_mask, -1])))
             
             if crossvalidate:
                 gf_norm.crossvalidate_fit(tc_full_iso_nonzerovar_dict['tc_test'],
                                  test_stimulus=test_prf_stim,
                                  single_hrf=single_hrf)
-                print("Norm Crossvalidation completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Median rsq>"+str(rsq_threshold)+": "+str(np.median(gf_norm.iterative_search_params[gf_norm.rsq_mask, -1])))
+                print("Norm Crossvalidation completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Mean rsq>"+str(rsq_threshold)+": "+str(np.mean(gf_norm.iterative_search_params[gf_norm.rsq_mask, -1])))
 
                 if hasattr(gf_norm, 'noise_ceiling'):
-                    print("Median noise-ceiling >"+str(rsq_threshold)+": "+str(np.median(gf_norm.noise_ceiling[gf_norm.rsq_mask])))  
+                    print("Mean noise-ceiling >"+str(rsq_threshold)+": "+str(np.mean(gf_norm.noise_ceiling[gf_norm.rsq_mask])))  
                     noise_ceiling_fraction = gf_norm.iterative_search_params[gf_norm.rsq_mask, -1]/gf_norm.noise_ceiling[gf_norm.rsq_mask]
-                    print("Median noise-ceiling-fraction rsq>"+str(rsq_threshold)+": "+str(np.median(noise_ceiling_fraction)))
+                    print("Mean noise-ceiling-fraction rsq>"+str(rsq_threshold)+": "+str(np.mean(noise_ceiling_fraction)))
                     
                     if return_noise_ceiling_fraction:
                         gf_norm.iterative_search_params[gf_norm.rsq_mask, -1] = noise_ceiling_fraction
@@ -1036,18 +1088,18 @@ if "norm" in models_to_fit:
                                            constraints=constraints_norm,
                                            xtol=xtol,
                                            ftol=ftol)
-            print("Norm iterfit completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Median rsq>"+str(rsq_threshold)+": "+str(np.median(gf_norm.iterative_search_params[gf_norm.rsq_mask, -1])))
+            print("Norm iterfit completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Mean rsq>"+str(rsq_threshold)+": "+str(np.mean(gf_norm.iterative_search_params[gf_norm.rsq_mask, -1])))
             
             if crossvalidate:
                 gf_norm.crossvalidate_fit(tc_full_iso_nonzerovar_dict['tc_test'],
                                  test_stimulus=test_prf_stim,
                                  single_hrf=single_hrf)
-                print("Norm Crossvalidation completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Median rsq>"+str(rsq_threshold)+": "+str(np.median(gf_norm.iterative_search_params[gf_norm.rsq_mask, -1])))
+                print("Norm Crossvalidation completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Mean rsq>"+str(rsq_threshold)+": "+str(np.mean(gf_norm.iterative_search_params[gf_norm.rsq_mask, -1])))
 
                 if hasattr(gf_norm, 'noise_ceiling'):
-                    print("Median noise-ceiling >"+str(rsq_threshold)+": "+str(np.median(gf_norm.noise_ceiling[gf_norm.rsq_mask])))  
+                    print("Mean noise-ceiling >"+str(rsq_threshold)+": "+str(np.mean(gf_norm.noise_ceiling[gf_norm.rsq_mask])))  
                     noise_ceiling_fraction = gf_norm.iterative_search_params[gf_norm.rsq_mask, -1]/gf_norm.noise_ceiling[gf_norm.rsq_mask]
-                    print("Median noise-ceiling-fraction rsq>"+str(rsq_threshold)+": "+str(np.median(noise_ceiling_fraction)))
+                    print("Mean noise-ceiling-fraction rsq>"+str(rsq_threshold)+": "+str(np.mean(noise_ceiling_fraction)))
                     
                     if return_noise_ceiling_fraction:
                         gf_norm.iterative_search_params[gf_norm.rsq_mask, -1] = noise_ceiling_fraction
@@ -1073,18 +1125,18 @@ if "norm" in models_to_fit:
                                               constraints=constraints_norm,
                                               xtol=xtol,
                                               ftol=ftol)
-                print("Norm iterfit completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Median rsq>"+str(rsq_threshold)+": "+str(np.median(gf_norm.iterative_search_params[gf_norm.rsq_mask, -1])))
+                print("Norm iterfit completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Mean rsq>"+str(rsq_threshold)+": "+str(np.mean(gf_norm.iterative_search_params[gf_norm.rsq_mask, -1])))
             
                 if crossvalidate:
                     gf_norm.crossvalidate_fit(tc_full_iso_nonzerovar_dict['tc_test'],
                                  test_stimulus=test_prf_stim,
                                  single_hrf=single_hrf)
-                    print("Norm Crossvalidation completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Median rsq>"+str(rsq_threshold)+": "+str(np.median(gf_norm.iterative_search_params[gf_norm.rsq_mask, -1])))
+                    print("Norm Crossvalidation completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Mean rsq>"+str(rsq_threshold)+": "+str(np.mean(gf_norm.iterative_search_params[gf_norm.rsq_mask, -1])))
             
                     if hasattr(gf_norm, 'noise_ceiling'):
-                        print("Median noise-ceiling >"+str(rsq_threshold)+": "+str(np.median(gf_norm.noise_ceiling[gf_norm.rsq_mask])))  
+                        print("Mean noise-ceiling >"+str(rsq_threshold)+": "+str(np.mean(gf_norm.noise_ceiling[gf_norm.rsq_mask])))  
                         noise_ceiling_fraction = gf_norm.iterative_search_params[gf_norm.rsq_mask, -1]/gf_norm.noise_ceiling[gf_norm.rsq_mask]
-                        print("Median noise-ceiling-fraction rsq>"+str(rsq_threshold)+": "+str(np.median(noise_ceiling_fraction)))
+                        print("Mean noise-ceiling-fraction rsq>"+str(rsq_threshold)+": "+str(np.mean(noise_ceiling_fraction)))
                         
                         if return_noise_ceiling_fraction:
                             gf_norm.iterative_search_params[gf_norm.rsq_mask, -1] = noise_ceiling_fraction    

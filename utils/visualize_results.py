@@ -105,7 +105,7 @@ class visualize_results(object):
         self.spaces = self.main_dict.keys()
         return
         
-    def define_rois_and_flatmaps(self, fs_dir, data_path, import_flatmaps, output_rois, hcp_atlas_path = None):
+    def define_rois_and_flatmaps(self, fs_dir, output_rois_path, import_flatmaps, output_rois, hcp_atlas_path = None):
         self.idx_rois = dd(dict)
         self.fs_dir = fs_dir
         self.get_spaces()
@@ -204,7 +204,7 @@ class visualize_results(object):
             if len(output_rois)>0:
                 try:
                     rois = np.concatenate(tuple([self.idx_rois[subj][roi] for roi in self.output_rois]), axis=0)
-                    np.save(opj(data_path, f"prfpy/{subj}_combined-rois.npy"), rois)
+                    np.save(opj(output_rois_path, f"prfpy/{subj}_combined-rois.npy"), rois)
                 except Exception as e:
                     print(e)
                     pass    
@@ -634,9 +634,15 @@ class visualize_results(object):
                     #data quality/stats cortex visualization 
                     if self.plot_stats_cortex and not plotted_stats[subj] :
                         
-                        mean_ts_vert = cortex.Vertex2D(tc_stats['Mean'], mask*(tc_stats['Mean']>self.tc_min[subj]), subject=pycortex_subj, cmap='Jet_2D_alpha')
-                        var_ts_vert = cortex.Vertex2D(tc_stats['Variance'], mask*(tc_stats['Mean']>self.tc_min[subj]), subject=pycortex_subj, cmap='Jet_2D_alpha')
-                        tsnr_vert = cortex.Vertex2D(tc_stats['TSNR'], mask*(tc_stats['Mean']>self.tc_min[subj]), subject=pycortex_subj, cmap='Jet_2D_alpha')
+                        stats_mask = mask*(tc_stats['Mean']>self.tc_min[subj])
+                        if rois != 'all':
+                            stats_mask = roi_mask(np.concatenate(tuple([self.idx_rois[subj][r] for r in rois])), stats_mask)
+                        
+                        
+                        
+                        mean_ts_vert = cortex.Vertex2D(tc_stats['Mean'], stats_mask, subject=pycortex_subj, cmap='Jet_2D_alpha')
+                        var_ts_vert = cortex.Vertex2D(tc_stats['Variance'], stats_mask, subject=pycortex_subj, cmap='Jet_2D_alpha')
+                        tsnr_vert = cortex.Vertex2D(tc_stats['TSNR'], stats_mask, subject=pycortex_subj, cmap='Jet_2D_alpha')
         
                         data_stats ={'mean':mean_ts_vert.raw, 'var':var_ts_vert.raw, 'tsnr':tsnr_vert.raw}
         
