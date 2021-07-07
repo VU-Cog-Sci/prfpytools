@@ -105,7 +105,10 @@ models_to_fit:
            - "gauss"
            - "DoG"
            - "CSS"
-           - "norm"           
+           - "norm"   
+
+dog_grid: False
+css_grid: False        
 
 task_names:
            - "1R"
