@@ -1459,7 +1459,7 @@ class visualize_results(object):
                                 bar_height = full_roi_stats.mean
                                 
                                 if zconfint_err_alpha is not None:                                    
-                                    bar_err = (np.abs(full_roi_stats.zconfint_mean(alpha=zconfint_err_alpha) - bar_height)*upsampling_corr_factor**0.5).reshape(2,1)                                    
+                                    bar_err = (np.abs(full_roi_stats.zconfint_mean(alpha=zconfint_err_alpha) - bar_height)).reshape(2,1)*upsampling_corr_factor**0.5                                    
                                 else:
                                     bar_err = full_roi_stats.std_mean*upsampling_corr_factor**0.5
                                     
@@ -1520,7 +1520,7 @@ class visualize_results(object):
                                                             weights=rsq[analysis][ssj[0]][model][roi])
                                                 
                                                 if zconfint_err_alpha is not None:
-                                                    yerr_sj = (np.abs(ssj_stats.zconfint_mean(alpha=zconfint_err_alpha) - ssj_stats.mean)*upsampling_corr_factor**0.5).reshape(2,1)
+                                                    yerr_sj = (np.abs(ssj_stats.zconfint_mean(alpha=zconfint_err_alpha) - ssj_stats.mean)).reshape(2,1)*upsampling_corr_factor**0.5
                                                 else:
                                                     yerr_sj = ssj_stats.std_mean*upsampling_corr_factor**0.5
                                                     
@@ -1741,7 +1741,7 @@ class visualize_results(object):
                                                             weights=rsq[analysis][ssj[0]][model][roi])
                                                 
                                                 if zconfint_err_alpha is not None:
-                                                    yerr_sj = (np.abs(ssj_stats.zconfint_mean(alpha=zconfint_err_alpha) - ssj_stats.mean)*upsampling_corr_factor**0.5).reshape(2,1)
+                                                    yerr_sj = (np.abs(ssj_stats.zconfint_mean(alpha=zconfint_err_alpha) - ssj_stats.mean)).reshape(2,1)*upsampling_corr_factor**0.5
                                                 else:
                                                     yerr_sj = ssj_stats.std_mean*upsampling_corr_factor**0.5
                                                     
@@ -1891,12 +1891,12 @@ class visualize_results(object):
                                         
                                         try:
                                             if zconfint_err_alpha is not None:
-                                                curr_yerr = np.array([np.abs(ss.zconfint_mean(alpha=zconfint_err_alpha)-ss.mean)*upsampling_corr_factor**0.5 for ss in y_par_stats[analysis][subj][model][roi]]).T
-                                                curr_xerr = np.array([np.abs(ss.zconfint_mean(alpha=zconfint_err_alpha)-ss.mean)*upsampling_corr_factor**0.5 for ss in x_par_stats[analysis][subj][model][roi]]).T
+                                                curr_yerr = np.array([np.abs(ss.zconfint_mean(alpha=zconfint_err_alpha)-ss.mean) for ss in y_par_stats[analysis][subj][model][roi]]).T*upsampling_corr_factor**0.5
+                                                curr_xerr = np.array([np.abs(ss.zconfint_mean(alpha=zconfint_err_alpha)-ss.mean) for ss in x_par_stats[analysis][subj][model][roi]]).T*upsampling_corr_factor**0.5
                                             else:
-                                                curr_yerr = np.array([ss.std_mean*upsampling_corr_factor**0.5 for ss in y_par_stats[analysis][subj][model][roi]]).T
-                                                curr_xerr = np.array([ss.std_mean*upsampling_corr_factor**0.5 for ss in x_par_stats[analysis][subj][model][roi]]).T
-                                           
+                                                curr_yerr = np.array([ss.std_mean for ss in y_par_stats[analysis][subj][model][roi]])*upsampling_corr_factor**0.5
+                                                curr_xerr = np.array([ss.std_mean for ss in x_par_stats[analysis][subj][model][roi]])*upsampling_corr_factor**0.5
+                                                
                                             
                                             pl.errorbar(curr_x_bins,
                                                 curr_y_bins,
@@ -2020,11 +2020,11 @@ class visualize_results(object):
                                             
                                             #data points with errors
                                             if zconfint_err_alpha is not None:
-                                                curr_yerr = np.array([np.abs(ss.zconfint_mean(alpha=zconfint_err_alpha)-ss.mean)*upsampling_corr_factor**0.5 for ss in y_par_stats[analysis][subj][model][roi]]).T
-                                                curr_xerr = np.array([np.abs(ss.zconfint_mean(alpha=zconfint_err_alpha)-ss.mean)*upsampling_corr_factor**0.5 for ss in x_par_stats[analysis][subj][model][roi]]).T
+                                                curr_yerr = np.array([np.abs(ss.zconfint_mean(alpha=zconfint_err_alpha)-ss.mean) for ss in y_par_stats[analysis][subj][model][roi]]).T*upsampling_corr_factor**0.5
+                                                curr_xerr = np.array([np.abs(ss.zconfint_mean(alpha=zconfint_err_alpha)-ss.mean) for ss in x_par_stats[analysis][subj][model][roi]]).T*upsampling_corr_factor**0.5
                                             else:
-                                                curr_yerr = np.array([ss.std_mean*upsampling_corr_factor**0.5 for ss in y_par_stats[analysis][subj][model][roi]]).T
-                                                curr_xerr = np.array([ss.std_mean*upsampling_corr_factor**0.5 for ss in x_par_stats[analysis][subj][model][roi]]).T
+                                                curr_yerr = np.array([ss.std_mean for ss in y_par_stats[analysis][subj][model][roi]])*upsampling_corr_factor**0.5
+                                                curr_xerr = np.array([ss.std_mean for ss in x_par_stats[analysis][subj][model][roi]])*upsampling_corr_factor**0.5
                                            
                                             
                                             pl.errorbar(curr_x_bins,
@@ -2095,7 +2095,7 @@ class visualize_results(object):
                     analysis_names = 'all', subject_ids='all', y_parameter_toplevel=None,
                     x_dims_idx=None, y_dims_idx=None, zscore_data=False, size_response_curves = False,
                     plot_corr_matrix = False, regress_params=False, multidim_y = False, cv_regression = False,
-                    zconfint_err_alpha = None):
+                    zconfint_err_alpha = None, bold_voxel_volume = None):
         
         np.set_printoptions(precision=4,suppress=True)
 
@@ -2163,10 +2163,47 @@ class visualize_results(object):
                 
                 if len(subjects)>1 and space != 'fsaverage':
                     subjects.append(('Group', {}))
-
+                
+                upsampling_corr_factors = []
                 for subj, subj_res in subjects:
                     print(space+" "+analysis+" "+subj)
 
+                    #upsampling correction: fsnative has approximately 3 times as many datapoints as original
+                    if subj != 'Group':
+                        if bold_voxel_volume is not None:
+                            
+                            print("Make sure bold_voxel_volume is specified in mm^3")
+                            
+                            try:
+                                if subj.isdecimal() and space == 'HCP':
+                                    pycortex_subj = '999999'
+                                else:
+                                    pycortex_subj = subj
+                                    
+                                aseg = nb.load(opj(cortex.database.default_filestore,pycortex_subj,'anatomicals','aseg.nii.gz'))
+                                anat_vox_vol = aseg.header.get_zooms()[0]*aseg.header.get_zooms()[1]*aseg.header.get_zooms()[2]
+                                cortex_volume = ((aseg.get_fdata()==42).sum()+(aseg.get_fdata()==3).sum())*anat_vox_vol
+                                nr_bold_voxels = cortex_volume/bold_voxel_volume
+                                nr_surf_vertices = cortex.db.get_surfinfo(pycortex_subj).data.shape
+        
+                                upsampling_corr_factor = nr_surf_vertices / nr_bold_voxels
+                                
+          
+                            except Exception as e:
+                                print(e)
+                                print("Unable to perform upsampling correction.")
+                                upsampling_corr_factor = 1
+                                pass
+                                
+                        else:
+                            print("BOLD voxel volume not specified. Not performing upsampling correction.")
+                            upsampling_corr_factor = 1
+                        upsampling_corr_factors.append(upsampling_corr_factor)
+                    else:
+                        upsampling_corr_factor = np.mean(upsampling_corr_factors)
+                        
+                    print(f"Upsampling correction factor: {upsampling_corr_factor}")
+                  
                     
                     # binned eccentricity vs other parameters relationships       
         
@@ -2626,9 +2663,9 @@ class visualize_results(object):
                                     
                                     data_sr = [actual_response_1.mean, actual_response_1.mean,actual_response_2R.mean,actual_response_4.mean,actual_response_4.mean]/np.max([actual_response_1.mean, actual_response_1.mean,actual_response_2R.mean,actual_response_4.mean,actual_response_4.mean])
                                     if zconfint_err_alpha is not None:
-                                        yerr_data_sr = np.array([np.abs(ss.zconfint_mean(alpha=zconfint_err_alpha)-ss.mean)*upsampling_corr_factor**0.5 for ss in [actual_response_1,actual_response_1,actual_response_2R,actual_response_4,actual_response_4]]).T
+                                        yerr_data_sr = np.array([np.abs(ss.zconfint_mean(alpha=zconfint_err_alpha)-ss.mean) for ss in [actual_response_1,actual_response_1,actual_response_2R,actual_response_4,actual_response_4]]).T*upsampling_corr_factor**0.5
                                     else:
-                                        yerr_data_sr = np.array([ss.std_mean*upsampling_corr_factor**0.5 for ss in [actual_response_1,actual_response_1,actual_response_2R,actual_response_4,actual_response_4]]).T
+                                        yerr_data_sr = np.array([ss.std_mean for ss in [actual_response_1,actual_response_1,actual_response_2R,actual_response_4,actual_response_4]])*upsampling_corr_factor**0.5
                                     
                                     #yerr_data_sr /= np.max([actual_response_1R.mean,actual_response_1S.mean,actual_response_2R.mean,actual_response_4R.mean,actual_response_4F.mean])
                                     
