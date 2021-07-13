@@ -1075,7 +1075,7 @@ class visualize_results(object):
                     x_param_model=None, violin=False, scatter=False, diff_gauss=False, diff_gauss_x=False,
                     means_only=False, stats_on_plot=False, bin_by='size', zscore_ydata=False, zscore_xdata=False,
                     zconfint_err_alpha = None, exp_fit = False, show_legend=False, each_subj_on_group=False,
-                    bold_voxel_volume = None):
+                    bold_voxel_volume = None, quantile_exclusion=0.999):
         """
         
 
@@ -1142,14 +1142,15 @@ class visualize_results(object):
         for space, space_res in spaces:
             if 'fs' in space or 'HCP' in space:
                 
-                #surrounds larger than this are excluded from surround size calculations
-                w_max=60
-                #remove absurd suppression index values
-                supp_max=1000
-                #css max
-                css_max=1
-                #max b and d
-                #bd_max=1000
+                if quantile_exclusion is None:
+                    #surrounds larger than this are excluded from surround size calculations
+                    w_max=60
+                    #remove absurd suppression index values
+                    supp_max=1000
+                    #css max
+                    css_max=1
+                    #max b and d
+                    bd_max=1000
                 #bar or violin width
                 bar_or_violin_width = 0.3
 
@@ -1250,7 +1251,7 @@ class visualize_results(object):
 
                                 
                                 if 'mean' not in analysis or 'fsaverage' in subj:
-                                    if 'sub' in subj or 'fsaverage' in subj or (space=='HCP' and subj.isdecimal()):
+                                    if 'sub' in subj or 'fsaverage' in subj or subj.isdecimal():
                                         if 'rsq' in y_parameter.lower():
                                             #comparing same vertices for model performance
                                             curr_alpha = subj_res['Processed Results']['Alpha']['all']>rsq_thresh
@@ -1271,47 +1272,59 @@ class visualize_results(object):
                                                 alpha[analysis][subj][model][roi] = (roi_mask(np.concatenate(tuple([self.idx_rois[subj][r] for r in rois if ('combined' not in r and 'Brain' not in r and r in self.idx_rois[subj])])), curr_alpha))    
                                             elif roi == 'all_custom':
                                                 alpha[analysis][subj][model][roi] = (roi_mask(np.concatenate(tuple([self.idx_rois[subj][r] for r in self.idx_rois[subj] if 'custom' in r])), curr_alpha))    
-                                            
+                                            elif space == 'fsaverage' and roi in self.idx_rois['fsaverage']:
+                                                alpha[analysis][subj][model][roi] = (roi_mask(self.idx_rois['fsaverage'][roi], curr_alpha))
                                             else:
                                                 #, otherwise none
                                                 print(f"{roi}: undefined ROI")
                                                 alpha[analysis][subj][model][roi] = np.zeros_like(curr_alpha).astype('bool')
-
                                         
-                                        if y_parameter == 'Surround Size (fwatmin)' or x_parameter == 'Surround Size (fwatmin)':# and model == 'DoG':
-                                            #exclude too large surround (no surround)
-                                            alpha[analysis][subj][model][roi] *= (subj_res['Processed Results']['Surround Size (fwatmin)'][model]<w_max)
-                                            if x_param_model!=None:
-                                                alpha[analysis][subj][model][roi] *= (subj_res['Processed Results']['Surround Size (fwatmin)'][x_param_model]<w_max)
-
                                         
-                                        if y_parameter == 'Surround/Centre Amplitude'  or x_parameter == 'Surround/Centre Amplitude' :# and model == 'DoG':
-                                            #exclude too large surround (no surround)
-                                            if x_param_model!=None:
-                                                alpha[analysis][subj][model][roi] *= (subj_res['Processed Results']['Surround/Centre Amplitude'][x_param_model]<w_max)
-                                            else:
-                                                alpha[analysis][subj][model][roi] *= (subj_res['Processed Results']['Surround/Centre Amplitude'][model]<w_max)
-
+                                        #manual exclusion of outliers
+                                        if quantile_exclusion is None:
+                                            print("Using manual exclusion, see quant_plots function. Set quantile_exclusion=1 for no exclusion.")
+                                            if y_parameter == 'Surround Size (fwatmin)' or x_parameter == 'Surround Size (fwatmin)':# and model == 'DoG':
+                                                #exclude too large surround (no surround)
+                                                alpha[analysis][subj][model][roi] *= (subj_res['Processed Results']['Surround Size (fwatmin)'][model]<w_max)
+                                                if x_param_model!=None:
+                                                    alpha[analysis][subj][model][roi] *= (subj_res['Processed Results']['Surround Size (fwatmin)'][x_param_model]<w_max)
+    
+                                            
+                                            if y_parameter == 'Surround/Centre Amplitude'  or x_parameter == 'Surround/Centre Amplitude' :# and model == 'DoG':
+                                                #exclude too large surround (no surround)
+                                                if x_param_model is not None:
+                                                    alpha[analysis][subj][model][roi] *= (subj_res['Processed Results']['Surround/Centre Amplitude'][x_param_model]<w_max)
+                                                else:
+                                                    alpha[analysis][subj][model][roi] *= (subj_res['Processed Results']['Surround/Centre Amplitude'][model]<w_max)
+    
+                                                    
+                                            if 'Suppression' in y_parameter:
+                                                #exclude nonsensical suppression index values
+                                                alpha[analysis][subj][model][roi] *= (subj_res['Processed Results'][y_parameter][model]<supp_max)                                            
+                                            if 'Suppression' in x_parameter:
+                                                #exclude nonsensical suppression index values
+                                                alpha[analysis][subj][model][roi] *= (subj_res['Processed Results'][x_parameter][model]<supp_max)
+                                                if x_param_model is not None:
+                                                    alpha[analysis][subj][model][roi] *= (subj_res['Processed Results'][x_parameter][x_param_model]<supp_max)
+                                                    
+                                            if 'CSS Exponent' in x_parameter:
+                                                alpha[analysis][subj][model][roi] *= (subj_res['Processed Results'][x_parameter][x_param_model]<css_max)
+                                            
+                                            if 'Norm Param.' in y_parameter:
+                                                alpha[analysis][subj][model][roi] *= (subj_res['Processed Results'][y_parameter][model]<bd_max)                                            
+                                            if 'Norm Param.' in x_parameter:
+                                                alpha[analysis][subj][model][roi] *= (subj_res['Processed Results'][x_parameter][model]<bd_max)                                            
+                                                if x_param_model is not None:
+                                                    alpha[analysis][subj][model][roi] *= (subj_res['Processed Results'][x_parameter][x_param_model]<bd_max)
+                                        
+                                        else:
+                                            alpha[analysis][subj][model][roi] *= (subj_res['Processed Results'][y_parameter][model]<np.quantile(subj_res['Processed Results'][y_parameter][model],quantile_exclusion))*(subj_res['Processed Results'][y_parameter][model]>np.quantile(subj_res['Processed Results'][y_parameter][model],1-quantile_exclusion))  
+                                            alpha[analysis][subj][model][roi] *= (subj_res['Processed Results'][x_parameter][model]<np.quantile(subj_res['Processed Results'][x_parameter][model],quantile_exclusion))*(subj_res['Processed Results'][x_parameter][model]>np.quantile(subj_res['Processed Results'][x_parameter][model],1-quantile_exclusion))  
+                                            if x_param_model is not None:
+                                                alpha[analysis][subj][model][roi] *= (subj_res['Processed Results'][x_parameter][x_param_model]<np.quantile(subj_res['Processed Results'][x_parameter][x_param_model],quantile_exclusion))*(subj_res['Processed Results'][x_parameter][x_param_model]>np.quantile(subj_res['Processed Results'][x_parameter][x_param_model],1-quantile_exclusion))  
                                                 
-                                        if 'Suppression' in y_parameter:
-                                            #exclude nonsensical suppression index values
-                                            alpha[analysis][subj][model][roi] *= (subj_res['Processed Results'][y_parameter][model]<supp_max)                                            
-                                        if 'Suppression' in x_parameter:
-                                            #exclude nonsensical suppression index values
-                                            alpha[analysis][subj][model][roi] *= (subj_res['Processed Results'][x_parameter][model]<supp_max)
-                                            if x_param_model!=None:
-                                                alpha[analysis][subj][model][roi] *= (subj_res['Processed Results'][x_parameter][x_param_model]<supp_max)
-                                                
-                                        if 'CSS Exponent' in x_parameter:
-                                            alpha[analysis][subj][model][roi] *= (subj_res['Processed Results'][x_parameter][x_param_model]<css_max)
-                                        
-                                        # if 'Norm Param.' in y_parameter:
-                                        #     alpha[analysis][subj][model][roi] *= (subj_res['Processed Results'][y_parameter][model]<bd_max)                                            
-                                        # if 'Norm Param.' in x_parameter:
-                                        #     alpha[analysis][subj][model][roi] *= (subj_res['Processed Results'][x_parameter][model]<bd_max)                                            
-                                        #     if x_param_model!=None:
-                                        #         alpha[analysis][subj][model][roi] *= (subj_res['Processed Results'][x_parameter][x_param_model]<bd_max)
-                                                                    
+                                            
+                                            
          
                                         #if 'ccrsq' in y_parameter.lower():
                                         #    alpha[analysis][subj][model][roi] *= (subj_res['Processed Results'][y_parameter][model]>0)
@@ -2095,7 +2108,7 @@ class visualize_results(object):
                     analysis_names = 'all', subject_ids='all', y_parameter_toplevel=None,
                     x_dims_idx=None, y_dims_idx=None, zscore_data=False, size_response_curves = False,
                     plot_corr_matrix = False, regress_params=False, multidim_y = False, cv_regression = False,
-                    zconfint_err_alpha = None, bold_voxel_volume = None):
+                    zconfint_err_alpha = None, bold_voxel_volume = None, quantile_exclusion=0.999):
         
         np.set_printoptions(precision=4,suppress=True)
 
@@ -2125,16 +2138,15 @@ class visualize_results(object):
         for space, space_res in spaces:
         
             
-            #upsampling correction: fsnative has approximately 3 times as many datapoints as original
-            upsampling_corr_factor = 3
-            #surrounds larger than this are excluded from surround size calculations
-            w_max=60
-            #remove absurd suppression index values
-            supp_max=1000
-            #css max
-            css_max=1
-            #max b and d
-            #bd_max=1000
+            if quantile_exclusion is None:
+                #surrounds larger than this are excluded from surround size calculations
+                w_max=60
+                #remove absurd suppression index values
+                supp_max=1000
+                #css max
+                css_max=1
+                #max b and d
+                bd_max=1000
             
             dimensions = []
                     
@@ -2232,7 +2244,10 @@ class visualize_results(object):
                                         
                                         elif roi == 'all_custom':
                                             alpha[analysis][subj][roi] = roi_mask(np.concatenate(tuple([self.idx_rois[subj][r] for r in self.idx_rois[subj] if 'custom' in r])), curr_alpha)
-                                                                                        
+                                        
+                                        elif space == 'fsaverage' and roi in self.idx_rois['fsaverage']:
+                                            alpha[analysis][subj][roi] = (roi_mask(self.idx_rois['fsaverage'][roi], curr_alpha))
+                                                                                          
                                         else:
                                             #, otherwise none
                                             print(f"{roi}: undefined ROI")
@@ -2244,33 +2259,39 @@ class visualize_results(object):
                                         if model in subj_res['Processed Results'][param] and alpha[analysis][subj][roi].sum()>0:
                                             alpha[analysis][subj][roi] *= np.isfinite(subj_res['Processed Results'][param][model])
                                             
-                                            
-                                            if param == 'Surround Size (fwatmin)':
-                                                #exclude too large surround (no surround)
-                                                alpha[analysis][subj][roi] *= (subj_res['Processed Results'][param][model]<w_max)
-                                            if param == 'CSS Exponent':
-                                                alpha[analysis][subj][roi] *= (subj_res['Processed Results'][param][model]<css_max)
-                                            if 'Suppression' in param:
-                                                alpha[analysis][subj][roi] *= (subj_res['Processed Results'][param][model]<supp_max)
-                                                
-                                                
-                                            # if 'Amplitude' in param:
-                                            #     print(param)
-                                            #     print(subj_res['Processed Results'][param][model][alpha[analysis][subj][roi]].max())
-                                            #     alpha[analysis][subj][roi] *= (subj_res['Processed Results'][param][model]<bd_max)   
-                                                
-                                            #     print(subj_res['Processed Results'][param][model][alpha[analysis][subj][roi]].max())
-                                         
+                                            #manual exclusion of outliers
+                                            if quantile_exclusion is None:    
+                                                print("Using manual exclusion, see multidim_analysis function. Set quantile_exclusion=1 for no exclusion.")
 
-                                            # param_max = subj_res['Processed Results'][param][model][alpha[analysis][subj][roi]].mean()+3*np.std(subj_res['Processed Results'][param][model][alpha[analysis][subj][roi]])
-                                            # param_min = subj_res['Processed Results'][param][model][alpha[analysis][subj][roi]].mean()-3*np.std(subj_res['Processed Results'][param][model][alpha[analysis][subj][roi]])
-                                            
-                                            
-                                            # alpha[analysis][subj][roi] *= (subj_res['Processed Results'][param][model]<param_max)
-                                            # alpha[analysis][subj][roi] *= (subj_res['Processed Results'][param][model]>param_min)
-                                            # print(f"max min {param} {param_max} {param_min} {np.var(subj_res['Processed Results'][param][model][alpha[analysis][subj][roi]])}")
-                                            
-                                            
+                                                if param == 'Surround Size (fwatmin)':
+                                                    #exclude too large surround (no surround)
+                                                    alpha[analysis][subj][roi] *= (subj_res['Processed Results'][param][model]<w_max)
+                                                if param == 'CSS Exponent':
+                                                    alpha[analysis][subj][roi] *= (subj_res['Processed Results'][param][model]<css_max)
+                                                if 'Suppression' in param:
+                                                    alpha[analysis][subj][roi] *= (subj_res['Processed Results'][param][model]<supp_max)
+                                                if 'Norm Param.' in param:    
+                                                    alpha[analysis][subj][roi] *= (subj_res['Processed Results'][param][model]<bd_max)
+                                                
+                                                # if 'Amplitude' in param:
+                                                #     print(param)
+                                                #     print(subj_res['Processed Results'][param][model][alpha[analysis][subj][roi]].max())
+                                                #     alpha[analysis][subj][roi] *= (subj_res['Processed Results'][param][model]<bd_max)   
+                                                    
+                                                #     print(subj_res['Processed Results'][param][model][alpha[analysis][subj][roi]].max())
+                                             
+    
+                                                # param_max = subj_res['Processed Results'][param][model][alpha[analysis][subj][roi]].mean()+3*np.std(subj_res['Processed Results'][param][model][alpha[analysis][subj][roi]])
+                                                # param_min = subj_res['Processed Results'][param][model][alpha[analysis][subj][roi]].mean()-3*np.std(subj_res['Processed Results'][param][model][alpha[analysis][subj][roi]])
+                                                
+                                                
+                                                # alpha[analysis][subj][roi] *= (subj_res['Processed Results'][param][model]<param_max)
+                                                # alpha[analysis][subj][roi] *= (subj_res['Processed Results'][param][model]>param_min)
+                                                # print(f"max min {param} {param_max} {param_min} {np.var(subj_res['Processed Results'][param][model][alpha[analysis][subj][roi]])}")
+                                            else:    
+                                                alpha[analysis][subj][roi] *= (subj_res['Processed Results'][param][model]<np.quantile(subj_res['Processed Results'][param][model],quantile_exclusion))*(subj_res['Processed Results'][param][model]>np.quantile(subj_res['Processed Results'][param][model],1-quantile_exclusion))  
+
+                                                
                     for i, roi in enumerate(rois):                              
                         if 'mean' not in analysis or 'fsaverage' in subj:
                             if 'sub' in subj or 'fsaverage' in subj:
