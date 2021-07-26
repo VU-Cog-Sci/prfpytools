@@ -800,8 +800,8 @@ class visualize_results(object):
                         
                         for model in self.only_models:
                             ds_amp[model] = cortex.Vertex2D(p_r['Amplitude'][model], p_r['Alpha'][model], subject=pycortex_subj, 
-                                                            vmin=np.quantile(p_r['Amplitude'][model][p_r['Alpha'][model]>rsq_thresh],0.1), 
-                                                            vmax=np.quantile(p_r['Amplitude'][model][p_r['Alpha'][model]>rsq_thresh],0.9), vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw
+                                                            vmin=np.nanquantile(p_r['Amplitude'][model][p_r['Alpha'][model]>rsq_thresh],0.1), 
+                                                            vmax=np.nanquantile(p_r['Amplitude'][model][p_r['Alpha'][model]>rsq_thresh],0.9), vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw
         
                         self.js_handle_dict[space][analysis][subj]['js_handle_amp'] = cortex.webgl.show(ds_amp, pickerfun=clicker_function, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)
                         
@@ -864,7 +864,7 @@ class visualize_results(object):
                             for receptor in p_r['Receptor Maps']:
                                 
                                 ds_receptors[receptor] = cortex.Vertex2D(p_r['Receptor Maps'][receptor], p_r['Alpha']['all'], subject=pycortex_subj, 
-                                                                         vmin=np.quantile(p_r['Receptor Maps'][receptor][p_r['Alpha']['all']>rsq_thresh],0.1), vmax=np.quantile(p_r['Receptor Maps'][receptor][p_r['Alpha']['all']>rsq_thresh],0.9), 
+                                                                         vmin=np.nanquantile(p_r['Receptor Maps'][receptor][p_r['Alpha']['all']>rsq_thresh],0.1), vmax=np.nanquantile(p_r['Receptor Maps'][receptor][p_r['Alpha']['all']>rsq_thresh],0.9), 
                                                                          vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw                                                      
             
                             self.js_handle_dict[space][analysis][subj]['js_handle_receptors'] = cortex.webgl.show(ds_receptors, pickerfun=clicker_function, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)    
@@ -877,16 +877,16 @@ class visualize_results(object):
                         for model in [model for model in self.only_models if 'Norm' in model]:
 
                             ds_norm_baselines[f'{model} Param. B'] = cortex.Vertex2D(p_r['Norm Param. B'][model], p_r['Alpha'][model], subject=pycortex_subj, 
-                                                                         vmin=np.quantile(p_r['Norm Param. B'][model][p_r['Alpha'][model]>rsq_thresh],0.1), 
-                                                                         vmax=np.quantile(p_r['Norm Param. B'][model][p_r['Alpha'][model]>rsq_thresh],0.9), vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw                    
+                                                                         vmin=np.nanquantile(p_r['Norm Param. B'][model][p_r['Alpha'][model]>rsq_thresh],0.1), 
+                                                                         vmax=np.nanquantile(p_r['Norm Param. B'][model][p_r['Alpha'][model]>rsq_thresh],0.9), vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw                    
                             ds_norm_baselines[f'{model} Param. D'] = cortex.Vertex2D(p_r['Norm Param. D'][model], p_r['Alpha'][model], subject=pycortex_subj, 
-                                                                         vmin=np.quantile(p_r['Norm Param. D'][model][p_r['Alpha'][model]>rsq_thresh],0.1), 
-                                                                         vmax=np.quantile(p_r['Norm Param. D'][model][p_r['Alpha'][model]>rsq_thresh],0.9), vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw
+                                                                         vmin=np.nanquantile(p_r['Norm Param. D'][model][p_r['Alpha'][model]>rsq_thresh],0.1), 
+                                                                         vmax=np.nanquantile(p_r['Norm Param. D'][model][p_r['Alpha'][model]>rsq_thresh],0.9), vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw
                             
                             # if 'Ratio (B/D)' in p_r:
                             #     ds_norm_baselines[f'{model} Ratio (B/D)'] = cortex.Vertex2D(p_r['Ratio (B/D)'][model], p_r['Alpha'][model], subject=pycortex_subj, 
-                            #                                              vmin=np.quantile(p_r['Ratio (B/D)'][model][p_r['Alpha'][model]>rsq_thresh],0.1), 
-                            #                                              vmax=np.quantile(p_r['Ratio (B/D)'][model][p_r['Alpha'][model]>rsq_thresh],0.9), vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw
+                            #                                              vmin=np.nanquantile(p_r['Ratio (B/D)'][model][p_r['Alpha'][model]>rsq_thresh],0.1), 
+                            #                                              vmax=np.nanquantile(p_r['Ratio (B/D)'][model][p_r['Alpha'][model]>rsq_thresh],0.9), vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw
                         
                         self.js_handle_dict[space][analysis][subj]['js_handle_norm_baselines'] = cortex.webgl.show(ds_norm_baselines, pickerfun=clicker_function, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)    
         print('-----')                              
@@ -1318,22 +1318,30 @@ class visualize_results(object):
                                                     alpha[analysis][subj][model][roi] *= (subj_res['Processed Results'][x_parameter][x_param_model]<bd_max)
                                         
                                         else:
-                                            alpha[analysis][subj][model][roi] *= (subj_res['Processed Results'][y_parameter][model]<np.quantile(subj_res['Processed Results'][y_parameter][model],quantile_exclusion))*(subj_res['Processed Results'][y_parameter][model]>np.quantile(subj_res['Processed Results'][y_parameter][model],1-quantile_exclusion))  
-                                            alpha[analysis][subj][model][roi] *= (subj_res['Processed Results'][x_parameter][model]<np.quantile(subj_res['Processed Results'][x_parameter][model],quantile_exclusion))*(subj_res['Processed Results'][x_parameter][model]>np.quantile(subj_res['Processed Results'][x_parameter][model],1-quantile_exclusion))  
-                                            if x_param_model is not None:
-                                                alpha[analysis][subj][model][roi] *= (subj_res['Processed Results'][x_parameter][x_param_model]<np.quantile(subj_res['Processed Results'][x_parameter][x_param_model],quantile_exclusion))*(subj_res['Processed Results'][x_parameter][x_param_model]>np.quantile(subj_res['Processed Results'][x_parameter][x_param_model],1-quantile_exclusion))  
+                                            print(np.sum(alpha[analysis][subj][model][roi]))
+                                            print(np.nanquantile(subj_res['Processed Results'][y_parameter][model],1-quantile_exclusion))
+                                            print(np.nanquantile(subj_res['Processed Results'][y_parameter][model],quantile_exclusion))
                                                 
+                                            alpha[analysis][subj][model][roi] *= (subj_res['Processed Results'][y_parameter][model]<np.nanquantile(subj_res['Processed Results'][y_parameter][model],quantile_exclusion))*(subj_res['Processed Results'][y_parameter][model]>np.nanquantile(subj_res['Processed Results'][y_parameter][model],1-quantile_exclusion))  
+                                            print(np.sum(alpha[analysis][subj][model][roi]))
+                                            if x_param_model is not None:
+                                                print(subj_res['Processed Results'][x_parameter][x_param_model])
+                                                alpha[analysis][subj][model][roi] *= (subj_res['Processed Results'][x_parameter][x_param_model]<np.nanquantile(subj_res['Processed Results'][x_parameter][x_param_model],quantile_exclusion))*(subj_res['Processed Results'][x_parameter][x_param_model]>np.nanquantile(subj_res['Processed Results'][x_parameter][x_param_model],1-quantile_exclusion))  
+                                                print(np.sum(alpha[analysis][subj][model][roi]))
+                                            else:
+                                                alpha[analysis][subj][model][roi] *= (subj_res['Processed Results'][x_parameter][model]<np.nanquantile(subj_res['Processed Results'][x_parameter][model],quantile_exclusion))*(subj_res['Processed Results'][x_parameter][model]>np.nanquantile(subj_res['Processed Results'][x_parameter][model],1-quantile_exclusion))  
+
                                             
                                             
          
                                         #if 'ccrsq' in y_parameter.lower():
                                         #    alpha[analysis][subj][model][roi] *= (subj_res['Processed Results'][y_parameter][model]>0)
-                                        if y_parameter_toplevel == None:
+                                        if y_parameter_toplevel is None:
                                             alpha[analysis][subj][model][roi] *= np.isfinite(subj_res['Processed Results'][y_parameter][model])
                                         else:
                                             alpha[analysis][subj][model][roi] *= np.isfinite(subj_res['Processed Results'][y_parameter_toplevel][y_parameter])
                                        
-                                        if x_param_model != None:
+                                        if x_param_model is not None:
                                             
                                             alpha[analysis][subj][model][roi] *= np.isfinite(subj_res['Processed Results'][x_parameter][x_param_model])
                                             
@@ -1436,6 +1444,7 @@ class visualize_results(object):
                         for i, roi in enumerate([r for r in rois if 'all' not in r and 'combined' not in r and 'Brain' not in r]):
                             
                             samples_in_roi = len(y_par[analysis][subj][model][roi])
+                            print(f"Samples in ROI: {samples_in_roi}")
                             
                             if i>0:
                                 bar_position += (2*bar_or_violin_width)
@@ -1801,7 +1810,7 @@ class visualize_results(object):
                                         
                                         if bin_by == 'space':
                                         #equally spaced bins
-                                            x_par_range = np.linspace(np.quantile(x_par[analysis][subj][model][roi], 0.05), np.quantile(x_par[analysis][subj][model][roi], 0.95), nr_bins)
+                                            x_par_range = np.linspace(np.nanquantile(x_par[analysis][subj][model][roi], 0.05), np.nanquantile(x_par[analysis][subj][model][roi], 0.95), nr_bins)
                                             split_x_par_bins = np.array_split(x_par_sorted, [np.nanargmin(np.abs(el-np.sort(x_par[analysis][subj][model][roi]))) for el in x_par_range])
                                         elif bin_by == 'size':
                                         #equally sized bins
@@ -2288,8 +2297,9 @@ class visualize_results(object):
                                                 # alpha[analysis][subj][roi] *= (subj_res['Processed Results'][param][model]<param_max)
                                                 # alpha[analysis][subj][roi] *= (subj_res['Processed Results'][param][model]>param_min)
                                                 # print(f"max min {param} {param_max} {param_min} {np.var(subj_res['Processed Results'][param][model][alpha[analysis][subj][roi]])}")
-                                            else:    
-                                                alpha[analysis][subj][roi] *= (subj_res['Processed Results'][param][model]<np.quantile(subj_res['Processed Results'][param][model],quantile_exclusion))*(subj_res['Processed Results'][param][model]>np.quantile(subj_res['Processed Results'][param][model],1-quantile_exclusion))  
+                                            else:
+                                                if model in subj_res['Processed Results'][param] and np.sum(subj_res['Processed Results'][param][model])>0:
+                                                    alpha[analysis][subj][roi] *= (subj_res['Processed Results'][param][model]<np.nanquantile(subj_res['Processed Results'][param][model],quantile_exclusion))*(subj_res['Processed Results'][param][model]>np.nanquantile(subj_res['Processed Results'][param][model],1-quantile_exclusion))  
 
                                                 
                     for i, roi in enumerate(rois):                              
@@ -2317,8 +2327,6 @@ class visualize_results(object):
                                             else:
                                                 multidim_param_array[analysis][subj][roi].append(subj_res['Processed Results'][y_parameter_toplevel][param][alpha[analysis][subj][roi]])
                                                 
-
-                                #multidim_param_array[analysis][subj][roi] = zscore(np.array([x for _,x in sorted(zip(dimensions[analysis][subj][roi],multidim_param_array[analysis][subj][roi]))]), axis=1)
                                 
                                 multidim_param_array[analysis][subj][roi] = np.array([x for _,x in sorted(zip(dimensions[analysis][subj][roi],multidim_param_array[analysis][subj][roi]))])
 

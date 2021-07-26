@@ -119,6 +119,11 @@ n_chunks = analysis_info["n_chunks"]
 refit_mode = analysis_info["refit_mode"].lower()
 save_runs = analysis_info["save_runs"]
 
+if "batch_submission_system" in analysis_info:
+    batch_submission_system = analysis_info["batch_submission_system"]
+else:
+    batch_submission_system = None
+
 if "norm" in models_to_fit and "norm_model_variant" in analysis_info:
     norm_model_variant = analysis_info["norm_model_variant"]
 else:
@@ -145,14 +150,21 @@ if not param_bounds and norm_model_variant != "abcd":
           but param_bounds=False. param_bounds will be set to True.")
     param_bounds = True
 
-#analysis_time = datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
 
-job_id = int(os.getenv('SLURM_ARRAY_JOB_ID'))
-analysis_time = os.popen(f'sacct -j {job_id} -o submit -X --noheader | uniq').read().replace('T','-').replace(' \n','').replace(':','-')
+if batch_submission_system.lower() == 'slurm':
+    job_id = int(os.getenv('SLURM_ARRAY_JOB_ID'))
+    analysis_time = os.popen(f'sacct -j {job_id} -o submit -X --noheader | uniq').read().replace('T','-').replace(' \n','').replace(':','-')
+else:
+    analysis_time = datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
+    job_id = np.random.randint(1e5, 1e6)
+
 analysis_info["analysis_time"] = analysis_time
 analysis_info["job_id"] = job_id
 
 data_path = opj(data_path,'prfpy')
+if not os.path.exists(data_path):
+    os.mkdir(data_path)
+
 save_path = opj(data_path, subj+"_analysis_settings")
 
 
@@ -426,7 +438,7 @@ if css_grid:
     
 # norm grid params
 if norm_model_variant == "abcd":
-    surround_amplitude_grid=np.array([0.01,0.1,1,10], dtype='float32')
+    surround_amplitude_grid=np.array([0.05,0.25,0.5,1,2,10], dtype='float32')
     surround_size_grid=np.array([5,8,12,18], dtype='float32')
     neural_baseline_grid=np.array([0,1,10,100], dtype='float32')
     surround_baseline_grid=np.array([0.1,1.0,10.0,100.0], dtype='float32')
