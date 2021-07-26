@@ -1318,16 +1318,13 @@ class visualize_results(object):
                                                     alpha[analysis][subj][model][roi] *= (subj_res['Processed Results'][x_parameter][x_param_model]<bd_max)
                                         
                                         else:
-                                            print(np.sum(alpha[analysis][subj][model][roi]))
-                                            print(np.nanquantile(subj_res['Processed Results'][y_parameter][model],1-quantile_exclusion))
-                                            print(np.nanquantile(subj_res['Processed Results'][y_parameter][model],quantile_exclusion))
                                                 
                                             alpha[analysis][subj][model][roi] *= (subj_res['Processed Results'][y_parameter][model]<np.nanquantile(subj_res['Processed Results'][y_parameter][model],quantile_exclusion))*(subj_res['Processed Results'][y_parameter][model]>np.nanquantile(subj_res['Processed Results'][y_parameter][model],1-quantile_exclusion))  
-                                            print(np.sum(alpha[analysis][subj][model][roi]))
+
                                             if x_param_model is not None:
-                                                print(subj_res['Processed Results'][x_parameter][x_param_model])
+                                                #nanquantile handles nans but will not work if there are infs
                                                 alpha[analysis][subj][model][roi] *= (subj_res['Processed Results'][x_parameter][x_param_model]<np.nanquantile(subj_res['Processed Results'][x_parameter][x_param_model],quantile_exclusion))*(subj_res['Processed Results'][x_parameter][x_param_model]>np.nanquantile(subj_res['Processed Results'][x_parameter][x_param_model],1-quantile_exclusion))  
-                                                print(np.sum(alpha[analysis][subj][model][roi]))
+
                                             else:
                                                 alpha[analysis][subj][model][roi] *= (subj_res['Processed Results'][x_parameter][model]<np.nanquantile(subj_res['Processed Results'][x_parameter][model],quantile_exclusion))*(subj_res['Processed Results'][x_parameter][model]>np.nanquantile(subj_res['Processed Results'][x_parameter][model],1-quantile_exclusion))  
 

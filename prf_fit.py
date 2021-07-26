@@ -150,10 +150,10 @@ if not param_bounds and norm_model_variant != "abcd":
           but param_bounds=False. param_bounds will be set to True.")
     param_bounds = True
 
-
-if batch_submission_system.lower() == 'slurm':
-    job_id = int(os.getenv('SLURM_ARRAY_JOB_ID'))
-    analysis_time = os.popen(f'sacct -j {job_id} -o submit -X --noheader | uniq').read().replace('T','-').replace(' \n','').replace(':','-')
+if batch_submission_system is not None:
+    if batch_submission_system.lower() == 'slurm':
+        job_id = int(os.getenv('SLURM_ARRAY_JOB_ID'))
+        analysis_time = os.popen(f'sacct -j {job_id} -o submit -X --noheader | uniq').read().replace('T','-').replace(' \n','').replace(':','-')
 else:
     analysis_time = datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
     job_id = np.random.randint(1e5, 1e6)
