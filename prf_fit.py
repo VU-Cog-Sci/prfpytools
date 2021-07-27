@@ -438,8 +438,8 @@ if css_grid:
     
 # norm grid params
 if norm_model_variant == "abcd":
-    surround_amplitude_grid=np.array([0.05,0.25,0.5,1,2,10], dtype='float32')
-    surround_size_grid=np.array([5,8,12,18], dtype='float32')
+    surround_amplitude_grid=np.array([0.05,0.2,0.4,0.7,1,3], dtype='float32')
+    surround_size_grid=np.array([3,5,8,12,18], dtype='float32')
     neural_baseline_grid=np.array([0,1,10,100], dtype='float32')
     surround_baseline_grid=np.array([0.1,1.0,10.0,100.0], dtype='float32')
     
