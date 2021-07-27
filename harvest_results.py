@@ -63,14 +63,17 @@ for subj in subjects.split(','):
     previous_analysis_time = analysis_info["previous_analysis_time"]
     previous_analysis_refit_mode = analysis_info["previous_analysis_refit_mode"]
     
+    dog_grid = analysis_info["dog_grid"]
+    css_grid = analysis_info["css_grid"]
+    
     if refit_mode == previous_analysis_refit_mode and refit_mode!="overwrite":
         analysis_time = previous_analysis_time
     
     #first check if iteration was completed
     unfinished_chunks=[]
     if refit_mode in ["skip", "overwrite"]:
-        exists = np.array([os.path.exists(opj(data_path, subj+"_iterparams-norm_space-"\
-                            +fitting_space+str(chunk_nr)+".npy")) for chunk_nr in range(n_chunks)])
+        exists = np.array([os.path.exists(opj(data_path, f"{subj}_iterparams-{models_to_fit[-1].lower()}_space-\
+                            {fitting_space}{chunk_nr}.npy")) for chunk_nr in range(n_chunks)])
         finished_chunks = np.where(exists)[0]
         if np.any(exists==False):
             for value in np.where(exists==False)[0]:
@@ -84,7 +87,7 @@ for subj in subjects.split(','):
         for model in models_to_fit:
             model=model.lower()
             last_edited = np.array([(datetime.fromtimestamp(os.stat(opj(data_path,
-                                                            subj+"_iterparams-"+model+"_space-"+fitting_space+str(chunk_nr)+".npy")).st_mtime)) < datetime(\
+                                                            f"{subj}_iterparams-{model}_space-{fitting_space}{chunk_nr}.npy")).st_mtime)) < datetime(\
                                                             int(analysis_time.split('-')[0]),
                                                             int(analysis_time.split('-')[1]),
                                                             int(analysis_time.split('-')[2]),
@@ -95,7 +98,7 @@ for subj in subjects.split(','):
     
             if np.any(last_edited):
     
-                print("Fitting of "+model+" model has not been completed")
+                print(f"Fitting of {model} model has not been completed")
                 for value in np.where(last_edited)[0]:
                     unfinished_chunks.append(value)
     
@@ -119,10 +122,18 @@ for subj in subjects.split(','):
         continue
 
     order = np.load(opj(data_path, subj+"_order_space-"+fitting_space+".npy"))
+
+    #
+    grid_models = ["gauss", "norm"]
+    if dog_grid:
+        grid_models.append("dog")
+    if css_grid:
+        grid_models.append("css")
     
     for model in models_to_fit:
         model = model.lower()
-        if model in ["gauss", "norm"] and refit_mode != "iterate":
+
+        if model in grid_models and refit_mode != "iterate":
             grid_path = opj(data_path, subj+"_gridparams-"+model+"_space-"+fitting_space)
             grid_result = np.concatenate(tuple([np.load(grid_path+str(chunk_nr)+".npy") for chunk_nr in range(n_chunks)]), axis=0)
     
