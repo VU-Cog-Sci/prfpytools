@@ -162,7 +162,7 @@ analysis_info["analysis_time"] = analysis_time
 analysis_info["job_id"] = job_id
 
 data_path = opj(data_path,'prfpy')
-if not os.path.exists(data_path):
+if not os.path.isdir(data_path):
     os.mkdir(data_path)
 
 save_path = opj(data_path, subj+"_analysis_settings")

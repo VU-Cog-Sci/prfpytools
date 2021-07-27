@@ -21,7 +21,7 @@ norm_model_variant: "abcd"
 refit_mode: "skip"
 
 #expected max duration in hours:minutes
-duration: "4:55"
+duration: "2:55"
 
 #data chunks (50 good number for V1V2V3, 500 whole brain)
 n_chunks: 100
