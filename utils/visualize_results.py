@@ -13,6 +13,7 @@ import matplotlib.pyplot as pl
 import cortex
 import cifti
 import nibabel as nb
+from joblib import Parallel, delayed
 from matplotlib import cm, colors
 from mpl_toolkits.mplot3d import Axes3D
 from collections import defaultdict as dd
@@ -689,16 +690,16 @@ class visualize_results(object):
                     if self.plot_rsq_cortex:              
                         ds_rsq = dict()
                         
-                        
-                        best_model = np.argmax([p_r['RSq'][model] for model in self.only_models],axis=0)
+                        if len(self.only_models)>1:
+                            best_model = np.argmax([p_r['RSq'][model] for model in self.only_models],axis=0)
 
-                        ds_rsq['Best model'] = cortex.Vertex2D(best_model, p_r['Alpha']['all'], subject=pycortex_subj,
+                            ds_rsq['Best model'] = cortex.Vertex2D(best_model, p_r['Alpha']['all'], subject=pycortex_subj,
                                                                       vmin2=rsq_thresh, vmax2=0.6, cmap='BROYG_2D').raw 
 
 
                         for model in self.only_models:
                             ds_rsq[model] = cortex.Vertex2D(p_r['RSq'][model], p_r['Alpha'][model], subject=pycortex_subj, 
-                                                            vmin=rsq_thresh, vmax=0.8, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw
+                                                            vmin=rsq_thresh, vmax=0.3, vmin2=rsq_thresh, vmax2=0.3, cmap='Jet_2D_alpha').raw
                             
                         if 'CSS' in models and p_r['RSq']['CSS'].sum()>0:
                             ds_rsq['CSS - Gauss'] = cortex.Vertex2D(p_r['RSq']['CSS']-p_r['RSq']['Gauss'], p_r['Alpha']['all'], subject=pycortex_subj,
@@ -763,6 +764,9 @@ class visualize_results(object):
                         for model in self.only_models:
                             ds_polar[model] = cortex.Vertex2D(p_r['Polar Angle'][model], p_r['Alpha'][model], subject=pycortex_subj, 
                                                               vmin2=rsq_thresh, vmax2=0.6, cmap='Retinotopy_HSV_2x_alpha').raw
+
+                            ds_polar[f"{model} HSV1"] = cortex.Vertex2D(p_r['Polar Angle'][model], p_r['Alpha'][model], subject=pycortex_subj, 
+                                                              vmin2=rsq_thresh, vmax2=0.6, cmap='Retinotopy_HSV_alpha').raw
                         
                         if 'Processed Results' in self.main_dict['T1w'][analysis][subj] and self.compare_volume_surface:
                             ds_polar_comp = dict()
@@ -892,14 +896,13 @@ class visualize_results(object):
         print('-----')                              
         return    
         
-    def save_pycortex_views(self, js_handle, base_str, views):
+    def save_pycortex_views(self, js_handle, base_str, views, image_path = '/Crucial X8/marcoaqil/PRFMapping/Figures/'):
 
         
         surfaces = dict(inflated=dict(unfold=1))#,
                        # fiducial=dict(unfold=0.0))
+
         
-        # select path for the generated images on disk
-        image_path = '/Users/marcoaqil/PRFMapping/Figures/'
         
         # pattern of the saved images names
         file_pattern = "{base}_{view}_{surface}.png"
@@ -948,6 +951,9 @@ class visualize_results(object):
         if parameters[0] != 'RSq':
             parameters.insert(0,'RSq')
             
+        if 'Polar Angle' in parameters or 'Eccentricity' in parameters:
+            print("Are you sure you want to resample polar angle and eccentricity? this can cause interpolation issues. better to use x_pos and y_pos instead.")
+            
         if space_names == 'all':
             spaces = [item for item in self.main_dict.items()]
         else:
@@ -967,7 +973,7 @@ class visualize_results(object):
                     
                 
                 for model in models:
-                    #fsaverage_rsq = dict()
+                    fsaverage_rsq = dict()
                     for parameter in parameters:
                         
                         fsaverage_param = dict()
@@ -975,12 +981,21 @@ class visualize_results(object):
                         for subj, subj_res in subjects:
                             print(space+" "+analysis+" "+subj)
                             p_r = subj_res['Processed Results']
+                            _r = subj_res['Results']
                             
                             if space == 'fsnative':
                             
                                 lh_c = read_morph_data(opj(self.fs_dir, f"{subj}/surf/lh.curv"))
-                
-                                param = np.copy(p_r[parameter][model])
+                                
+                                if parameter not in ['x_pos', 'y_pos']:
+                                    param = np.copy(p_r[parameter][model])
+                                elif parameter == 'x_pos':
+                                    param = np.zeros_like(subj_res['mask'])
+                                    param[subj_res['mask']] = np.copy(_r[model][:,0])
+                                elif parameter == 'y_pos':
+                                    param = np.zeros_like(subj_res['mask'])
+                                    param[subj_res['mask']] = np.copy(_r[model][:,1])
+                                    
                                 
                                 lh_file_path = opj(self.fs_dir, f"{subj}/surf/lh.{''.join(filter(str.isalnum, parameter))}_{model}")
                                 rh_file_path = opj(self.fs_dir, f"{subj}/surf/rh.{''.join(filter(str.isalnum, parameter))}_{model}")
@@ -991,7 +1006,7 @@ class visualize_results(object):
                                 rh_fsaverage_path = f"{rh_file_path.replace(subj,'fsaverage')}_{subj}"
                                 lh_fsaverage_path = f"{lh_file_path.replace(subj,'fsaverage')}_{subj}"
                                 
-                                os.system("export FREESURFER_HOME=/Applications/freesurfer/7.1.0/")
+                                os.system("export FREESURFER_HOME=/Applications/freesurfer/7.2.0/")
                                 os.system("source $FREESURFER_HOME/SetUpFreeSurfer.sh")
                                 os.system(f"export SUBJECTS_DIR={self.fs_dir}")
                                 os.system(f"mri_surf2surf --srcsubject {subj} --srcsurfval {lh_file_path} --trgsubject fsaverage --trgsurfval {lh_fsaverage_path} --hemi lh --trg_type curv")
@@ -1000,12 +1015,16 @@ class visualize_results(object):
                                 lh_fsaverage_param = read_morph_data(lh_fsaverage_path)
                                 rh_fsaverage_param = read_morph_data(rh_fsaverage_path)
                                 
-                                fsaverage_param[subj] = np.concatenate((lh_fsaverage_param,rh_fsaverage_param))
-                                self.main_dict['fsaverage'][analysis][subj]['Processed Results'][parameter][model] = np.copy(fsaverage_param[subj])
                                 
-                                #if parameter == 'RSq':
-                                #    fsaverage_rsq[subj] = np.nan_to_num(np.concatenate((lh_fsaverage_param,rh_fsaverage_param)))
-                                #    fsaverage_rsq[subj][fsaverage_rsq[subj]<0] = 0
+                                if parameter == 'RSq':
+                                    fsaverage_rsq[subj] = np.nan_to_num(np.concatenate((lh_fsaverage_param,rh_fsaverage_param)))
+                                    fsaverage_rsq[subj][fsaverage_rsq[subj]<0] = 0
+                                    print(np.all(np.isfinite(fsaverage_rsq[subj])))
+                                    self.main_dict['fsaverage'][analysis][subj]['Processed Results'][parameter][model] = np.copy(fsaverage_rsq[subj])   
+                                else:
+                                    fsaverage_param[subj] = np.concatenate((lh_fsaverage_param,rh_fsaverage_param))
+                                    self.main_dict['fsaverage'][analysis][subj]['Processed Results'][parameter][model] = np.copy(fsaverage_param[subj])    
+                                    
                             elif space == 'HCP':
                                 f=nb.load(hcp_atlas_mask_path[0])
                                 data_1 = np.array([arr.data for arr in f.darrays])[0].astype('bool')
@@ -1017,9 +1036,18 @@ class visualize_results(object):
                                 cifti_brain_model = cifti.read(hcp_cii_file_path)[1][1]
                                 
                                 output = np.zeros(len(cifti_brain_model))
-                                output[:np.sum(data_1)] = p_r[parameter][model][:len(data_1)][data_1]
-                                output[np.sum(data_1):(np.sum(data_1) + np.sum(data_2))] = p_r[parameter][model][len(data_1):][data_2]
                                 
+                                if parameter not in ['x_pos', 'y_pos']:                              
+                                    output[:np.sum(data_1)] = p_r[parameter][model][:len(data_1)][data_1]
+                                    output[np.sum(data_1):(np.sum(data_1) + np.sum(data_2))] = p_r[parameter][model][len(data_1):][data_2]
+                                elif parameter == 'x_pos':
+                                    output[:np.sum(data_1)] = p_r['Eccentricity'][model][:len(data_1)][data_1]*np.cos(p_r['Polar Angle'][model][:len(data_1)][data_1])
+                                    output[np.sum(data_1):(np.sum(data_1) + np.sum(data_2))] = p_r['Eccentricity'][model][len(data_1):][data_2]*np.cos(p_r['Polar Angle'][model][len(data_1):][data_2])                          
+                                elif parameter == 'y_pos':
+                                    output[:np.sum(data_1)] = p_r['Eccentricity'][model][:len(data_1)][data_1]*np.sin(p_r['Polar Angle'][model][:len(data_1)][data_1])
+                                    output[np.sum(data_1):(np.sum(data_1) + np.sum(data_2))] = p_r['Eccentricity'][model][len(data_1):][data_2]*np.sin(p_r['Polar Angle'][model][len(data_1):][data_2])   
+                                    
+                                    
                                 temp_filenames = ['temp_cii.nii', 'temp_cii_subvol.nii.gz', 'temp_gii_L.func.gii',
                                                   'temp_gii_R.func.gii', 'fsaverage_gii_L.func.gii', 'fsaverage_gii_R.func.gii']
                                 temp_paths = [opj(hcp_temp_folder, el) for el in temp_filenames]
@@ -1040,20 +1068,37 @@ class visualize_results(object):
                                 
                                 a = nb.load(temp_paths[4])
                                 b = nb.load(temp_paths[5])
-                                
-                                fsaverage_param[subj] = np.concatenate((np.array([arr.data for arr in a.darrays])[0],np.array([arr.data for arr in b.darrays])[0]))
-                                self.main_dict['fsaverage'][analysis][subj]['Processed Results'][parameter][model] = np.copy(fsaverage_param[subj])
-                                          
-                
-                                
 
-                        fsaverage_group_average = np.nanmean([fsaverage_param[sid] for sid in fsaverage_param], axis=0)
+                                if parameter == 'RSq':
+                                    fsaverage_rsq[subj] = np.nan_to_num(np.concatenate((np.array([arr.data for arr in a.darrays])[0],np.array([arr.data for arr in b.darrays])[0])))
+                                    fsaverage_rsq[subj][fsaverage_rsq[subj]<0] = 0
+                                    print(np.any(np.isnan(fsaverage_rsq[subj])))
+                                    print(np.any(~np.isfinite(fsaverage_rsq[subj])))                                    
+                                    self.main_dict['fsaverage'][analysis][subj]['Processed Results'][parameter][model] = np.copy(fsaverage_rsq[subj])   
+                                else:           
+                                    fsaverage_param[subj] = np.concatenate((np.array([arr.data for arr in a.darrays])[0],np.array([arr.data for arr in b.darrays])[0]))
+                                    print(np.any(np.isnan(fsaverage_param[subj])))
+                                    print(np.any(~np.isfinite(fsaverage_param[subj])))
+                                    self.main_dict['fsaverage'][analysis][subj]['Processed Results'][parameter][model] = np.copy(fsaverage_param[subj])
+                                    
+
                         
-                        # for i in range(len(fsaverage_group_average)):
-                        #     fsaverage_group_average[i] = weightstats.DescrStatsW(np.array([fsaverage_param[sid][i] for sid in fsaverage_param]),
-                        #                                                          weights=np.array([fsaverage_rsq[sid][i] for sid in fsaverage_rsq])).mean
+                        if parameter == 'RSq':
+                            fsaverage_group_average = np.nanmean([fsaverage_rsq[sid] for sid in fsaverage_rsq], axis=0)
+                        else:
+                            def fsgavg(i):
+                                vert_i_par = np.array([fsaverage_param[sid][i] for sid in fsaverage_param])
+                                vert_i_rsq = np.array([fsaverage_rsq[sid][i] for sid in fsaverage_rsq])
+                                vert_i_rsq[np.isnan(vert_i_par)] = 0
+                                vert_i_rsq[~np.isfinite(vert_i_par)] = 0
+                                vert_i_par[np.isnan(vert_i_par)] = 0
+                                vert_i_par[~np.isfinite(vert_i_par)] = 0
+
+                                return weightstats.DescrStatsW(vert_i_par, weights=vert_i_rsq).mean
+                                
+                            fsaverage_group_average = Parallel(n_jobs=4)(delayed(fsgavg)(i) for i in range(len(fsaverage_group_average)))
                         
-                        self.main_dict['fsaverage'][analysis]['fsaverage']['Processed Results'][parameter][model] = np.copy(fsaverage_group_average)
+                        self.main_dict['fsaverage'][analysis]['fsaverage']['Processed Results'][parameter][model] = np.copy(np.array(fsaverage_group_average))
  
 
                         
@@ -1066,6 +1111,14 @@ class visualize_results(object):
                     self.main_dict['fsaverage']['Mean analysis']['fsaverage']['Processed Results'][parameter][model] = np.nanmean([self.main_dict['fsaverage'][an[0]]['fsaverage']['Processed Results'][parameter][model] for an in analyses], axis=0)
                     
                         
+        for analysis, analysis_res in self.main_dict['fsaverage'].items():
+            for subj, subj_res in analysis_res.items():
+                for model in models:
+                    if 'x_pos' in subj_res['Processed Results'] and 'y_pos' in subj_res['Processed Results']:
+                        subj_res['Processed Results']['Polar Angle'][model] = np.arctan2(subj_res['Processed Results']['y_pos'][model],subj_res['Processed Results']['x_pos'][model])
+                        subj_res['Processed Results']['Eccentricity'][model] = np.sqrt(subj_res['Processed Results']['y_pos'][model]**2+subj_res['Processed Results']['x_pos'][model]**2)
+                        
+        
         return
     
     
@@ -2111,14 +2164,14 @@ class visualize_results(object):
         return
     
     def multidim_analysis(self, parameters, rois, rsq_thresh, save_figures, figure_path, space_names = 'fsnative',
-                    analysis_names = 'all', subject_ids='all', y_parameter_toplevel=None,
+                    analysis_names = 'all', subject_ids='all', y_parameter_toplevel=None, rsq_weights=True,
                     x_dims_idx=None, y_dims_idx=None, zscore_data=False, size_response_curves = False,
                     plot_corr_matrix = False, regress_params=False, multidim_y = False, cv_regression = False,
                     zconfint_err_alpha = None, bold_voxel_volume = None, quantile_exclusion=0.999):
         
         np.set_printoptions(precision=4,suppress=True)
-
-        if not os.path.exists(figure_path):
+        
+        if not os.path.exists(figure_path) and save_figures:
             os.makedirs(figure_path)
        
         pl.rcParams.update({'font.size': 28})
@@ -2295,7 +2348,7 @@ class visualize_results(object):
                                                 # alpha[analysis][subj][roi] *= (subj_res['Processed Results'][param][model]>param_min)
                                                 # print(f"max min {param} {param_max} {param_min} {np.var(subj_res['Processed Results'][param][model][alpha[analysis][subj][roi]])}")
                                             else:
-                                                if model in subj_res['Processed Results'][param] and np.sum(subj_res['Processed Results'][param][model])>0:
+                                                if model in subj_res['Processed Results'][param] and np.sum(subj_res['Processed Results'][param][model])>0 and 'rsq' not in param.lower():
                                                     alpha[analysis][subj][roi] *= (subj_res['Processed Results'][param][model]<np.nanquantile(subj_res['Processed Results'][param][model],quantile_exclusion))*(subj_res['Processed Results'][param][model]>np.nanquantile(subj_res['Processed Results'][param][model],1-quantile_exclusion))  
 
                                                 
@@ -2310,7 +2363,7 @@ class visualize_results(object):
                                             #print(param)
                                             #print(subj_res['Processed Results'][param][model][alpha[analysis][subj][roi]].max())
                                             
-                                            if zscore_data:
+                                            if zscore_data and 'rsq' not in param.lower():
                                                 multidim_param_array[analysis][subj][roi].append(zscore(subj_res['Processed Results'][param][model][alpha[analysis][subj][roi]]))
                                             else:
                                                 multidim_param_array[analysis][subj][roi].append(subj_res['Processed Results'][param][model][alpha[analysis][subj][roi]])
@@ -2319,7 +2372,7 @@ class visualize_results(object):
                                     if y_parameter_toplevel != None:
                                         if param in subj_res['Processed Results'][y_parameter_toplevel]:
                                             dimensions[analysis][subj][roi].append(f"{param}")
-                                            if zscore_data:
+                                            if zscore_data and 'rsq' not in param.lower():
                                                 multidim_param_array[analysis][subj][roi].append(zscore(subj_res['Processed Results'][y_parameter_toplevel][param][alpha[analysis][subj][roi]]))
                                             else:
                                                 multidim_param_array[analysis][subj][roi].append(subj_res['Processed Results'][y_parameter_toplevel][param][alpha[analysis][subj][roi]])
@@ -2345,6 +2398,7 @@ class visualize_results(object):
                             
                     
                         ordered_dimensions = sorted(dimensions[analysis][subj][roi])
+                        print(f"Ordered dimensions: {ordered_dimensions}")
                 
                 for subj, subj_res in subjects:
                     
@@ -2431,9 +2485,16 @@ class visualize_results(object):
                                             
                                             
                                             ls1 = LinearRegression()
-                                            ls1.fit(X,y)
-                                            print(f"Estimated betas {ordered_dimensions[y_dim]} {ls1.coef_}") 
-                                            rsq_prediction = ls1.score(X,y)
+                                            if rsq_weights:
+                                                #print(ordered_dimensions.index('RSq Norm_abcd'))
+                                                #print(multidim_param_array[analysis][subj][roi][ordered_dimensions.index('RSq Norm_abcd')])
+                                                ls1.fit(X,y,sample_weight = multidim_param_array[analysis][subj][roi][ordered_dimensions.index('RSq Norm_abcd')])
+                                                rsq_prediction = ls1.score(X,y,sample_weight = multidim_param_array[analysis][subj][roi][ordered_dimensions.index('RSq Norm_abcd')])
+                                            else:
+                                                ls1.fit(X,y)
+                                                rsq_prediction = ls1.score(X,y)
+                                                
+                                            print(f"Estimated betas {ordered_dimensions[y_dim]} {ls1.coef_}")
                                             print(f"RSq {rsq_prediction}")
                                             corr_prediction = np.corrcoef(ls1.predict(X), y)[0,1]
                                             print(f"corr prediction {corr_prediction}")
@@ -2443,19 +2504,31 @@ class visualize_results(object):
                                                     print(f"CV regression (fit on {subj}, test on {cv_subj})")
                                                     X_cv = multidim_param_array[analysis][cv_subj][roi][x_dims].T
                                                     y_cv = multidim_param_array[analysis][cv_subj][roi][y_dim].T
-                                                    rsq_prediction = ls1.score(X_cv,y_cv)
+                                                    
+                                                    if rsq_weights:
+                                                        rsq_prediction = ls1.score(X_cv,y_cv, sample_weight = multidim_param_array[analysis][cv_subj][roi][ordered_dimensions.index('RSq Norm_abcd')])
+                                                    else:
+                                                        rsq_prediction = ls1.score(X_cv,y_cv)
+                                                        
                                                     print(f"CV RSq {rsq_prediction}")
-                                                    corr_prediction = np.corrcoef(ls1.predict(X), y)[0,1]
-                                                    print(f"CV corr prediction {corr_prediction}")                                                    
+                                                    corr_prediction = np.corrcoef(ls1.predict(X_cv), y_cv)[0,1]
+                                                    print(f"CV corr prediction {corr_prediction}")      
+                                            
+                                            pl.figure(figsize=(9,9))
+                                            pl.bar(np.arange(len(ls1.coef_)), ls1.coef_, label=f"RSq {rsq_prediction:.3f}")
+                                            pl.xticks(np.arange(len(ls1.coef_)),[ordered_dimensions[x_dim].replace('Norm_abcd','') for x_dim in x_dims],rotation='vertical')
+                                            pl.ylabel(f"{ordered_dimensions[y_dim]} LS betas")
+                                            pl.legend()
+                                            if save_figures:
+                                                pl.savefig(opj(figure_path,f"{ordered_dimensions[y_dim]}_betas_{roi.replace('custom.','').replace('HCPQ1Q6.','')}.pdf"),dpi=600, bbox_inches='tight')
+                                    
 
 
                                     else:
                                         
                                         print("Multidim Y")
                                         Y = multidim_param_array[analysis][subj][roi][y_dims].T
-                                        
-
-                                        
+                                                                                
                                         for n_components in range(1, 1+X.shape[1]):
                                             pls = PLSRegression(n_components)
                                             pls.fit(X, Y)
@@ -2465,7 +2538,6 @@ class visualize_results(object):
                                             for i,x_dim in enumerate(x_dims):
                                                 print(f"{ordered_dimensions[x_dim]}: {np.array(pls.coef_)[i]}, total beta: {np.abs(np.array(pls.coef_)[i]).sum():.3f}")
                                                 
-
                                             pred = pls.predict(X)
                                             corr_prediction = []
                                             rsq_prediction = []
@@ -2473,10 +2545,50 @@ class visualize_results(object):
                                             for p in range(pred.shape[1]):
                                                 corr_prediction.append(np.corrcoef(pred[:,p], Y[:,p])[0,1])
                                                 rsq_prediction.append(1-np.sum((pred[:,p]-Y[:,p])**2)/(pred.shape[0]*Y[:,p].var()))
+                                            
+                                            if rsq_weights:
+                                                rsqtot = pls.score(X,Y,sample_weight=multidim_param_array[analysis][subj][roi][ordered_dimensions.index('RSq Norm_abcd')])
+                                            else:
+                                                rsqtot = pls.score(X,Y)
                                                 
-                                            print(f"RSq total {pls.score(X,Y)}")
+                                            print(f"RSq total {rsqtot}")                                               
                                             print(f"RSq predictions {np.array(rsq_prediction)}")
                                             print(f"corr predictions {np.array(corr_prediction)}\n")
+                                            
+                                            for j,y_dim in enumerate(y_dims):
+                                                pl.figure(figsize=(9,9))
+                                                pl.bar(np.arange(X.shape[1]), np.array(pls.coef_)[:,j], label=f"RSq {rsq_prediction[j]:.3f}")
+                                                pl.xticks(np.arange(X.shape[1]),[ordered_dimensions[x_dim].replace('Norm_abcd','') for x_dim in x_dims],rotation='vertical')
+                                                pl.ylabel(f"{ordered_dimensions[y_dim]} PLS betas")
+                                                pl.legend()
+                                                if save_figures:
+                                                    pl.savefig(opj(figure_path,f"{ordered_dimensions[y_dim]}_PLSbetas_{n_components}comp_{roi.replace('custom.','').replace('HCPQ1Q6.','')}.pdf"),dpi=600, bbox_inches='tight')
+                                            
+                                            pl.figure(figsize=(9,9))
+                                            pl.bar(np.arange(X.shape[1]),np.abs(np.array(pls.coef_)).sum(1), label=f"RSq total {rsqtot:.3f}")
+                                            pl.xticks(np.arange(X.shape[1]),[ordered_dimensions[x_dim].replace('Norm_abcd','') for x_dim in x_dims],rotation='vertical')
+                                            pl.ylabel("Total PLS betas")
+                                            pl.legend()
+                                            if save_figures:
+                                                pl.savefig(opj(figure_path,f"TotalPLSbetas_{n_components}comp_{roi.replace('custom.','').replace('HCPQ1Q6.','')}.pdf"),dpi=600, bbox_inches='tight')
+                                            
+                                            vis_pls_pycortex = True
+                                            if vis_pls_pycortex and roi == 'combined':
+                                                ds_pls=dict()
+                                                for c in range(n_components):
+                                                    zz = np.zeros_like(alpha[analysis][subj][roi]).astype(float)
+                                                    zz[alpha[analysis][subj][roi]] = pls.x_scores_[:,c]
+                                                    ds_pls[f"x_score {c}"] = cortex.Vertex2D(zz, alpha[analysis][subj][roi], subject=subj, 
+                                                                        # vmin=np.nanquantile(p_r['Receptor Maps'][receptor][p_r['Alpha']['all']>rsq_thresh],0.1), vmax=np.nanquantile(p_r['Receptor Maps'][receptor][p_r['Alpha']['all']>rsq_thresh],0.9), 
+                                                                         vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw                                                      
+                                                    zz = np.zeros_like(alpha[analysis][subj][roi]).astype(float)
+                                                    zz[alpha[analysis][subj][roi]] = pls.y_scores_[:,c]
+                                                    ds_pls[f"y_score {c}"] = cortex.Vertex2D(zz, alpha[analysis][subj][roi], subject=subj, 
+                                                                        # vmin=np.nanquantile(p_r['Receptor Maps'][receptor][p_r['Alpha']['all']>rsq_thresh],0.1), vmax=np.nanquantile(p_r['Receptor Maps'][receptor][p_r['Alpha']['all']>rsq_thresh],0.9), 
+                                                                         vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw               
+                                                cortex.webgl.show(ds_pls, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)    
+
+                                            
                                             
                                             if cv_regression == True:
                                                 cv_corr_pred = []
@@ -2495,7 +2607,10 @@ class visualize_results(object):
                                                         corr_prediction.append(np.corrcoef(pred[:,p], Y_cv[:,p])[0,1])
                                                         rsq_prediction.append(1-np.sum((pred[:,p]-Y_cv[:,p])**2)/(pred.shape[0]*Y_cv[:,p].var()))
                                                         
-                                                    cv_rsq_total.append(pls.score(X_cv,Y_cv))
+                                                    if rsq_weights:
+                                                        cv_rsq_total.append(pls.score(X_cv,Y_cv,sample_weight=multidim_param_array[analysis][cv_subj][roi][ordered_dimensions.index('RSq Norm_abcd')]))
+                                                    else:
+                                                        cv_rsq_total.append(pls.score(X_cv,Y_cv))
                                                     cv_corr_pred.append(corr_prediction)
                                                     cv_rsq_pred.append(rsq_prediction)
                                                         

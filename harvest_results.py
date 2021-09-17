@@ -71,7 +71,12 @@ for subj in subjects.split(','):
     
     #first check if iteration was completed
     unfinished_chunks=[]
+    for chunk_nr in range(n_chunks):
+        print(opj(data_path, f"{subj}_iterparams-{models_to_fit[-1].lower()}_space-\
+                            {fitting_space}{chunk_nr}.npy"))
+                            
     if refit_mode in ["skip", "overwrite"]:
+        
         exists = np.array([os.path.exists(opj(data_path, f"{subj}_iterparams-{models_to_fit[-1].lower()}_space-\
                             {fitting_space}{chunk_nr}.npy")) for chunk_nr in range(n_chunks)])
         finished_chunks = np.where(exists)[0]
