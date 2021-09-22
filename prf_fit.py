@@ -404,6 +404,9 @@ if param_bounds:
                     (0, 1000),  # prf amplitude
                     (0, 1000)]  # bold baseline
     
+    if not pos_prfs_only:
+        gauss_bounds[3] = (-1000,1000)
+    
     css_bounds = [(-1.5*max_ecc_size, 1.5*max_ecc_size),  # x
                     (-1.5*max_ecc_size, 1.5*max_ecc_size),  # y
                     (eps, 1.5*ss),  # prf size

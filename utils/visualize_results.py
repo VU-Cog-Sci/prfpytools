@@ -32,6 +32,7 @@ opj = os.path.join
 
 from statsmodels.stats import weightstats
 from sklearn.linear_model import LinearRegression
+from sklearn.metrics import r2_score
 from sklearn.decomposition import PCA, KernelPCA
 from sklearn.cross_decomposition import CCA, PLSCanonical, PLSRegression
 
@@ -754,7 +755,8 @@ class visualize_results(object):
                         
                         for model in self.only_models:
                             ds_ecc[model] = cortex.Vertex2D(p_r['Eccentricity'][model], p_r['Alpha'][model], subject=pycortex_subj, 
-                                                            vmin=self.ecc_min, vmax=self.ecc_max-1, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_r_2D_alpha').raw
+                                                            vmin=np.nanquantile(p_r['Eccentricity'][model][p_r['Alpha'][model]>rsq_thresh],0.1), 
+                                                            vmax=np.nanquantile(p_r['Eccentricity'][model][p_r['Alpha'][model]>rsq_thresh],0.9), vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw
         
                         self.js_handle_dict[space][analysis][subj]['js_handle_ecc'] = cortex.webgl.show(ds_ecc, pickerfun=clicker_function, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)
         
@@ -762,11 +764,14 @@ class visualize_results(object):
                         ds_polar = dict()
                         
                         for model in self.only_models:
+                            #print(p_r['Polar Angle'][model])
                             ds_polar[model] = cortex.Vertex2D(p_r['Polar Angle'][model], p_r['Alpha'][model], subject=pycortex_subj, 
+                                                              vmin=-3.1415, vmax=3.1415,
                                                               vmin2=rsq_thresh, vmax2=0.6, cmap='Retinotopy_HSV_2x_alpha').raw
 
                             ds_polar[f"{model} HSV1"] = cortex.Vertex2D(p_r['Polar Angle'][model], p_r['Alpha'][model], subject=pycortex_subj, 
-                                                              vmin2=rsq_thresh, vmax2=0.6, cmap='Retinotopy_HSV_alpha').raw
+                                                                        vmin=-3.1415, vmax=3.1415,
+                                                               vmin2=rsq_thresh, vmax2=0.6, cmap='Retinotopy_HSV_alpha').raw
                         
                         if 'Processed Results' in self.main_dict['T1w'][analysis][subj] and self.compare_volume_surface:
                             ds_polar_comp = dict()
@@ -792,9 +797,10 @@ class visualize_results(object):
                         
                         for model in self.only_models:
                             ds_size[f"{model} fwhmax"] = cortex.Vertex2D(p_r['Size (fwhmax)'][model], p_r['Alpha'][model], subject=pycortex_subj, 
-                                                             vmin=0, vmax=6, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw
+                                                             vmin=2, vmax=20, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw
                             ds_size[f"{model} sigma_1"] = cortex.Vertex2D(p_r['Size (sigma_1)'][model], p_r['Alpha'][model], subject=pycortex_subj, 
-                                                             vmin=0, vmax=6, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw
+                                                             vmin=0.5, 
+                                                            vmax=10, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw
                             
                         self.js_handle_dict[space][analysis][subj]['js_handle_size'] = cortex.webgl.show(ds_size, pickerfun=clicker_function, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)
         
@@ -858,7 +864,8 @@ class visualize_results(object):
                         for model in self.only_models:
                             if model in p_r['Size ratio (sigma_2/sigma_1)']:
                                 ds_size_ratio[f'{model} size ratio'] = cortex.Vertex2D(p_r['Size ratio (sigma_2/sigma_1)'][model], p_r['Alpha'][model], subject=pycortex_subj, 
-                                                                     vmin=4, vmax=16, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw                                                      
+                                                                     vmin=1, 
+                                                                     vmax=10, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw                                                      
         
                         self.js_handle_dict[space][analysis][subj]['js_handle_size_ratio'] = cortex.webgl.show(ds_size_ratio, pickerfun=clicker_function, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)    
                     
@@ -1086,17 +1093,22 @@ class visualize_results(object):
                         if parameter == 'RSq':
                             fsaverage_group_average = np.nanmean([fsaverage_rsq[sid] for sid in fsaverage_rsq], axis=0)
                         else:
-                            def fsgavg(i):
-                                vert_i_par = np.array([fsaverage_param[sid][i] for sid in fsaverage_param])
-                                vert_i_rsq = np.array([fsaverage_rsq[sid][i] for sid in fsaverage_rsq])
-                                vert_i_rsq[np.isnan(vert_i_par)] = 0
-                                vert_i_rsq[~np.isfinite(vert_i_par)] = 0
-                                vert_i_par[np.isnan(vert_i_par)] = 0
-                                vert_i_par[~np.isfinite(vert_i_par)] = 0
+                            # def fsgavg(i):
+                            #     vert_i_par = np.array([fsaverage_param[sid][i] for sid in fsaverage_param])
+                            #     vert_i_rsq = np.array([fsaverage_rsq[sid][i] for sid in fsaverage_rsq])
+                            #     vert_i_rsq[np.isnan(vert_i_par)] = 0
+                            #     vert_i_rsq[~np.isfinite(vert_i_par)] = 0
+                            #     vert_i_par[np.isnan(vert_i_par)] = 0
+                            #     vert_i_par[~np.isfinite(vert_i_par)] = 0
 
-                                return weightstats.DescrStatsW(vert_i_par, weights=vert_i_rsq).mean
+                            #     return weightstats.DescrStatsW(vert_i_par, weights=vert_i_rsq).mean
                                 
-                            fsaverage_group_average = Parallel(n_jobs=4)(delayed(fsgavg)(i) for i in range(len(fsaverage_group_average)))
+                            # fsaverage_group_average = Parallel(n_jobs=4)(delayed(fsgavg)(i) for i in range(len(fsaverage_group_average)))
+                            
+                            data = np.array([fsaverage_param[sid] for sid in fsaverage_param])
+                            weights = np.array([fsaverage_rsq[sid] for sid in fsaverage_rsq])
+                            
+                            fsaverage_group_average = (data*weights).sum(0)/weights.sum(0)
                         
                         self.main_dict['fsaverage'][analysis]['fsaverage']['Processed Results'][parameter][model] = np.copy(np.array(fsaverage_group_average))
  
@@ -1182,7 +1194,7 @@ class visualize_results(object):
         
         cmap_values += [0 for r in rois if 'all' in r or 'combined' in r or 'Brain' in r]
         
-        cmap_rois = cm.get_cmap('nipy_spectral')(cmap_values)#
+        cmap_rois = cm.get_cmap('Jet')(cmap_values)#
         
         #making black into dark gray for visualization reasons
         cmap_rois[(cmap_rois == [0,0,0,1]).sum(1)==4] = [0.33,0.33,0.33,1]
@@ -1371,8 +1383,8 @@ class visualize_results(object):
                                                     alpha[analysis][subj][model][roi] *= (subj_res['Processed Results'][x_parameter][x_param_model]<bd_max)
                                         
                                         else:
-                                                
-                                            alpha[analysis][subj][model][roi] *= (subj_res['Processed Results'][y_parameter][model]<np.nanquantile(subj_res['Processed Results'][y_parameter][model],quantile_exclusion))*(subj_res['Processed Results'][y_parameter][model]>np.nanquantile(subj_res['Processed Results'][y_parameter][model],1-quantile_exclusion))  
+                                            if y_parameter_toplevel is None:    
+                                                alpha[analysis][subj][model][roi] *= (subj_res['Processed Results'][y_parameter][model]<np.nanquantile(subj_res['Processed Results'][y_parameter][model],quantile_exclusion))*(subj_res['Processed Results'][y_parameter][model]>np.nanquantile(subj_res['Processed Results'][y_parameter][model],1-quantile_exclusion))  
 
                                             if x_param_model is not None:
                                                 #nanquantile handles nans but will not work if there are infs
@@ -1904,22 +1916,25 @@ class visualize_results(object):
                                                 curr_min_res = np.inf
                                                 
                                                 for x0 in x0s:
-                                                                            
-                                                    res = minimize(lambda x,a,y:np.sum(rsq[analysis][subj][model][roi]*(y-x[0]/(x[1]*np.exp(-a*x[2])+1)-x[3])**2), x0=x0,
-                                                                   args=(x_par[analysis][subj][model][roi],
-                                                                         y_par[analysis][subj][model][roi]),
-                                                                   method='Powell', options={'ftol':1e-8, 'xtol':1e-8})
-                                                    if res['fun']<curr_min_res:
-                                                        exp_res = res
-                                                        curr_min_res = res['fun']
+                                                    try:
+                                                        res = minimize(lambda x,a,y:1-r2_score(y,x[3]+x[0]/(x[1]*np.exp(-x[2]*a)+1),sample_weight=rsq[analysis][subj][model][roi]), x0=x0,
+                                                                       args=(x_par[analysis][subj][model][roi],
+                                                                             y_par[analysis][subj][model][roi]),
+                                                                       method='Powell', options={'ftol':1e-5, 'xtol':1e-5})
+                                                        if res['fun']<curr_min_res:
+                                                            exp_res = deepcopy(res)
+                                                            curr_min_res = deepcopy(res['fun'])
+                                                    except Exception as e:
+                                                        print(e)
+                                                        x0s.append(np.random.rand(4))
+                                                        pass
                                                 
                                                 
                                                 
                                                 exp_pred = exp_res['x'][3]+exp_res['x'][0]/(exp_res['x'][1]*np.exp(-exp_res['x'][2]*np.linspace(curr_x_bins.min(),curr_x_bins.max(),100))+1)
-                                                full_exp_pred = exp_res['x'][3]+exp_res['x'][0]/(exp_res['x'][1]*np.exp(-exp_res['x'][2]*x_par[analysis][subj][model][roi])+1)
+                                                #full_exp_pred = exp_res['x'][3]+exp_res['x'][0]/(exp_res['x'][1]*np.exp(-exp_res['x'][2]*x_par[analysis][subj][model][roi])+1)
                                                 
-                                                rsq_pred=1-(np.sum((y_par[analysis][subj][model][roi]-full_exp_pred)**2))/(len(y_par[analysis][subj][model][roi])*np.var(y_par[analysis][subj][model][roi]))
-                                                
+                                                rsq_pred=1-exp_res['fun']
                                                         
                                             for c in range(200):
                                                 
@@ -2184,7 +2199,7 @@ class visualize_results(object):
         
         cmap_values += [0 for r in rois if 'custom.' not in r]
         
-        cmap_rois = cm.get_cmap('nipy_spectral')(cmap_values)#
+        cmap_rois = cm.get_cmap('Jet')(cmap_values)#
         
         #making black into dark gray for visualization reasons
         cmap_rois[(cmap_rois == [0,0,0,1]).sum(1)==4] = [0.33,0.33,0.33,1]
@@ -2572,8 +2587,8 @@ class visualize_results(object):
                                             if save_figures:
                                                 pl.savefig(opj(figure_path,f"TotalPLSbetas_{n_components}comp_{roi.replace('custom.','').replace('HCPQ1Q6.','')}.pdf"),dpi=600, bbox_inches='tight')
                                             
-                                            vis_pls_pycortex = True
-                                            if vis_pls_pycortex and roi == 'combined':
+                                            vis_pls_pycortex = False
+                                            if vis_pls_pycortex and (roi == 'combined' or roi == 'Brain'):
                                                 ds_pls=dict()
                                                 for c in range(n_components):
                                                     zz = np.zeros_like(alpha[analysis][subj][roi]).astype(float)
