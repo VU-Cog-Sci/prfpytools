@@ -33,9 +33,9 @@ opj = os.path.join
 from statsmodels.stats import weightstats
 from sklearn.linear_model import LinearRegression
 from sklearn.metrics import r2_score
-from sklearn.decomposition import PCA, KernelPCA
+#from sklearn.decomposition import PCA, KernelPCA
 from sklearn.cross_decomposition import CCA, PLSCanonical, PLSRegression
-
+from wpca import PCA, WPCA
 from sklearn.metrics import mean_squared_error
 from nibabel.freesurfer.io import read_morph_data, write_morph_data
 from utils.preproc_utils import roi_mask
@@ -1194,7 +1194,7 @@ class visualize_results(object):
         
         cmap_values += [0 for r in rois if 'all' in r or 'combined' in r or 'Brain' in r]
         
-        cmap_rois = cm.get_cmap('Jet')(cmap_values)#
+        cmap_rois = cm.get_cmap('nipy_spectral')(cmap_values)#
         
         #making black into dark gray for visualization reasons
         cmap_rois[(cmap_rois == [0,0,0,1]).sum(1)==4] = [0.33,0.33,0.33,1]
@@ -2182,7 +2182,8 @@ class visualize_results(object):
                     analysis_names = 'all', subject_ids='all', y_parameter_toplevel=None, rsq_weights=True,
                     x_dims_idx=None, y_dims_idx=None, zscore_data=False, size_response_curves = False,
                     plot_corr_matrix = False, regress_params=False, multidim_y = False, cv_regression = False,
-                    zconfint_err_alpha = None, bold_voxel_volume = None, quantile_exclusion=0.999):
+                    zconfint_err_alpha = None, bold_voxel_volume = None, quantile_exclusion=0.999,
+                    perform_pca = False, perform_pls = False, vis_pls_pycortex = False, vis_pca_pycortex = False):
         
         np.set_printoptions(precision=4,suppress=True)
         
@@ -2199,7 +2200,7 @@ class visualize_results(object):
         
         cmap_values += [0 for r in rois if 'custom.' not in r]
         
-        cmap_rois = cm.get_cmap('Jet')(cmap_values)#
+        cmap_rois = cm.get_cmap('nipy_spectral')(cmap_values)#
         
         #making black into dark gray for visualization reasons
         cmap_rois[(cmap_rois == [0,0,0,1]).sum(1)==4] = [0.33,0.33,0.33,1]
@@ -2363,7 +2364,7 @@ class visualize_results(object):
                                                 # alpha[analysis][subj][roi] *= (subj_res['Processed Results'][param][model]>param_min)
                                                 # print(f"max min {param} {param_max} {param_min} {np.var(subj_res['Processed Results'][param][model][alpha[analysis][subj][roi]])}")
                                             else:
-                                                if model in subj_res['Processed Results'][param] and np.sum(subj_res['Processed Results'][param][model])>0 and 'rsq' not in param.lower():
+                                                if 'rsq' not in param.lower():
                                                     alpha[analysis][subj][roi] *= (subj_res['Processed Results'][param][model]<np.nanquantile(subj_res['Processed Results'][param][model],quantile_exclusion))*(subj_res['Processed Results'][param][model]>np.nanquantile(subj_res['Processed Results'][param][model],1-quantile_exclusion))  
 
                                                 
@@ -2505,7 +2506,7 @@ class visualize_results(object):
                                                 #print(multidim_param_array[analysis][subj][roi][ordered_dimensions.index('RSq Norm_abcd')])
                                                 ls1.fit(X,y,sample_weight = multidim_param_array[analysis][subj][roi][ordered_dimensions.index('RSq Norm_abcd')])
                                                 rsq_prediction = ls1.score(X,y,sample_weight = multidim_param_array[analysis][subj][roi][ordered_dimensions.index('RSq Norm_abcd')])
-                                            else:
+                                            else: 
                                                 ls1.fit(X,y)
                                                 rsq_prediction = ls1.score(X,y)
                                                 
@@ -2543,97 +2544,129 @@ class visualize_results(object):
                                         
                                         print("Multidim Y")
                                         Y = multidim_param_array[analysis][subj][roi][y_dims].T
-                                                                                
-                                        for n_components in range(1, 1+X.shape[1]):
-                                            pls = PLSRegression(n_components)
-                                            pls.fit(X, Y)
-                                            print(f"Performing PLS with {n_components} components")
+                                        
 
-                                            print(f"Estimated betas: {[ordered_dimensions[y_dim] for y_dim in y_dims]}")
-                                            for i,x_dim in enumerate(x_dims):
-                                                print(f"{ordered_dimensions[x_dim]}: {np.array(pls.coef_)[i]}, total beta: {np.abs(np.array(pls.coef_)[i]).sum():.3f}")
+                                        
+                                        if perform_pca:
+                                            full_dataset = np.concatenate((X,Y),axis=1)
+                                            print(full_dataset.shape)
+                                            
+                                            ncomp = full_dataset.shape[1]
+                                            pca = WPCA(n_components=ncomp).fit(full_dataset,weights=np.tile(multidim_param_array[analysis][subj][roi][ordered_dimensions.index('RSq Norm_abcd')],(full_dataset.shape[1],1)).T)
+
+                                            pl.figure(figsize=(5,5))
+                                            
+                                            pl.plot(np.arange(ncomp), pca.explained_variance_ratio_)
+
+                                            pl.title('PCA variance ratio')
+                                            pl.xlabel('principal vector')
+                                            pl.ylabel('proportion of total variance')
+
+                                            if vis_pca_pycortex and ((roi == 'combined' and 'Brain' not in rois) or roi == 'V1'):
+                                                ds_pca=dict()
+                                                print(pca.components_)
+                                                for c in range(ncomp):
+                                                    zz = np.zeros_like(alpha[analysis][subj][roi]).astype(float)
+                                                    zz[alpha[analysis][subj][roi]] = pca.fit_transform(full_dataset,weights=np.tile(multidim_param_array[analysis][subj][roi][ordered_dimensions.index('RSq Norm_abcd')],(full_dataset.shape[1],1)).T)[:,c]
+                                                    ds_pca[f"Component {c}"] = cortex.Vertex2D(zz, alpha[analysis][subj][roi], subject=subj, 
+                                                                        # vmin=np.nanquantile(p_r['Receptor Maps'][receptor][p_r['Alpha']['all']>rsq_thresh],0.1), vmax=np.nanquantile(p_r['Receptor Maps'][receptor][p_r['Alpha']['all']>rsq_thresh],0.9), 
+                                                                         vmin2=rsq_thresh, vmax2=0.6, cmap='BuBkRd_alpha_2D').raw                                                      
+          
+                                                cortex.webgl.show(ds_pca, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)    
+                                            
+                            
+                                        
+                                        if perform_pls:                                        
+                                            for n_components in range(1, 1+X.shape[1]):
+                                                pls = PLSRegression(n_components)
+                                                pls.fit(X, Y)
+                                                print(f"Performing PLS with {n_components} components")
+    
+                                                print(f"Estimated betas: {[ordered_dimensions[y_dim] for y_dim in y_dims]}")
+                                                for i,x_dim in enumerate(x_dims):
+                                                    print(f"{ordered_dimensions[x_dim]}: {np.array(pls.coef_)[i]}, total beta: {np.abs(np.array(pls.coef_)[i]).sum():.3f}")
+                                                    
+                                                pred = pls.predict(X)
+                                                corr_prediction = []
+                                                rsq_prediction = []
                                                 
-                                            pred = pls.predict(X)
-                                            corr_prediction = []
-                                            rsq_prediction = []
-                                            
-                                            for p in range(pred.shape[1]):
-                                                corr_prediction.append(np.corrcoef(pred[:,p], Y[:,p])[0,1])
-                                                rsq_prediction.append(1-np.sum((pred[:,p]-Y[:,p])**2)/(pred.shape[0]*Y[:,p].var()))
-                                            
-                                            if rsq_weights:
-                                                rsqtot = pls.score(X,Y,sample_weight=multidim_param_array[analysis][subj][roi][ordered_dimensions.index('RSq Norm_abcd')])
-                                            else:
-                                                rsqtot = pls.score(X,Y)
+                                                for p in range(pred.shape[1]):
+                                                    corr_prediction.append(np.corrcoef(pred[:,p], Y[:,p])[0,1])
+                                                    rsq_prediction.append(1-np.sum((pred[:,p]-Y[:,p])**2)/(pred.shape[0]*Y[:,p].var()))
                                                 
-                                            print(f"RSq total {rsqtot}")                                               
-                                            print(f"RSq predictions {np.array(rsq_prediction)}")
-                                            print(f"corr predictions {np.array(corr_prediction)}\n")
-                                            
-                                            for j,y_dim in enumerate(y_dims):
+                                                if rsq_weights:
+                                                    rsqtot = pls.score(X,Y,sample_weight=multidim_param_array[analysis][subj][roi][ordered_dimensions.index('RSq Norm_abcd')])
+                                                else:
+                                                    rsqtot = pls.score(X,Y)
+                                                    
+                                                print(f"RSq total {rsqtot}")                                               
+                                                print(f"RSq predictions {np.array(rsq_prediction)}")
+                                                print(f"corr predictions {np.array(corr_prediction)}\n")
+                                                
+                                                for j,y_dim in enumerate(y_dims):
+                                                    pl.figure(figsize=(9,9))
+                                                    pl.bar(np.arange(X.shape[1]), np.array(pls.coef_)[:,j], label=f"RSq {rsq_prediction[j]:.3f}")
+                                                    pl.xticks(np.arange(X.shape[1]),[ordered_dimensions[x_dim].replace('Norm_abcd','') for x_dim in x_dims],rotation='vertical')
+                                                    pl.ylabel(f"{ordered_dimensions[y_dim]} PLS betas")
+                                                    pl.legend()
+                                                    if save_figures:
+                                                        pl.savefig(opj(figure_path,f"{ordered_dimensions[y_dim]}_PLSbetas_{n_components}comp_{roi.replace('custom.','').replace('HCPQ1Q6.','')}.pdf"),dpi=600, bbox_inches='tight')
+                                                
                                                 pl.figure(figsize=(9,9))
-                                                pl.bar(np.arange(X.shape[1]), np.array(pls.coef_)[:,j], label=f"RSq {rsq_prediction[j]:.3f}")
+                                                pl.bar(np.arange(X.shape[1]),np.abs(np.array(pls.coef_)).sum(1), label=f"RSq total {rsqtot:.3f}")
                                                 pl.xticks(np.arange(X.shape[1]),[ordered_dimensions[x_dim].replace('Norm_abcd','') for x_dim in x_dims],rotation='vertical')
-                                                pl.ylabel(f"{ordered_dimensions[y_dim]} PLS betas")
+                                                pl.ylabel("Total PLS betas")
                                                 pl.legend()
                                                 if save_figures:
-                                                    pl.savefig(opj(figure_path,f"{ordered_dimensions[y_dim]}_PLSbetas_{n_components}comp_{roi.replace('custom.','').replace('HCPQ1Q6.','')}.pdf"),dpi=600, bbox_inches='tight')
-                                            
-                                            pl.figure(figsize=(9,9))
-                                            pl.bar(np.arange(X.shape[1]),np.abs(np.array(pls.coef_)).sum(1), label=f"RSq total {rsqtot:.3f}")
-                                            pl.xticks(np.arange(X.shape[1]),[ordered_dimensions[x_dim].replace('Norm_abcd','') for x_dim in x_dims],rotation='vertical')
-                                            pl.ylabel("Total PLS betas")
-                                            pl.legend()
-                                            if save_figures:
-                                                pl.savefig(opj(figure_path,f"TotalPLSbetas_{n_components}comp_{roi.replace('custom.','').replace('HCPQ1Q6.','')}.pdf"),dpi=600, bbox_inches='tight')
-                                            
-                                            vis_pls_pycortex = False
-                                            if vis_pls_pycortex and (roi == 'combined' or roi == 'Brain'):
-                                                ds_pls=dict()
-                                                for c in range(n_components):
-                                                    zz = np.zeros_like(alpha[analysis][subj][roi]).astype(float)
-                                                    zz[alpha[analysis][subj][roi]] = pls.x_scores_[:,c]
-                                                    ds_pls[f"x_score {c}"] = cortex.Vertex2D(zz, alpha[analysis][subj][roi], subject=subj, 
-                                                                        # vmin=np.nanquantile(p_r['Receptor Maps'][receptor][p_r['Alpha']['all']>rsq_thresh],0.1), vmax=np.nanquantile(p_r['Receptor Maps'][receptor][p_r['Alpha']['all']>rsq_thresh],0.9), 
-                                                                         vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw                                                      
-                                                    zz = np.zeros_like(alpha[analysis][subj][roi]).astype(float)
-                                                    zz[alpha[analysis][subj][roi]] = pls.y_scores_[:,c]
-                                                    ds_pls[f"y_score {c}"] = cortex.Vertex2D(zz, alpha[analysis][subj][roi], subject=subj, 
-                                                                        # vmin=np.nanquantile(p_r['Receptor Maps'][receptor][p_r['Alpha']['all']>rsq_thresh],0.1), vmax=np.nanquantile(p_r['Receptor Maps'][receptor][p_r['Alpha']['all']>rsq_thresh],0.9), 
-                                                                         vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw               
-                                                cortex.webgl.show(ds_pls, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)    
-
-                                            
-                                            
-                                            if cv_regression == True:
-                                                cv_corr_pred = []
-                                                cv_rsq_pred = []
-                                                cv_rsq_total = []
-                                                for cv_subj in [s for s,_ in subjects if s!='fsaverage' and s!='Group' and s!=subj]:
-                                                    print(f"CV regression (fit on {subj}, test on {cv_subj})")
-                                                    X_cv = multidim_param_array[analysis][cv_subj][roi][x_dims].T
-                                                    Y_cv = multidim_param_array[analysis][cv_subj][roi][y_dims].T
-                                                    
-                                                    pred = pls.predict(X_cv)
-                                                    corr_prediction = []
-                                                    rsq_prediction = []
-                                                    
-                                                    for p in range(pred.shape[1]):
-                                                        corr_prediction.append(np.corrcoef(pred[:,p], Y_cv[:,p])[0,1])
-                                                        rsq_prediction.append(1-np.sum((pred[:,p]-Y_cv[:,p])**2)/(pred.shape[0]*Y_cv[:,p].var()))
-                                                        
-                                                    if rsq_weights:
-                                                        cv_rsq_total.append(pls.score(X_cv,Y_cv,sample_weight=multidim_param_array[analysis][cv_subj][roi][ordered_dimensions.index('RSq Norm_abcd')]))
-                                                    else:
-                                                        cv_rsq_total.append(pls.score(X_cv,Y_cv))
-                                                    cv_corr_pred.append(corr_prediction)
-                                                    cv_rsq_pred.append(rsq_prediction)
-                                                        
-                                                print(f"CVRSq total {np.mean(cv_rsq_total,axis=0)}")
-                                                print(f"CVRSq predictions {np.array(cv_rsq_pred).mean(0)}")
-                                                print(f"CV corr predictions {np.array(cv_corr_pred).mean(0)}")
+                                                    pl.savefig(opj(figure_path,f"TotalPLSbetas_{n_components}comp_{roi.replace('custom.','').replace('HCPQ1Q6.','')}.pdf"),dpi=600, bbox_inches='tight')
                                                 
-                                                pls_result_dict[roi][f"{n_components} components"].append(np.mean(cv_rsq_total,axis=0))
+                                                
+                                                if vis_pls_pycortex and (roi == 'combined' or roi == 'Brain'):
+                                                    ds_pls=dict()
+                                                    for c in range(n_components):
+                                                        zz = np.zeros_like(alpha[analysis][subj][roi]).astype(float)
+                                                        zz[alpha[analysis][subj][roi]] = pls.x_scores_[:,c]
+                                                        ds_pls[f"x_score {c}"] = cortex.Vertex2D(zz, alpha[analysis][subj][roi], subject=subj, 
+                                                                            # vmin=np.nanquantile(p_r['Receptor Maps'][receptor][p_r['Alpha']['all']>rsq_thresh],0.1), vmax=np.nanquantile(p_r['Receptor Maps'][receptor][p_r['Alpha']['all']>rsq_thresh],0.9), 
+                                                                             vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw                                                      
+                                                        zz = np.zeros_like(alpha[analysis][subj][roi]).astype(float)
+                                                        zz[alpha[analysis][subj][roi]] = pls.y_scores_[:,c]
+                                                        ds_pls[f"y_score {c}"] = cortex.Vertex2D(zz, alpha[analysis][subj][roi], subject=subj, 
+                                                                            # vmin=np.nanquantile(p_r['Receptor Maps'][receptor][p_r['Alpha']['all']>rsq_thresh],0.1), vmax=np.nanquantile(p_r['Receptor Maps'][receptor][p_r['Alpha']['all']>rsq_thresh],0.9), 
+                                                                             vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw               
+                                                    cortex.webgl.show(ds_pls, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)    
+    
+                                                
+                                                
+                                                if cv_regression == True:
+                                                    cv_corr_pred = []
+                                                    cv_rsq_pred = []
+                                                    cv_rsq_total = []
+                                                    for cv_subj in [s for s,_ in subjects if s!='fsaverage' and s!='Group' and s!=subj]:
+                                                        print(f"CV regression (fit on {subj}, test on {cv_subj})")
+                                                        X_cv = multidim_param_array[analysis][cv_subj][roi][x_dims].T
+                                                        Y_cv = multidim_param_array[analysis][cv_subj][roi][y_dims].T
+                                                        
+                                                        pred = pls.predict(X_cv)
+                                                        corr_prediction = []
+                                                        rsq_prediction = []
+                                                        
+                                                        for p in range(pred.shape[1]):
+                                                            corr_prediction.append(np.corrcoef(pred[:,p], Y_cv[:,p])[0,1])
+                                                            rsq_prediction.append(1-np.sum((pred[:,p]-Y_cv[:,p])**2)/(pred.shape[0]*Y_cv[:,p].var()))
+                                                            
+                                                        if rsq_weights:
+                                                            cv_rsq_total.append(pls.score(X_cv,Y_cv,sample_weight=multidim_param_array[analysis][cv_subj][roi][ordered_dimensions.index('RSq Norm_abcd')]))
+                                                        else:
+                                                            cv_rsq_total.append(pls.score(X_cv,Y_cv))
+                                                        cv_corr_pred.append(corr_prediction)
+                                                        cv_rsq_pred.append(rsq_prediction)
+                                                            
+                                                    print(f"CVRSq total {np.mean(cv_rsq_total,axis=0)}")
+                                                    print(f"CVRSq predictions {np.array(cv_rsq_pred).mean(0)}")
+                                                    print(f"CV corr predictions {np.array(cv_corr_pred).mean(0)}")
+                                                    
+                                                    pls_result_dict[roi][f"{n_components} components"].append(np.mean(cv_rsq_total,axis=0))
                                         
                                 except Exception as e:
                                     print(e)
