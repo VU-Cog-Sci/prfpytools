@@ -2562,7 +2562,7 @@ class visualize_results(object):
                                             pl.xlabel('principal vector')
                                             pl.ylabel('proportion of total variance')
 
-                                            if vis_pca_pycortex and ((roi == 'combined' and 'Brain' not in rois) or roi == 'V1'):
+                                            if vis_pca_pycortex and ((roi == 'combined' and 'Brain' not in rois) or roi == 'Brain'):
                                                 ds_pca=dict()
                                                 print(pca.components_)
                                                 for c in range(ncomp):

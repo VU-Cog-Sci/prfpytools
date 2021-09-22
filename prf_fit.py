@@ -108,6 +108,7 @@ baseline_volumes_begin_end = analysis_info["baseline_volumes_begin_end"]
 min_percent_var = analysis_info["min_percent_var"]
 
 param_bounds = analysis_info["param_bounds"]
+#note pos_prfs_only here only applies to gauss
 pos_prfs_only = analysis_info["pos_prfs_only"]
 normalize_RFs = analysis_info["normalize_RFs"]
 
@@ -1048,7 +1049,7 @@ if "norm" in models_to_fit:
                          verbose=verbose,
                          n_batches=n_batches,
                          rsq_threshold=rsq_threshold,
-                         pos_prfs_only=pos_prfs_only)
+                         pos_prfs_only=True)
         
             print("Norm gridfit completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Mean rsq>"+str(rsq_threshold)+": "+str(np.mean(gf_norm.gridsearch_params[gf_norm.gridsearch_rsq_mask, -1])))
         
