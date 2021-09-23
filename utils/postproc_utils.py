@@ -544,14 +544,20 @@ def make_2d_cmap(cmap_name):
     #####
     cmap = mpimg.imread(os.path.join(os.path.split(cortex.database.default_filestore)[
                           0], 'colormaps',f'{cmap_name}.png'))
+    
     cmap = colors.rgb_to_hsv(cmap[...,:3])
     hue, alpha = np.meshgrid(cmap[...,0], 1-np.linspace(0, 1, 256))
     hsv = np.zeros(list(hue.shape)+[3])
 
+    # hsv[..., 0] = cmap[...,0]  
+    # hsv[..., 1] = np.ones_like(alpha)
+    # hsv[..., 2] = np.ones_like(alpha)
+    # hsv[-1,:,2] = 0
+
     hsv[..., 0] = cmap[...,0]  
-    hsv[..., 1] = np.ones_like(alpha)
-    hsv[..., 2] = np.ones_like(alpha)
-    hsv[-1,:,2] = 0
+    hsv[..., 1] = cmap[...,1] 
+    hsv[..., 2] = cmap[...,2] 
+    #hsv[-1,:,2] = 0
 
     rgb = colors.hsv_to_rgb(hsv)
     rgba = np.vstack((rgb.T, alpha[..., np.newaxis].T)).T

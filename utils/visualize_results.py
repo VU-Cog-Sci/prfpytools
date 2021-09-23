@@ -800,7 +800,7 @@ class visualize_results(object):
                                                              vmin=2, vmax=20, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw
                             ds_size[f"{model} sigma_1"] = cortex.Vertex2D(p_r['Size (sigma_1)'][model], p_r['Alpha'][model], subject=pycortex_subj, 
                                                              vmin=0.5, 
-                                                            vmax=10, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw
+                                                            vmax=5, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw
                             
                         self.js_handle_dict[space][analysis][subj]['js_handle_size'] = cortex.webgl.show(ds_size, pickerfun=clicker_function, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)
         
@@ -864,8 +864,8 @@ class visualize_results(object):
                         for model in self.only_models:
                             if model in p_r['Size ratio (sigma_2/sigma_1)']:
                                 ds_size_ratio[f'{model} size ratio'] = cortex.Vertex2D(p_r['Size ratio (sigma_2/sigma_1)'][model], p_r['Alpha'][model], subject=pycortex_subj, 
-                                                                     vmin=1, 
-                                                                     vmax=10, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw                                                      
+                                                                     vmin=2, 
+                                                                     vmax=8, vmin2=rsq_thresh, vmax2=0.6, cmap='Jet_2D_alpha').raw                                                      
         
                         self.js_handle_dict[space][analysis][subj]['js_handle_size_ratio'] = cortex.webgl.show(ds_size_ratio, pickerfun=clicker_function, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)    
                     
