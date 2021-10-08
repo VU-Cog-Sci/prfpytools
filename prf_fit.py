@@ -307,12 +307,30 @@ if "timecourse_data_path" in analysis_info:
     print("Using time series from: "+analysis_info["timecourse_data_path"])
     tc_full_iso_nonzerovar_dict = {}
     tc_full_iso_nonzerovar_dict['tc'] = np.load(analysis_info["timecourse_data_path"])
+    tc_full_iso_nonzerovar_dict['order'] = np.arange(tc_full_iso_nonzerovar_dict['tc'].shape[0])
+    tc_full_iso_nonzerovar_dict['mask'] = np.ones(tc_full_iso_nonzerovar_dict['tc'].shape[0]).astype('bool')
+    
     if crossvalidate:
         if "timecourse_test_data_path" in analysis_info:
             tc_full_iso_nonzerovar_dict['tc_test'] = np.load(analysis_info["timecourse_test_data_path"])
         else:
             print("Please also provide 'timecourse_test_data_path' path for crossvalidation (filename must contain 'timecourse-test').")
             raise IOError
+
+
+        save_path = opj(data_path, subj+"_timecourse-test_space-"+fitting_space)
+        np.save(save_path, tc_full_iso_nonzerovar_dict['tc_test'])
+
+    save_path = opj(data_path, subj+"_order_space-"+fitting_space)
+    np.save(save_path, tc_full_iso_nonzerovar_dict['order'])
+
+    save_path = opj(data_path, subj+"_mask_space-"+fitting_space)
+    np.save(save_path, tc_full_iso_nonzerovar_dict['mask'])
+
+    save_path = opj(data_path, subj+"_timecourse_space-"+fitting_space)
+    np.save(save_path, tc_full_iso_nonzerovar_dict['tc'])
+
+
 elif os.path.exists(opj(data_path, subj+"_timecourse_space-"+fitting_space+".npy")):
     print("Using time series from: "+opj(data_path, subj+"_timecourse_space-"+fitting_space+".npy"))
     tc_full_iso_nonzerovar_dict = {}
