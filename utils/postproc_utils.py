@@ -561,9 +561,9 @@ def make_2d_cmap(cmap_name):
 
     rgb = colors.hsv_to_rgb(hsv)
     rgba = np.vstack((rgb.T, alpha[..., np.newaxis].T)).T
-    pl.imshow(rgba)
+    #pl.imshow(rgba)
     hsv_fn = os.path.join(os.path.split(cortex.database.default_filestore)[
-                          0], 'colormaps', f'{cmap_name}_2D_alpha.png')
+                          0], 'colormaps', f'{cmap_name}_2D_alpha_unfix.png')
     mpimg.imsave(hsv_fn, rgba)
     
 
