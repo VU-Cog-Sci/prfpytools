@@ -275,10 +275,14 @@ class results(object):
         raw_tc_stats = dict()
 
         for subj in set(subjects):
-
-            tc_raw = np.load(opj(timecourse_folder,f'{subj}_timecourse-raw_space-{space}.npy'))
-            mask = np.load(opj(timecourse_folder,f'{subj}_mask-raw_space-{space}.npy'))
-        
+            
+            if '999999' in subj:
+                tc_raw = np.load(opj(timecourse_folder,f'999999_timecourse-raw_space-{space}.npy'))
+                mask = np.load(opj(timecourse_folder,f'999999_mask-raw_space-{space}.npy'))
+            else:
+                tc_raw = np.load(opj(timecourse_folder,f'{subj}_timecourse-raw_space-{space}.npy'))
+                mask = np.load(opj(timecourse_folder,f'{subj}_mask-raw_space-{space}.npy'))   
+                
             tc_mean = tc_raw.mean(-1)
             tc_mean_full = np.zeros(mask.shape)
             tc_mean_full[mask] = tc_mean
@@ -304,7 +308,7 @@ class results(object):
     
     def process_results(self, results_dict, return_norm_profiles=False):
         for k, v in tqdm(results_dict.items()):
-            if 'sub-' not in k and not k.isdecimal():
+            if 'sub-' not in k and not k.isdecimal() and '999999' not in k:
                 self.process_results(v, return_norm_profiles)
             elif 'Results' in v and 'Processed Results' not in v:
                 mask = v['mask']
