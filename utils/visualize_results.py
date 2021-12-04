@@ -2117,7 +2117,7 @@ class visualize_results(object):
                                                             res = minimize(lambda x,a,y:1-r2_score(y,x[3]+x[0]/(x[1]*np.exp(-x[2]*a)+1),sample_weight=rsq_regr_weight[analysis][subj][model][roi]), x0=x0,
                                                                            args=(x_par[analysis][subj][model][roi],
                                                                                  y_par[analysis][subj][model][roi]),
-                                                                           method='Powell', options={'ftol':1e-5, 'xtol':1e-5})
+                                                                           method='Powell', options={'ftol':1e-8, 'xtol':1e-8})
                                                             if res['fun']<curr_min_res:
                                                                 exp_res = deepcopy(res)
                                                                 curr_min_res = deepcopy(res['fun'])
@@ -2388,7 +2388,7 @@ class visualize_results(object):
         return
     
     def multidim_analysis(self, parameters, rois, rsq_thresh, save_figures, figure_path, space_names = 'fsnative',
-                    analysis_names = 'all', subject_ids='all', y_parameter_toplevel=None, rsq_weights=True,
+                    analysis_names = 'all', subject_ids='all', parameter_toplevel=None, rsq_weights=True,
                     x_dims_idx=None, y_dims_idx=None, zscore_data=False, zscore_data_across_rois = False,
                     size_response_curves = False, third_dim_sr_curves = None,
                     plot_corr_matrix = False, perform_ols=False, polar_plots = False, cv_regression = False,
@@ -2622,11 +2622,11 @@ class visualize_results(object):
                                                 multidim_param_array[analysis][subj][roi].append(subj_res['Processed Results'][param][model][alpha[analysis][subj][roi]>rsq_thresh])
                                                 
                                     
-                                    if y_parameter_toplevel != None:
-                                        if param in subj_res['Processed Results'][y_parameter_toplevel]:
+                                    if parameter_toplevel != None:
+                                        if param in subj_res['Processed Results'][parameter_toplevel]:
                                             dimensions[analysis][subj][roi].append(f"{param}")
                                             if zscore_data and 'rsq' not in param.lower():
-                                                multidim_param_array[analysis][subj][roi].append(zscore(subj_res['Processed Results'][y_parameter_toplevel][param][alpha[analysis][subj][roi]>rsq_thresh]))
+                                                multidim_param_array[analysis][subj][roi].append(zscore(subj_res['Processed Results'][parameter_toplevel][param][alpha[analysis][subj][roi]>rsq_thresh]))
                                             
                                             elif zscore_data_across_rois and 'rsq' not in param.lower():
                                                 
@@ -2637,13 +2637,13 @@ class visualize_results(object):
                                                 elif 'all_custom' in rois:
                                                     overall_roi = 'all_custom'
                                                 
-                                                all_rois_zsc = zscore(subj_res['Processed Results'][y_parameter_toplevel][param][alpha[analysis][subj][overall_roi]>rsq_thresh])
+                                                all_rois_zsc = zscore(subj_res['Processed Results'][parameter_toplevel][param][alpha[analysis][subj][overall_roi]>rsq_thresh])
                                                 copy = np.zeros_like(alpha[analysis][subj][roi])
                                                 copy[alpha[analysis][subj][overall_roi]>rsq_thresh] = np.copy(all_rois_zsc)
                                                 multidim_param_array[analysis][subj][roi].append(copy[alpha[analysis][subj][roi]>rsq_thresh])
                                                 
                                             else:
-                                                multidim_param_array[analysis][subj][roi].append(subj_res['Processed Results'][y_parameter_toplevel][param][alpha[analysis][subj][roi]>rsq_thresh])
+                                                multidim_param_array[analysis][subj][roi].append(subj_res['Processed Results'][parameter_toplevel][param][alpha[analysis][subj][roi]>rsq_thresh])
                                                 
                                 
                                 multidim_param_array[analysis][subj][roi] = np.array([x for _,x in sorted(zip(dimensions[analysis][subj][roi],multidim_param_array[analysis][subj][roi]))])
@@ -2696,8 +2696,8 @@ class visualize_results(object):
                                         if model in dim_name:
                                             tick_colors.append(model_colors[model])
                                             ticks.append(dim_name.replace(model,''))
-                                    if y_parameter_toplevel != None:
-                                        if dim_name in subj_res['Processed Results'][y_parameter_toplevel]:
+                                    if parameter_toplevel != None:
+                                        if dim_name in subj_res['Processed Results'][parameter_toplevel]:
                                             tick_colors.append('black')
                                             ticks.append(dim_name)
                                             rec_dims.append(dim)
@@ -2721,10 +2721,12 @@ class visualize_results(object):
 
                             print(f"{analysis} {subj} {roi}")
                             if x_dims_idx is None or y_dims_idx is None:    
-                                if y_parameter_toplevel != None:
+                                if parameter_toplevel is not None:
+                                    print("X and Y dims not specified. Using receptors as Y, everything else as X.")
                                     x_dims = [dim for dim, _ in enumerate(ordered_dimensions) if dim not in rec_dims]
                                     y_dims = rec_dims
                                 else:
+                                    print("X and Y dims not specified. Using norm model parameters as X, everything else as Y.")
                                     x_dims = list(set([dim for dim, dim_name in enumerate(ordered_dimensions) if 'Norm_abcd' in dim_name]))
                                     y_dims = list(set([dim for dim, dim_name in enumerate(ordered_dimensions) if 'Norm_abcd' not in dim_name]))
                             else:
@@ -2743,7 +2745,7 @@ class visualize_results(object):
                             
                             try:
                                 ############## polar plots
-                                if polar_plots:
+                                if polar_plots and np.sum(alpha[analysis][subj][roi]>rsq_thresh)>10:
                                     
                                     fig_polarplot, ax_polarplot = pl.subplots(figsize=(11,8),subplot_kw={'projection': 'polar'})
                                     print('drawing polar plots')
@@ -2907,8 +2909,9 @@ class visualize_results(object):
                                             cortex.webgl.show(ds_pca_pycortex, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)    
                                     
                                 ###########1D regressions
-                                if perform_ols:
+                                if perform_ols and np.sum(alpha[analysis][subj][roi]>rsq_thresh)>10:
                                     print("performing OLS (1D y)")
+                                    
                                     for y_dim in y_dims:
                                         
                                         y = multidim_param_array[analysis][subj][roi][y_dim].T
@@ -2929,6 +2932,42 @@ class visualize_results(object):
                                         corr_prediction = np.corrcoef(ls1.predict(X), y)[0,1]
                                         print(f"corr prediction {corr_prediction}")
                                         
+                                        if roi in ['combined', 'Brain', 'all_custom']:
+                                            fig = pl.figure(f"3D OLS prediction {roi.replace('custom.','').replace('HCPQ1Q6.','').replace('glasser_','')}", figsize=(8,8))
+                                            
+                                            ax = fig.add_subplot(111, projection='3d', azim=-45, elev=50)
+                                            ax.grid(False)
+                                            ols_x0_dim = [ordered_dimensions[x_dim].replace('Norm_abcd','') for x_dim in x_dims][0]
+                                            ols_x1_dim = [ordered_dimensions[x_dim].replace('Norm_abcd','') for x_dim in x_dims][1]
+                                            ax.set_xlabel(f"{ols_x0_dim}",labelpad=50)
+                                            ax.set_ylabel(f"{ols_x1_dim}",labelpad=60)
+                                            ax.set_zlabel(f"{ordered_dimensions[y_dim]}",labelpad=50) 
+                                            ax.xaxis.set_tick_params(pad=20)
+                                            ax.zaxis.set_tick_params(pad=20)
+                                            ax.yaxis.set_tick_params(pad=20)
+
+                                            # for rr in [rr for rr in rois if rr != 'Brain' and rr != 'combined' and np.sum(alpha[analysis][subj][rr]>rsq_thresh)>10]:
+                                                
+                                            #     data_x0 = multidim_param_array[analysis][subj][roi][ordered_dimensions.index('RSq Norm_abcd')]
+                                            #     weights = alpha[analysis][subj][rr][alpha[analysis][subj][rr]>rsq_thresh]                                                   
+
+
+                                            #     roi_wstats = weightstats.DescrStatsW(data,
+                                            #                                         weights=weights)                                            
+                                            
+                                            xx0, xx1 = np.meshgrid(np.linspace(X[:,0].min(),X[:,0].max(),50),
+                                                                   np.linspace(X[:,1].min(),X[:,1].max(),50))
+                                            xx0xx1 = np.array([xx0.flatten(), xx1.flatten()]).T
+                                            Z_pred = ls1.predict(xx0xx1)
+                                            
+                                            rgba_colors = np.zeros((X.shape[0],4))
+                                            # the fourth column needs to be your alphas
+                                            rgba_colors[:, 3] = alpha[analysis][subj][roi][alpha[analysis][subj][roi]>rsq_thresh]
+                                            
+                                            ax.scatter(X[:,0], X[:,1], y, zorder=15,s=5, color=rgba_colors)
+                                            ax.scatter(xx0.flatten(), xx1.flatten(), Z_pred, facecolor=(0,0,0,0), s=5, edgecolor='#70b3f0')
+                                        
+                                        
                                         if cv_regression:
                                             for cv_subj in [s for s,_ in subjects if s!='fsaverage' and s!='Group' and s!=subj]:
                                                 print(f"CV regression (fit on {subj}, test on {cv_subj})")
@@ -2944,7 +2983,7 @@ class visualize_results(object):
                                                 corr_prediction = np.corrcoef(ls1.predict(X_cv), y_cv)[0,1]
                                                 print(f"CV corr prediction {corr_prediction}")      
                                         
-                                        pl.figure(figsize=(9,9))
+                                        pl.figure("OLS betas {roi.replace('custom.','').replace('HCPQ1Q6.','').replace('glasser_','')}",figsize=(9,9))
                                         pl.bar(np.arange(len(ls1.coef_)), ls1.coef_, label=f"RSq {rsq_prediction:.3f}")
                                         pl.xticks(np.arange(len(ls1.coef_)),[ordered_dimensions[x_dim].replace('Norm_abcd','') for x_dim in x_dims],rotation='vertical')
                                         pl.ylabel(f"{ordered_dimensions[y_dim]} OLS betas")
@@ -2953,7 +2992,7 @@ class visualize_results(object):
                                             pl.savefig(opj(figure_path,f"{ordered_dimensions[y_dim]}_OLSbetas_{roi.replace('custom.','').replace('HCPQ1Q6.','').replace('glasser_','')}.pdf"),dpi=600, bbox_inches='tight')
                                 
                                 ##########Multidim regression
-                                if perform_pls:                                     
+                                if perform_pls and np.sum(alpha[analysis][subj][roi]>rsq_thresh)>10:                                     
                                     for n_components in range(1, 1+X.shape[1]):
                                         pls = PLSRegression(n_components)
                                         pls.fit(X, Y)
