@@ -233,15 +233,15 @@ class results(object):
         no_folds = [key for key in unique_an_results if 'fit-runs-all' in key]
         
         combined_results = dd(dict)
-        for key in set([key[:-13] for key in folds]):
+        for key in set(['_'.join(key.split('_')[:-1]) for key in folds]):
             current_fold_infos = [unique_an_results[fold]['analysis_info'] for fold in folds if key in fold]
             for res in unique_an_results[folds[0]]:
                 if 'info' in res:
-                    combined_results[key+'_fit-runs-5050CVmedian'][res] = mergedict_AND(current_fold_infos)
+                    combined_results[key+'_fit-runs-CVmedian'][res] = mergedict_AND(current_fold_infos)
                 elif 'mask' in res:
-                    combined_results[key+'_fit-runs-5050CVmedian'][res] = np.product([unique_an_results[fold][res] for fold in folds if key in fold], axis=0).astype('bool')
+                    combined_results[key+'_fit-runs-CVmedian'][res] = np.product([unique_an_results[fold][res] for fold in folds if key in fold], axis=0).astype('bool')
                 else:
-                    combined_results[key+'_fit-runs-5050CVmedian'][res] = np.median([unique_an_results[fold][res] for fold in folds if key in fold], axis=0)
+                    combined_results[key+'_fit-runs-CVmedian'][res] = np.median([unique_an_results[fold][res] for fold in folds if key in fold], axis=0)
                     
             #for res in unique_an_results[folds[0]]:     
                 #final_mask = combined_results[key+'_fit-runs-5050CVmedian']['mask']
