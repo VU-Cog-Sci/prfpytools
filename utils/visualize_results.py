@@ -2807,8 +2807,11 @@ class visualize_results(object):
                                     full_dataset = np.concatenate((X,Y),axis=1)
     
                                     ncomp = full_dataset.shape[1]
-                                    pca = WPCA(n_components=ncomp).fit(full_dataset,weights=np.tile(multidim_param_array[analysis][subj][roi][ordered_dimensions.index('RSq Norm_abcd')],(full_dataset.shape[1],1)).T)
-                                    
+                                    if rsq_weights:
+                                        pca = WPCA(n_components=ncomp).fit(full_dataset,weights=np.tile(multidim_param_array[analysis][subj][roi][ordered_dimensions.index('RSq Norm_abcd')],(full_dataset.shape[1],1)).T)
+                                    else:
+                                        pca = PCA(n_components=ncomp).fit(full_dataset)
+                                        
                                     
                                     
                                     if roi in vis_pca_comps_rois:
@@ -2829,8 +2832,6 @@ class visualize_results(object):
                                             pl.savefig(opj(figure_path,f"PCA_dimensions_{roi.replace('custom.','').replace('HCPQ1Q6.','').replace('glasser_','')}.pdf"),dpi=600, bbox_inches='tight')
                                     
                                     
-    
-                                    
                                         ds_pca_pycortex = dict()
                                         ds_pca_roi_mean = dd(lambda:dict())
                                         
@@ -2843,14 +2844,22 @@ class visualize_results(object):
                                         for c in range(max_comp):
                                             
                                             zz = np.zeros_like(alpha[analysis][subj][roi]).astype(float)
-                                            zz[alpha[analysis][subj][roi]>rsq_thresh] = pca.fit_transform(full_dataset,weights=np.tile(multidim_param_array[analysis][subj][roi][ordered_dimensions.index('RSq Norm_abcd')],(full_dataset.shape[1],1)).T)[:,c]
                                             
+                                            if rsq_weights:
+                                                zz[alpha[analysis][subj][roi]>rsq_thresh] = pca.fit_transform(full_dataset,weights=np.tile(multidim_param_array[analysis][subj][roi][ordered_dimensions.index('RSq Norm_abcd')],(full_dataset.shape[1],1)).T)[:,c]
+                                            else:
+                                                zz[alpha[analysis][subj][roi]>rsq_thresh] = pca.fit_transform(full_dataset)
+                                                
                                             if c in vis_pca_comps_axes:
                                                 
                                                 for rr in [rr for rr in rois if rr != 'Brain' and rr != 'combined' and np.sum(alpha[analysis][subj][rr]>rsq_thresh)>10]:
                                                     
                                                     data = zz[alpha[analysis][subj][rr]>rsq_thresh]
-                                                    weights = alpha[analysis][subj][rr][alpha[analysis][subj][rr]>rsq_thresh]                                                   
+                                                    
+                                                    weights = alpha[analysis][subj][rr][alpha[analysis][subj][rr]>rsq_thresh]
+                                                    
+                                                    if not rsq_weights:
+                                                        weights = np.ones_like(weights)
 
 
                                                     roi_wstats = weightstats.DescrStatsW(data,
@@ -2932,31 +2941,31 @@ class visualize_results(object):
                                         corr_prediction = np.corrcoef(ls1.predict(X), y)[0,1]
                                         print(f"corr prediction {corr_prediction}")
                                         
-                                        if roi in ['combined', 'Brain', 'all_custom']:
+                                        if roi in vis_pca_comps_rois:
                                             fig = pl.figure(f"3D OLS prediction {roi.replace('custom.','').replace('HCPQ1Q6.','').replace('glasser_','')}", figsize=(8,8))
                                             
                                             ax = fig.add_subplot(111, projection='3d', azim=-45, elev=50)
                                             ax.grid(False)
-                                            ols_x0_dim = [ordered_dimensions[x_dim].replace('Norm_abcd','') for x_dim in x_dims][0]
-                                            ols_x1_dim = [ordered_dimensions[x_dim].replace('Norm_abcd','') for x_dim in x_dims][1]
-                                            ax.set_xlabel(f"{ols_x0_dim}",labelpad=50)
-                                            ax.set_ylabel(f"{ols_x1_dim}",labelpad=60)
-                                            ax.set_zlabel(f"{ordered_dimensions[y_dim]}",labelpad=50) 
+                                            ols_x0_dim = [ordered_dimensions[x_dim] for x_dim in x_dims][0]
+                                            ols_x1_dim = [ordered_dimensions[x_dim] for x_dim in x_dims][1]
+                                            ax.set_xlabel(f"{ols_x0_dim.replace('Norm_abcd','')}",labelpad=50)
+                                            ax.set_ylabel(f"{ols_x1_dim.replace('Norm_abcd','')}",labelpad=60)
+                                            ax.set_zlabel(f"{ordered_dimensions[y_dim].replace('Norm_abcd','')}",labelpad=50) 
                                             ax.xaxis.set_tick_params(pad=20)
                                             ax.zaxis.set_tick_params(pad=20)
                                             ax.yaxis.set_tick_params(pad=20)
+                                            ax.set_zlim(15,40)
 
                                             # for rr in [rr for rr in rois if rr != 'Brain' and rr != 'combined' and np.sum(alpha[analysis][subj][rr]>rsq_thresh)>10]:
                                                 
-                                            #     data_x0 = multidim_param_array[analysis][subj][roi][ordered_dimensions.index('RSq Norm_abcd')]
-                                            #     weights = alpha[analysis][subj][rr][alpha[analysis][subj][rr]>rsq_thresh]                                                   
+                                            #     if rsq_weights and 'Norm_abcd' in ols_x0_dim:
+                                            #         weights_x0 = alpha[analysis][subj][rr][alpha[analysis][subj][rr]>rsq_thresh]                                                   
 
-
-                                            #     roi_wstats = weightstats.DescrStatsW(data,
+                                            #         roi_wstats_x0 = weightstats.DescrStatsW(X[:,0],
                                             #                                         weights=weights)                                            
                                             
-                                            xx0, xx1 = np.meshgrid(np.linspace(X[:,0].min(),X[:,0].max(),50),
-                                                                   np.linspace(X[:,1].min(),X[:,1].max(),50))
+                                            xx0, xx1 = np.meshgrid(np.linspace(X[:,0].min(),X[:,0].max(),100),
+                                                                   np.linspace(X[:,1].min(),X[:,1].max(),100))
                                             xx0xx1 = np.array([xx0.flatten(), xx1.flatten()]).T
                                             Z_pred = ls1.predict(xx0xx1)
                                             
@@ -2964,8 +2973,8 @@ class visualize_results(object):
                                             # the fourth column needs to be your alphas
                                             rgba_colors[:, 3] = alpha[analysis][subj][roi][alpha[analysis][subj][roi]>rsq_thresh]
                                             
-                                            ax.scatter(X[:,0], X[:,1], y, zorder=15,s=5, color=rgba_colors)
-                                            ax.scatter(xx0.flatten(), xx1.flatten(), Z_pred, facecolor=(0,0,0,0), s=5, edgecolor='#70b3f0')
+                                            ax.scatter(X[:,0], X[:,1], y, zorder=15,s=1, color=rgba_colors)
+                                            ax.scatter(xx0.flatten(), xx1.flatten(), Z_pred, c=Z_pred, s=2,  alpha=0.25, cmap='jet')
                                         
                                         
                                         if cv_regression:
@@ -2983,7 +2992,7 @@ class visualize_results(object):
                                                 corr_prediction = np.corrcoef(ls1.predict(X_cv), y_cv)[0,1]
                                                 print(f"CV corr prediction {corr_prediction}")      
                                         
-                                        pl.figure("OLS betas {roi.replace('custom.','').replace('HCPQ1Q6.','').replace('glasser_','')}",figsize=(9,9))
+                                        pl.figure(f"OLS betas {roi.replace('custom.','').replace('HCPQ1Q6.','').replace('glasser_','')}",figsize=(9,9))
                                         pl.bar(np.arange(len(ls1.coef_)), ls1.coef_, label=f"RSq {rsq_prediction:.3f}")
                                         pl.xticks(np.arange(len(ls1.coef_)),[ordered_dimensions[x_dim].replace('Norm_abcd','') for x_dim in x_dims],rotation='vertical')
                                         pl.ylabel(f"{ordered_dimensions[y_dim]} OLS betas")
