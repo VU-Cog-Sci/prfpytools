@@ -20,8 +20,8 @@ from collections import defaultdict as dd
 from copy import deepcopy
 import itertools
 from pathlib import Path
-from utils.postproc_utils import model_wrapper, create_model_rf_wrapper, colorbar, norm_1d_sr_function, norm_2d_sr_function
-from utils.preproc_utils import create_full_stim
+from utils.postproc_utils import model_wrapper, create_model_rf_wrapper, colorbar, norm_1d_sr_function, norm_2d_sr_function, Vertex2D_fix
+from utils.preproc_utils import roi_mask, create_full_stim
 #import seaborn as sns
 
 import time
@@ -38,8 +38,7 @@ from sklearn.cross_decomposition import CCA, PLSCanonical, PLSRegression
 from wpca import PCA, WPCA
 from sklearn.metrics import mean_squared_error
 from nibabel.freesurfer.io import read_morph_data, write_morph_data
-from utils.preproc_utils import roi_mask
-#from builtins import input
+
 
 class visualize_results(object):
     def __init__(self, results):
@@ -756,39 +755,39 @@ class visualize_results(object):
                             best_model = np.argmax([p_r['RSq'][model] for model in self.only_models],axis=0)
 
                             ds_rsq['Best model'] = cortex.Vertex2D(best_model, alpha[analysis][subj]['all'], subject=pycortex_subj,
-                                                                      vmin2=rsq_thresh, vmax2=0.6, cmap='BROYG_2D').raw 
+                                                                      vmin2=rsq_thresh, vmax2=0.5, cmap='BROYG_2D').raw 
 
 
                         for model in self.only_models:
-                            ds_rsq[model] = cortex.Vertex2D(p_r['RSq'][model], alpha[analysis][subj][model], subject=pycortex_subj, 
-                                                            vmin=rsq_thresh, vmax=0.6, vmin2=rsq_thresh, vmax2=0.6, cmap=pycortex_cmap).raw
+                            ds_rsq[f"{model} rsq"] = Vertex2D_fix(p_r['RSq'][model], alpha[analysis][subj][model], subject=pycortex_subj, 
+                                                            vmin=rsq_thresh, vmax=0.6, vmin2=rsq_thresh, vmax2=0.5, cmap=pycortex_cmap)
                             
                         if 'CSS' in models and p_r['RSq']['CSS'].sum()>0:
                             ds_rsq['CSS - Gauss'] = cortex.Vertex2D(p_r['RSq']['CSS']-p_r['RSq']['Gauss'], alpha[analysis][subj]['all'], subject=pycortex_subj,
-                                                                      vmin=-0.1, vmax=0.1, vmin2=rsq_thresh, vmax2=0.6, cmap=pycortex_cmap).raw   
+                                                                      vmin=-0.1, vmax=0.1, vmin2=rsq_thresh, vmax2=0.5, cmap=pycortex_cmap).raw   
                             
                         if 'DoG' in models and p_r['RSq']['DoG'].sum()>0:
                             ds_rsq['DoG - Gauss'] = cortex.Vertex2D(p_r['RSq']['DoG']-p_r['RSq']['Gauss'], alpha[analysis][subj]['all'], subject=pycortex_subj,
-                                                                  vmin=-0.1, vmax=0.1, vmin2=rsq_thresh, vmax2=0.6, cmap=pycortex_cmap).raw
+                                                                  vmin=-0.1, vmax=0.1, vmin2=rsq_thresh, vmax2=0.5, cmap=pycortex_cmap).raw
                         
                         if 'Norm_abcd' in self.only_models and 'Gauss' in self.only_models:
 
                             ds_rsq[f'Norm_abcd - Gauss'] = cortex.Vertex2D(p_r['RSq']['Norm_abcd']-p_r['RSq']['Gauss'], alpha[analysis][subj]['all'], subject=pycortex_subj,
-                                                                      vmin=-0.1, vmax=0.1, vmin2=rsq_thresh, vmax2=0.6, cmap=pycortex_cmap).raw
+                                                                      vmin=-0.1, vmax=0.1, vmin2=rsq_thresh, vmax2=0.5, cmap=pycortex_cmap).raw
 
                             if 'CSS' in self.only_models and 'DoG' in self.only_models:
                             
                                 ds_rsq[f'Norm_abcd - DoG'] = cortex.Vertex2D(p_r['RSq']['Norm_abcd']-p_r['RSq']['DoG'], alpha[analysis][subj]['all'], subject=pycortex_subj,
-                                                                      vmin=-0.1, vmax=0.1, vmin2=rsq_thresh, vmax2=0.6, cmap=pycortex_cmap).raw
+                                                                      vmin=-0.1, vmax=0.1, vmin2=rsq_thresh, vmax2=0.5, cmap=pycortex_cmap).raw
 
                                 ds_rsq[f'Norm_abcd - CSS'] = cortex.Vertex2D(p_r['RSq']['Norm_abcd']-p_r['RSq']['CSS'], alpha[analysis][subj]['all'], subject=pycortex_subj, 
-                                                                      vmin=-0.1, vmax=0.1, vmin2=rsq_thresh, vmax2=0.6, cmap=pycortex_cmap).raw
+                                                                      vmin=-0.1, vmax=0.1, vmin2=rsq_thresh, vmax2=0.5, cmap=pycortex_cmap).raw
  
 
                         for model in [model for model in self.only_models if 'Norm' in model and 'Norm_abcd' != model]:
 
                             ds_rsq[f'{model} - Norm_abcd'] = cortex.Vertex2D(p_r['RSq'][model]-p_r['RSq']['Norm_abcd'], alpha[analysis][subj]['all'], subject=pycortex_subj,
-                                                                      vmin=-0.1, vmax=0.1, vmin2=rsq_thresh, vmax2=0.6, cmap=pycortex_cmap).raw
+                                                                      vmin=-0.1, vmax=0.1, vmin2=rsq_thresh, vmax2=0.5, cmap=pycortex_cmap).raw
                             
                             
                         if 'Processed Results' in self.main_dict['T1w'][analysis][subj] and self.compare_volume_surface:
@@ -817,7 +816,7 @@ class visualize_results(object):
                         for model in self.only_models:
                             ds_ecc[f"{model} Eccentricity"] = cortex.Vertex2D(p_r['Eccentricity'][model], alpha[analysis][subj][model], subject=pycortex_subj, 
                                                             vmin=np.nanquantile(p_r['Eccentricity'][model][alpha[analysis][subj][model]>rsq_thresh],0.1), 
-                                                            vmax=np.nanquantile(p_r['Eccentricity'][model][alpha[analysis][subj][model]>rsq_thresh],0.9), vmin2=rsq_thresh, vmax2=0.6, cmap=pycortex_cmap).raw
+                                                            vmax=np.nanquantile(p_r['Eccentricity'][model][alpha[analysis][subj][model]>rsq_thresh],0.9), vmin2=rsq_thresh, vmax2=0.5, cmap=pycortex_cmap).raw
         
                         self.js_handle_dict[space][analysis][subj]['js_handle_ecc'] = cortex.webgl.show(ds_ecc, pickerfun=clicker_function, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)
         
@@ -828,11 +827,11 @@ class visualize_results(object):
                             #print(p_r['Polar Angle'][model])
                             ds_polar[f"{model} polar angle HSV2"] = cortex.Vertex2D(p_r['Polar Angle'][model], alpha[analysis][subj][model], subject=pycortex_subj, 
                                                               vmin=-3.1415, vmax=3.1415,
-                                                              vmin2=rsq_thresh, vmax2=0.6, cmap='Retinotopy_HSV_2x_alpha').raw
+                                                              vmin2=rsq_thresh, vmax2=0.5, cmap='Retinotopy_HSV_2x_alpha').raw
 
                             ds_polar[f"{model} polar angle HSV1"] = cortex.Vertex2D(p_r['Polar Angle'][model], alpha[analysis][subj][model], subject=pycortex_subj, 
                                                                         vmin=-3.1415, vmax=3.1415,
-                                                               vmin2=rsq_thresh, vmax2=0.6, cmap='Retinotopy_HSV_alpha').raw
+                                                               vmin2=rsq_thresh, vmax2=0.5, cmap='Retinotopy_HSV_alpha').raw
                         
                         if 'Processed Results' in self.main_dict['T1w'][analysis][subj] and self.compare_volume_surface:
                             ds_polar_comp = dict()
@@ -858,10 +857,10 @@ class visualize_results(object):
                         
                         for model in self.only_models:
                             ds_size[f"{model} fwhmax"] = cortex.Vertex2D(p_r['Size (fwhmax)'][model], alpha[analysis][subj][model], subject=pycortex_subj, 
-                                                             vmin=2, vmax=20, vmin2=rsq_thresh, vmax2=0.6, cmap=pycortex_cmap).raw
+                                                             vmin=2, vmax=20, vmin2=rsq_thresh, vmax2=0.5, cmap=pycortex_cmap).raw
                             ds_size[f"{model} sigma_1"] = cortex.Vertex2D(p_r['Size (sigma_1)'][model], alpha[analysis][subj][model], subject=pycortex_subj, 
                                                              vmin=0.5, 
-                                                            vmax=5, vmin2=rsq_thresh, vmax2=0.6, cmap=pycortex_cmap).raw
+                                                            vmax=5, vmin2=rsq_thresh, vmax2=0.5, cmap=pycortex_cmap).raw
                             
                         self.js_handle_dict[space][analysis][subj]['js_handle_size'] = cortex.webgl.show(ds_size, pickerfun=clicker_function, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)
         
@@ -872,7 +871,7 @@ class visualize_results(object):
                         for model in self.only_models:
                             ds_amp[model] = cortex.Vertex2D(p_r['Amplitude'][model], alpha[analysis][subj][model], subject=pycortex_subj, 
                                                             vmin=np.nanquantile(p_r['Amplitude'][model][alpha[analysis][subj][model]>rsq_thresh],0.1), 
-                                                            vmax=np.nanquantile(p_r['Amplitude'][model][alpha[analysis][subj][model]>rsq_thresh],0.9), vmin2=rsq_thresh, vmax2=0.6, cmap=pycortex_cmap).raw
+                                                            vmax=np.nanquantile(p_r['Amplitude'][model][alpha[analysis][subj][model]>rsq_thresh],0.9), vmin2=rsq_thresh, vmax2=0.5, cmap=pycortex_cmap).raw
         
                         self.js_handle_dict[space][analysis][subj]['js_handle_amp'] = cortex.webgl.show(ds_amp, pickerfun=clicker_function, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)
                         
@@ -880,7 +879,7 @@ class visualize_results(object):
                         ds_css_exp = dict()
                         
                         ds_css_exp['CSS Exponent'] = cortex.Vertex2D(p_r['CSS Exponent']['CSS'], alpha[analysis][subj]['CSS'], subject=pycortex_subj, 
-                                                                     vmin=0, vmax=1, vmin2=rsq_thresh, vmax2=0.6, cmap=pycortex_cmap).raw
+                                                                     vmin=0, vmax=1, vmin2=rsq_thresh, vmax2=0.5, cmap=pycortex_cmap).raw
         
                         self.js_handle_dict[space][analysis][subj]['js_handle_css_exp'] = cortex.webgl.show(ds_css_exp, pickerfun=clicker_function, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)
                         
@@ -891,14 +890,14 @@ class visualize_results(object):
                         for model in self.only_models:
                             if model == 'DoG':
                                 ds_surround_size[f'DoG fwatmin'] = cortex.Vertex2D(p_r['Surround Size (fwatmin)']['DoG'], alpha[analysis][subj]['DoG'], subject=pycortex_subj, 
-                                                                     vmin=0, vmax=50, vmin2=rsq_thresh, vmax2=0.6, cmap=pycortex_cmap).raw
+                                                                     vmin=0, vmax=50, vmin2=rsq_thresh, vmax2=0.5, cmap=pycortex_cmap).raw
                                 ds_surround_size[f'DoG sigma_2'] = cortex.Vertex2D(p_r['Size (sigma_2)']['DoG'], alpha[analysis][subj]['DoG'], subject=pycortex_subj, 
-                                                                     vmin=0, vmax=50, vmin2=rsq_thresh, vmax2=0.6, cmap=pycortex_cmap).raw
+                                                                     vmin=0, vmax=50, vmin2=rsq_thresh, vmax2=0.5, cmap=pycortex_cmap).raw
                             elif 'Norm' in model:
                                 ds_surround_size[f"{model} fwatmin"] = cortex.Vertex2D(p_r['Surround Size (fwatmin)'][model], alpha[analysis][subj][model], subject=pycortex_subj, 
-                                                                     vmin=0, vmax=50, vmin2=rsq_thresh, vmax2=0.6, cmap=pycortex_cmap).raw                    
+                                                                     vmin=0, vmax=50, vmin2=rsq_thresh, vmax2=0.5, cmap=pycortex_cmap).raw                    
                                 ds_surround_size[f"{model} sigma_2"] = cortex.Vertex2D(p_r['Size (sigma_2)'][model], alpha[analysis][subj][model], subject=pycortex_subj, 
-                                                                     vmin=0, vmax=10, vmin2=rsq_thresh, vmax2=0.6, cmap=pycortex_cmap).raw    
+                                                                     vmin=0, vmax=10, vmin2=rsq_thresh, vmax2=0.5, cmap=pycortex_cmap).raw    
                                 
                         self.js_handle_dict[space][analysis][subj]['js_handle_surround_size'] = cortex.webgl.show(ds_surround_size, pickerfun=clicker_function, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)    
 
@@ -909,14 +908,14 @@ class visualize_results(object):
                         for model in self.only_models:
                             if model == 'DoG':
                                 ds_suppression_index[f'{model} SI (full)'] = cortex.Vertex2D(p_r['Suppression Index (full)'][model], alpha[analysis][subj][model], subject=pycortex_subj, 
-                                                                     vmin=0, vmax=10, vmin2=rsq_thresh, vmax2=0.6, cmap=pycortex_cmap).raw
+                                                                     vmin=0, vmax=10, vmin2=rsq_thresh, vmax2=0.5, cmap=pycortex_cmap).raw
                                 ds_suppression_index[f'{model} SI (aperture)'] = cortex.Vertex2D(p_r['Suppression Index'][model], alpha[analysis][subj][model], subject=pycortex_subj, 
-                                                                     vmin=0, vmax=1.5, vmin2=rsq_thresh, vmax2=0.6, cmap=pycortex_cmap).raw                                    
+                                                                     vmin=0, vmax=1.5, vmin2=rsq_thresh, vmax2=0.5, cmap=pycortex_cmap).raw                                    
                             elif 'Norm' in model:
                                 ds_suppression_index[f'{model} NI (full)'] = cortex.Vertex2D(p_r['Suppression Index (full)'][model], alpha[analysis][subj][model], subject=pycortex_subj, 
-                                                                     vmin=1, vmax=20, vmin2=rsq_thresh, vmax2=0.6, cmap=pycortex_cmap).raw
+                                                                     vmin=1, vmax=20, vmin2=rsq_thresh, vmax2=0.5, cmap=pycortex_cmap).raw
                                 ds_suppression_index[f'{model} NI (aperture)'] = cortex.Vertex2D(p_r['Suppression Index'][model], alpha[analysis][subj][model], subject=pycortex_subj, 
-                                                                     vmin=0, vmax=1.5, vmin2=rsq_thresh, vmax2=0.6, cmap=pycortex_cmap).raw                      
+                                                                     vmin=0, vmax=1.5, vmin2=rsq_thresh, vmax2=0.5, cmap=pycortex_cmap).raw                      
         
                         self.js_handle_dict[space][analysis][subj]['js_handle_suppression_index'] = cortex.webgl.show(ds_suppression_index, pickerfun=clicker_function, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)    
 
@@ -926,7 +925,7 @@ class visualize_results(object):
                             if model in p_r['Size ratio (sigma_2/sigma_1)']:
                                 ds_size_ratio[f'{model} size ratio'] = cortex.Vertex2D(p_r['Size ratio (sigma_2/sigma_1)'][model], alpha[analysis][subj][model], subject=pycortex_subj, 
                                                             vmin=np.nanquantile(p_r['Size ratio (sigma_2/sigma_1)'][model][alpha[analysis][subj][model]>rsq_thresh],0.1), 
-                                                            vmax=np.nanquantile(p_r['Size ratio (sigma_2/sigma_1)'][model][alpha[analysis][subj][model]>rsq_thresh],0.9), vmin2=rsq_thresh, vmax2=0.6, cmap=pycortex_cmap).raw                                                      
+                                                            vmax=np.nanquantile(p_r['Size ratio (sigma_2/sigma_1)'][model][alpha[analysis][subj][model]>rsq_thresh],0.9), vmin2=rsq_thresh, vmax2=0.5, cmap=pycortex_cmap).raw                                                      
         
                         self.js_handle_dict[space][analysis][subj]['js_handle_size_ratio'] = cortex.webgl.show(ds_size_ratio, pickerfun=clicker_function, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)    
                     
@@ -941,7 +940,7 @@ class visualize_results(object):
 
                                 ds_receptors[receptor] = cortex.Vertex2D(p_r['Receptor Maps'][receptor], alpha[analysis][subj][rec_mod_alpha], subject=pycortex_subj, 
                                                                          vmin=np.nanquantile(p_r['Receptor Maps'][receptor][alpha[analysis][subj][rec_mod_alpha]>rsq_thresh],0.1), vmax=np.nanquantile(p_r['Receptor Maps'][receptor][alpha[analysis][subj][rec_mod_alpha]>rsq_thresh],0.9), 
-                                                                         vmin2=rsq_thresh, vmax2=0.6, cmap=pycortex_cmap).raw                                                      
+                                                                         vmin2=rsq_thresh, vmax2=0.5, cmap=pycortex_cmap).raw                                                      
             
                             self.js_handle_dict[space][analysis][subj]['js_handle_receptors'] = cortex.webgl.show(ds_receptors, pickerfun=clicker_function, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)    
 
@@ -952,17 +951,17 @@ class visualize_results(object):
                         
                         for model in [model for model in self.only_models if 'Norm' in model]:
 
-                            ds_norm_baselines[f'{model} Param. B'] = cortex.Vertex2D(p_r['Norm Param. B'][model], alpha[analysis][subj][model], subject=pycortex_subj, 
+                            ds_norm_baselines[f'{model} Param. B'] = Vertex2D_fix(p_r['Norm Param. B'][model], alpha[analysis][subj][model], subject=pycortex_subj, 
                                                                          vmin=np.nanquantile(p_r['Norm Param. B'][model][alpha[analysis][subj][model]>rsq_thresh],0.1), 
-                                                                         vmax=np.nanquantile(p_r['Norm Param. B'][model][alpha[analysis][subj][model]>rsq_thresh],0.9), vmin2=rsq_thresh, vmax2=0.6, cmap=pycortex_cmap).raw                    
-                            ds_norm_baselines[f'{model} Param. D'] = cortex.Vertex2D(p_r['Norm Param. D'][model], alpha[analysis][subj][model], subject=pycortex_subj, 
+                                                                         vmax=np.nanquantile(p_r['Norm Param. B'][model][alpha[analysis][subj][model]>rsq_thresh],0.9), vmin2=rsq_thresh, vmax2=0.5, cmap=pycortex_cmap)                    
+                            ds_norm_baselines[f'{model} Param. D'] = Vertex2D_fix(p_r['Norm Param. D'][model], alpha[analysis][subj][model], subject=pycortex_subj, 
                                                                          vmin=np.nanquantile(p_r['Norm Param. D'][model][alpha[analysis][subj][model]>rsq_thresh],0.1), 
-                                                                         vmax=np.nanquantile(p_r['Norm Param. D'][model][alpha[analysis][subj][model]>rsq_thresh],0.9), vmin2=rsq_thresh, vmax2=0.6, cmap=pycortex_cmap).raw
+                                                                         vmax=np.nanquantile(p_r['Norm Param. D'][model][alpha[analysis][subj][model]>rsq_thresh],0.9), vmin2=rsq_thresh, vmax2=0.5, cmap=pycortex_cmap)
                             
                             if 'Ratio (B/D)' in p_r:
-                                ds_norm_baselines[f'{model} Ratio (B/D)'] = cortex.Vertex2D(p_r['Ratio (B/D)'][model], alpha[analysis][subj][model], subject=pycortex_subj, 
+                                ds_norm_baselines[f'{model} Ratio (B/D)'] = Vertex2D_fix(p_r['Ratio (B/D)'][model], alpha[analysis][subj][model], subject=pycortex_subj, 
                                                                           vmin=np.nanquantile(p_r['Ratio (B/D)'][model][alpha[analysis][subj][model]>rsq_thresh],0.1), 
-                                                                          vmax=np.nanquantile(p_r['Ratio (B/D)'][model][alpha[analysis][subj][model]>rsq_thresh],0.9), vmin2=rsq_thresh, vmax2=0.6, cmap=pycortex_cmap).raw
+                                                                          vmax=np.nanquantile(p_r['Ratio (B/D)'][model][alpha[analysis][subj][model]>rsq_thresh],0.9), vmin2=rsq_thresh, vmax2=0.5, cmap=pycortex_cmap)
                         
                         self.js_handle_dict[space][analysis][subj]['js_handle_norm_baselines'] = cortex.webgl.show(ds_norm_baselines, pickerfun=clicker_function, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)    
 
@@ -1000,7 +999,7 @@ class visualize_results(object):
                                             
 
                                         ds_correlations[f'{x_param_topl} {x_param_lowl} VS {y_param_topl} {y_param_lowl}'] = cortex.Vertex2D(corr_per_roi_data, alpha_per_roi, subject=pycortex_subj, 
-                                                                          vmin=np.nanquantile(corr_per_roi_data[all_rois_alpha>rsq_thresh],0.1), vmin2=rsq_thresh, vmax2=0.6,
+                                                                          vmin=np.nanquantile(corr_per_roi_data[all_rois_alpha>rsq_thresh],0.1), vmin2=rsq_thresh, vmax2=0.5,
                                                                           vmax=np.nanquantile(corr_per_roi_data[all_rois_alpha>rsq_thresh],0.9), #alpha=(np.clip(alpha_per_roi, rsq_thresh, 0.6)-rsq_thresh)/(0.6-rsq_thresh),
                                                                           cmap='BuBkRd_alpha_2D').raw                    
 
@@ -1033,7 +1032,7 @@ class visualize_results(object):
                                     
 
                                 ds_means[f'Mean {y_param_topl} {y_param_lowl} per roi'] = cortex.Vertex2D(mean_per_roi_data, alpha_per_roi, subject=pycortex_subj, 
-                                                                  vmin=np.nanquantile(mean_per_roi_data[all_rois_alpha>rsq_thresh],0.1), vmin2=rsq_thresh, vmax2=0.6,
+                                                                  vmin=np.nanquantile(mean_per_roi_data[all_rois_alpha>rsq_thresh],0.1), vmin2=rsq_thresh, vmax2=0.5,
                                                                   vmax=np.nanquantile(mean_per_roi_data[all_rois_alpha>rsq_thresh],0.9), #alpha=(np.clip(alpha_per_roi, rsq_thresh, 0.6)-rsq_thresh)/(0.6-rsq_thresh),
                                                                   cmap=pycortex_cmap).raw                    
 
@@ -2875,7 +2874,7 @@ class visualize_results(object):
                                             if vis_pca_pycortex:
                                                 ds_pca_pycortex[f"Component {c}"] = cortex.Vertex2D(zz, alpha[analysis][subj][roi], subject=subj, 
                                                                 vmin=np.nanquantile(zz[alpha[analysis][subj][roi]>rsq_thresh],0.1), vmax=np.nanquantile(zz[alpha[analysis][subj][roi]>rsq_thresh],0.9), 
-                                                                 vmin2=rsq_thresh, vmax2=0.6, cmap='nipy_spectral_2D_alpha').raw
+                                                                 vmin2=rsq_thresh, vmax2=0.5, cmap='nipy_spectral_2D_alpha').raw
 
                                         
                                         pl.figure(figsize=(8,8))                                        
@@ -2954,7 +2953,7 @@ class visualize_results(object):
                                             ax.xaxis.set_tick_params(pad=20)
                                             ax.zaxis.set_tick_params(pad=20)
                                             ax.yaxis.set_tick_params(pad=20)
-                                            ax.set_zlim(15,40)
+                                            #ax.set_zlim(15,40)
 
                                             # for rr in [rr for rr in rois if rr != 'Brain' and rr != 'combined' and np.sum(alpha[analysis][subj][rr]>rsq_thresh)>10]:
                                                 
@@ -3055,12 +3054,12 @@ class visualize_results(object):
                                                     zz[alpha[analysis][subj][roi]>rsq_thresh] = pls.x_scores_[:,c]
                                                     ds_pls[f"x_score {c}"] = cortex.Vertex2D(zz, alpha[analysis][subj][roi], subject=subj, 
                                                                         vmin=np.nanquantile(zz[alpha[analysis][subj][roi]>rsq_thresh],0.1), vmax=np.nanquantile(zz[alpha[analysis][subj][roi]>rsq_thresh],0.9), 
-                                                                      vmin2=rsq_thresh, vmax2=0.6, cmap='nipy_spectral_2D_alpha').raw                                                      
+                                                                      vmin2=rsq_thresh, vmax2=0.5, cmap='nipy_spectral_2D_alpha').raw                                                      
                                                     zz = np.zeros_like(alpha[analysis][subj][roi]).astype(float)
                                                     zz[alpha[analysis][subj][roi]>rsq_thresh] = pls.y_scores_[:,c]
                                                     ds_pls[f"y_score {c}"] = cortex.Vertex2D(zz, alpha[analysis][subj][roi], subject=subj, 
                                                                         vmin=np.nanquantile(zz[alpha[analysis][subj][roi]>rsq_thresh],0.1), vmax=np.nanquantile(zz[alpha[analysis][subj][roi]>rsq_thresh],0.9), 
-                                                                      vmin2=rsq_thresh, vmax2=0.6, cmap='nipy_spectral_2D_alpha').raw               
+                                                                      vmin2=rsq_thresh, vmax2=0.5, cmap='nipy_spectral_2D_alpha').raw               
                                                 cortex.webgl.show(ds_pls, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)    
 
                                         
@@ -3108,6 +3107,10 @@ class visualize_results(object):
                         an_info = subj_res['analysis_info']
                         ss_deg = 2.0 * np.degrees(np.arctan(an_info['screen_size_cm'] /(2.0*an_info['screen_distance_cm'])))
                         n_pix = an_info['n_pix']
+                        
+                        ##correcting for a previous issue with non-divisors
+                        if an_info["fitting_space"] == 'HCP' and n_pix == 54:
+                            n_pix = 67
                     
                     if third_dim_sr_curves is not None:
                         fig = pl.figure(f"3D sr curves by {third_dim_sr_curves}", figsize=(8,8))
