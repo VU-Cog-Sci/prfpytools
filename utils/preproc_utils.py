@@ -40,18 +40,15 @@ def create_dm_from_screenshots(screenshot_path,
             offset = int((img.shape[1]-img.shape[0])/2)
             img = img[:, offset:(offset+img.shape[0])]
 
-
+        assert img.shape[0]%n_pix == 0, f"please choose a n_pix value that is a divisor of {str(img.shape[0])}"
         # downsample
-        downsampling_constant = int(img.shape[1]/n_pix)
+        downsampling_constant = int(img.shape[0]/n_pix)
         downsampled_img = img[::downsampling_constant, ::downsampling_constant]
 #        import matplotlib.pyplot as pl
 #        fig = pl.figure()
 #        pl.imshow(downsampled_img)
 #        fig.close()
         
-        
-        if downsampled_img[:,:,0].shape != design_matrix[...,0].shape:
-            print("please choose a n_pix value that is a divisor of "+str(img.shape[0]))
 
         # binarize image into dm matrix
         # assumes: standard RGB255 format; only colors present in image are black, white, grey, red, green.
@@ -91,6 +88,11 @@ def create_full_stim(screenshot_paths,
                 with h5py.File(screenshot_paths[i], 'r') as f:
                     dm_task = np.array(f.get('stim')).T
                     dm_task /= dm_task.max()
+                    
+                    #assert dm_task.shape[0]%n_pix == 0, f"please choose a n_pix value that is a divisor of {str(dm_task.shape[0])}"
+                    if dm_task.shape[0]%n_pix != 0:
+                        print(f"warning: n_pix is not a divisor of original DM size. The true downsampled size is: {dm_task[::int(dm_task.shape[0]/n_pix),0,0].shape[0]}")
+                        
                 dm_list.append(dm_task[::int(dm_task.shape[0]/n_pix),::int(dm_task.shape[0]/n_pix),:])
                 
             #this is for screenshots
