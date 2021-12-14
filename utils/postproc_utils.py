@@ -26,7 +26,8 @@ class results(object):
                         timecourse_folder=None,
                         ref_volume_path=None,
                         calculate_CCrsq=False,
-                        calculate_noise_ceiling=False):
+                        calculate_noise_ceiling=False,
+                        screenshot_paths = []):
         
         an_list = [path for path in os.listdir(results_folder) if 'analysis' in path]
         subjects = [path.split('_')[0] for path in an_list]
@@ -113,15 +114,16 @@ class results(object):
             all_runs = np.unique(np.array([int(elem.replace('run-','').replace('.npy','')) for path in tc_paths for elem in path.split('_')  if 'run' in elem]))
             
             if merged_an_info["crossvalidate"] and calculate_noise_ceiling:
-                prf_stim = create_full_stim(screenshot_paths=[opj(timecourse_folder,f'task-{task}_screenshots') for task in merged_an_info['task_names']],
-                                n_pix=merged_an_info['n_pix'],
-                                discard_volumes=merged_an_info['discard_volumes'],
-                                baseline_volumes_begin_end=merged_an_info['baseline_volumes_begin_end'],
-                                dm_edges_clipping=merged_an_info['dm_edges_clipping'],
-                                screen_size_cm=merged_an_info['screen_size_cm'],
-                                screen_distance_cm=merged_an_info['screen_distance_cm'],
-                                TR=merged_an_info['TR'],
-                                task_names=merged_an_info['task_names'])
+                # prf_stim = create_full_stim(screenshot_paths=screenshot_paths,
+                #                 n_pix=merged_an_info['n_pix'],
+                #                 discard_volumes=merged_an_info['discard_volumes'],
+                #                 baseline_volumes_begin_end=merged_an_info['baseline_volumes_begin_end'],
+                #                 dm_edges_clipping=merged_an_info['dm_edges_clipping'],
+                #                 screen_size_cm=merged_an_info['screen_size_cm'],
+                #                 screen_distance_cm=merged_an_info['screen_distance_cm'],
+                #                 TR=merged_an_info['TR'],
+                #                 task_names=merged_an_info['task_names'],
+                #                 normalize_integral_dx=merged_an_info['normalize_integral_dx'])
                 
                 tc_test = dict()
                 tc_fit = dict()
@@ -135,11 +137,16 @@ class results(object):
 
                         tc_run = ([np.load(tc_path) for tc_path in tc_paths if task in tc_path and f"run-{run}" in tc_path][0])
                         
-                        tc_run *= (100/tc_run.mean(-1))[...,np.newaxis]
-                        tc_run += (tc_run.mean(-1)-np.median(tc_run[...,prf_stim.late_iso_dict[task]], axis=-1))[...,np.newaxis]
+                        #tc_run *= (100/tc_run.mean(-1))[...,np.newaxis]
+                        #tc_run += (tc_run.mean(-1)-np.median(tc_run[...,prf_stim.late_iso_dict[task]], axis=-1))[...,np.newaxis]
                         
                         tc_runs_unmasked = np.zeros((mask_run.shape[0], tc_run.shape[-1]))
-                        tc_runs_unmasked[mask_run] = np.copy(tc_run)
+                        
+                        if merged_an_info['fitting_space'] == 'HCP':
+                            tc_runs_unmasked[mask_run] = np.copy(tc_run[:118584])
+                        else:
+                            tc_runs_unmasked[mask_run] = np.copy(tc_run)
+                            
                         tc_runs.append(tc_runs_unmasked)
                                            
                     
@@ -161,7 +168,7 @@ class results(object):
             if not merged_an_info["crossvalidate"] and calculate_CCrsq:
                 for task in [tsk for tsk in all_task_names if tsk not in merged_an_info['task_names']]:
                     if task not in prf_stims:
-                        prf_stims[task] = create_full_stim(screenshot_paths=[opj(timecourse_folder,f'task-{task}_screenshots')],
+                        prf_stims[task] = create_full_stim(screenshot_paths=[s_p for s_p in screenshot_paths if task in s_p],
                                 n_pix=merged_an_info['n_pix'],
                                 discard_volumes=merged_an_info['discard_volumes'],
                                 baseline_volumes_begin_end=merged_an_info['baseline_volumes_begin_end'],
@@ -169,7 +176,8 @@ class results(object):
                                 screen_size_cm=merged_an_info['screen_size_cm'],
                                 screen_distance_cm=merged_an_info['screen_distance_cm'],
                                 TR=merged_an_info['TR'],
-                                task_names=[task])
+                                task_names=[task],
+                                normalize_integral_dx=merged_an_info['normalize_integral_dx'])
                         
 
                     all_tcs_task = [np.load(tc_path) for tc_path in tc_paths if task in tc_path]
@@ -186,8 +194,8 @@ class results(object):
                     common_mask = mask_task * mask
                     tc_comp = np.copy(tc_full[common_mask])              
                     
-                    tc_comp *= (100/tc_comp.mean(-1))[...,np.newaxis]
-                    tc_comp += (tc_comp.mean(-1)-np.median(tc_comp[...,prf_stims[task].late_iso_dict[task]], axis=-1))[...,np.newaxis]
+                    #tc_comp *= (100/tc_comp.mean(-1))[...,np.newaxis]
+                    #tc_comp += (tc_comp.mean(-1)-np.median(tc_comp[...,prf_stims[task].late_iso_dict[task]], axis=-1))[...,np.newaxis]
                     
 
                     
@@ -545,78 +553,19 @@ def colorbar(mappable):
     return cbar        
 
 
-def make_2d_cmap(cmap_name):
-    #####
-    cmap = mpimg.imread(os.path.join(os.path.split(cortex.database.default_filestore)[
-                          0], 'colormaps',f'{cmap_name}.png'))
-    
-    cmap = colors.rgb_to_hsv(cmap[...,:3])
-    hue, alpha = np.meshgrid(cmap[...,0], 1-np.linspace(0, 1, 256))
-    hsv = np.zeros(list(hue.shape)+[3])
-
-    # hsv[..., 0] = cmap[...,0]  
-    # hsv[..., 1] = np.ones_like(alpha)
-    # hsv[..., 2] = np.ones_like(alpha)
-    # hsv[-1,:,2] = 0
-
-    hsv[..., 0] = cmap[...,0]  
-    hsv[..., 1] = cmap[...,1] 
-    hsv[..., 2] = cmap[...,2] 
-    #hsv[-1,:,2] = 0
-
-    rgb = colors.hsv_to_rgb(hsv)
-    rgba = np.vstack((rgb.T, alpha[..., np.newaxis].T)).T
-    #pl.imshow(rgba)
-    hsv_fn = os.path.join(os.path.split(cortex.database.default_filestore)[
-                          0], 'colormaps', f'{cmap_name}_2D_alpha_unfix.png')
-    mpimg.imsave(hsv_fn, rgba)
-    
-
-def create_retinotopy_colormaps():
-    hue, alpha = np.meshgrid(np.linspace(
-        0, 1, 256, endpoint=False), 1-np.linspace(0, 1, 256))
-
-    hsv = np.zeros(list(hue.shape)+[3])
-
-    hsv[..., 0] = hue 
-    hsv[..., 1] = np.ones_like(alpha)
-    hsv[..., 2] = np.ones_like(alpha)
-    hsv[-1,:,2] = 0
-
-    rgb = colors.hsv_to_rgb(hsv)
-    rgba = np.vstack((rgb.T, alpha[..., np.newaxis].T)).T
-    pl.imshow(rgba)
-    hsv_fn = os.path.join(os.path.split(cortex.database.default_filestore)[
-                          0], 'colormaps', 'Retinotopy_HSV_alpha.png')
-    mpimg.imsave(hsv_fn, rgba)
-
-    hue, alpha = np.meshgrid(
-        np.fmod(np.linspace(0, 2, 256), 1.0), 1-np.linspace(0, 1, 256))
-    hsv = np.zeros(list(hue.shape)+[3])
-
-    hsv[..., 0] = hue
-    hsv[..., 1] = np.ones_like(alpha)
-    hsv[..., 2] = np.ones_like(alpha)
-    hsv[-1,:,2] = 0
-
-    rgb = colors.hsv_to_rgb(hsv)
-    rgba = np.vstack((rgb.T, alpha[..., np.newaxis].T)).T
-    pl.imshow(rgba)
-    hsv_fn = os.path.join(os.path.split(cortex.database.default_filestore)[
-                          0], 'colormaps', 'Retinotopy_HSV_2x_alpha.png')
-    mpimg.imsave(hsv_fn, rgba)
-
 
 def Vertex2D_fix(data1, data2, subject, cmap, vmin, vmax, vmin2, vmax2):
-    
+    #this provides a nice workaround for pycortex opacity issues, at the cost of interactivity    
     # Get curvature
     curv = cortex.db.get_surfinfo(subject)
     # Adjust curvature contrast / color. Alternately, you could work
     # with curv.data, maybe threshold it, and apply a color map. 
-    curv.data = np.sign(curv.data.data) * .25
-    curv.vmin = -1
-    curv.vmax = 1
-    curv.cmap = 'gray'  
+    curv.data = np.sign(curv.data) * .25
+    #curv.vmin = -1
+    #curv.vmax = 1
+    #curv.cmap = 'gray'  
+    
+    curv = cortex.Vertex(curv.data, subject, vmin=-1,vmax=1,cmap='gray')
     
     norm2 = Normalize(vmin2, vmax2)   
     
@@ -624,14 +573,78 @@ def Vertex2D_fix(data1, data2, subject, cmap, vmin, vmax, vmin2, vmax2):
     
     # Map to RGB
     vx_rgb = np.vstack([vx.raw.red.data, vx.raw.green.data, vx.raw.blue.data])
+    
     curv_rgb = np.vstack([curv.raw.red.data, curv.raw.green.data, curv.raw.blue.data])
+
     
     # Pick an arbitrary region to mask out
     # (in your case you could use np.isnan on your data in similar fashion)
     alpha = np.clip(norm2(data2), 0, 1)
         
     # Alpha mask
-    display_data = vx_rgb * alpha + curv_rgb * (1-alpha)
+    display_data =  curv_rgb * (1-alpha) + vx_rgb * alpha
     
     # Create vertex RGB object out of R, G, B channels
     return cortex.VertexRGB(*display_data, subject)    
+
+# outdated
+# def make_2d_cmap(cmap_name):
+#     #####
+#     cmap = mpimg.imread(os.path.join(os.path.split(cortex.database.default_filestore)[
+#                           0], 'colormaps',f'{cmap_name}.png'))
+    
+#     cmap = colors.rgb_to_hsv(cmap[...,:3])
+#     hue, alpha = np.meshgrid(cmap[...,0], 1-np.linspace(0, 1, 256))
+#     hsv = np.zeros(list(hue.shape)+[3])
+
+#     # hsv[..., 0] = cmap[...,0]  
+#     # hsv[..., 1] = np.ones_like(alpha)
+#     # hsv[..., 2] = np.ones_like(alpha)
+#     # hsv[-1,:,2] = 0
+
+#     hsv[..., 0] = cmap[...,0]  
+#     hsv[..., 1] = cmap[...,1] 
+#     hsv[..., 2] = cmap[...,2] 
+#     #hsv[-1,:,2] = 0
+
+#     rgb = colors.hsv_to_rgb(hsv)
+#     rgba = np.vstack((rgb.T, alpha[..., np.newaxis].T)).T
+#     #pl.imshow(rgba)
+#     hsv_fn = os.path.join(os.path.split(cortex.database.default_filestore)[
+#                           0], 'colormaps', f'{cmap_name}_2D_alpha_unfix.png')
+#     mpimg.imsave(hsv_fn, rgba)
+    
+
+# def create_retinotopy_colormaps():
+#     hue, alpha = np.meshgrid(np.linspace(
+#         0, 1, 256, endpoint=False), 1-np.linspace(0, 1, 256))
+
+#     hsv = np.zeros(list(hue.shape)+[3])
+
+#     hsv[..., 0] = hue 
+#     hsv[..., 1] = np.ones_like(alpha)
+#     hsv[..., 2] = np.ones_like(alpha)
+#     hsv[-1,:,2] = 0
+
+#     rgb = colors.hsv_to_rgb(hsv)
+#     rgba = np.vstack((rgb.T, alpha[..., np.newaxis].T)).T
+#     pl.imshow(rgba)
+#     hsv_fn = os.path.join(os.path.split(cortex.database.default_filestore)[
+#                           0], 'colormaps', 'Retinotopy_HSV_alpha.png')
+#     mpimg.imsave(hsv_fn, rgba)
+
+#     hue, alpha = np.meshgrid(
+#         np.fmod(np.linspace(0, 2, 256), 1.0), 1-np.linspace(0, 1, 256))
+#     hsv = np.zeros(list(hue.shape)+[3])
+
+#     hsv[..., 0] = hue
+#     hsv[..., 1] = np.ones_like(alpha)
+#     hsv[..., 2] = np.ones_like(alpha)
+#     hsv[-1,:,2] = 0
+
+#     rgb = colors.hsv_to_rgb(hsv)
+#     rgba = np.vstack((rgb.T, alpha[..., np.newaxis].T)).T
+#     pl.imshow(rgba)
+#     hsv_fn = os.path.join(os.path.split(cortex.database.default_filestore)[
+#                           0], 'colormaps', 'Retinotopy_HSV_2x_alpha.png')
+#     mpimg.imsave(hsv_fn, rgba)
