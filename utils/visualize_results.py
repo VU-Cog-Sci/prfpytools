@@ -409,10 +409,19 @@ class visualize_results(object):
                     #tc[task] += (tc[task].mean(-1)-np.median(tc[task][...,self.prf_stims[task].late_iso_dict[task]], axis=-1))[...,np.newaxis]
                     
                     #fit and test timecourses separately
-                    if an_info['crossvalidate'] and 'fit_runs' in an_info:
-                        tc_test[task] = np.mean([tc_runs[i] for i in all_runs if i not in an_info['fit_runs']], axis=0)
-                        tc_fit[task] = np.mean([tc_runs[i] for i in all_runs if i in an_info['fit_runs']], axis=0)
-                        
+                    if an_info['crossvalidate']:
+                        if 'fit_runs' in an_info:
+                            tc_test[task] = np.mean([tc_runs[i] for i in all_runs if i not in an_info['fit_runs']], axis=0)
+                            tc_fit[task] = np.mean([tc_runs[i] for i in all_runs if i in an_info['fit_runs']], axis=0)
+                        elif 'fit_task' not in an_info:
+                            print("warning: fit runs not specified. guessing based on space. check code.")
+                            if space == 'HCP':
+                                fit_runs = [0]
+                            elif space == 'fsnative':
+                                fit_runs = [0,2,4]
+                            tc_test[task] = np.mean([tc_runs[i] for i in all_runs if i not in fit_runs], axis=0)
+                            tc_fit[task] = np.mean([tc_runs[i] for i in all_runs if i in fit_runs], axis=0)
+                            
                         #tc_test[task] *= (100/tc_test[task].mean(-1))[...,np.newaxis]
                         #tc_test[task] += (tc_test[task].mean(-1)-np.median(tc_test[task][...,self.prf_stims[task].late_iso_dict[task]], axis=-1))[...,np.newaxis]
                         #tc_fit[task] *= (100/tc_fit[task].mean(-1))[...,np.newaxis]
@@ -423,7 +432,7 @@ class visualize_results(object):
                 tc_full = np.concatenate(tuple([tc[task] for task in tc]), axis=0) - an_info['norm_bold_baseline']
                 tc_err = np.concatenate(tuple([tc_err[task] for task in tc_err]), axis=0)
                 
-                if an_info['crossvalidate'] and 'fit_runs' in an_info:
+                if an_info['crossvalidate'] and 'fit_task' not in an_info:
                     tc_full_test = np.concatenate(tuple([tc_test[task] for task in tc_test]), axis=0) - an_info['norm_bold_baseline']
                     tc_full_fit = np.concatenate(tuple([tc_fit[task] for task in tc_fit]), axis=0) - an_info['norm_bold_baseline']    
                     #timecourse reliability stats
@@ -462,7 +471,7 @@ class visualize_results(object):
                     vertex_info+=f"{model} params: {params} \n"
                     vertex_info+=f"Rsq {model} full tc: {1-np.sum((preds[model]-tc_full)**2)/(tc_full.var(-1)*tc_full.shape[-1]):.4f}\n"
                     
-                    if an_info['crossvalidate'] and 'fit_runs' in an_info:
+                    if an_info['crossvalidate'] and 'fit_task' not in an_info:
                         vertex_info+=f"Rsq {model} fit tc: {1-np.sum((preds[model]-tc_full_fit)**2)/(tc_full_fit.var(-1)*tc_full_fit.shape[-1]):.4f}\n"
                         vertex_info+=f"Rsq {model} test tc: {1-np.sum((preds[model]-tc_full_test)**2)/(tc_full_test.var(-1)*tc_full_test.shape[-1]):.4f}\n"
     
@@ -506,14 +515,14 @@ class visualize_results(object):
         
                 
     
-                if an_info['crossvalidate'] and 'fit_runs' in an_info:
+                if an_info['crossvalidate'] and 'fit_task' not in an_info:
                     
                     print(np.std([tc_full_test,tc_full_fit],axis=0))
                     
                     self.axes[0,0].errorbar(tseconds, tc_full, yerr=tc_err, label='Data',  fmt = 's:k', markersize=1,  linewidth=0.3, zorder=1) 
                     
-                    #self.axes[0,0].plot(tseconds, tc_full_test, label='Data (test)', linestyle = ':', marker='^', markersize=1, color=cmap(4), linewidth=0.75, alpha=0.5) 
-                    #self.axes[0,0].plot(tseconds, tc_full_fit, label='Data (fit)', linestyle = ':', marker='v', markersize=1, color=cmap(5), linewidth=0.75, alpha=0.5) 
+                    self.axes[0,0].plot(tseconds, tc_full_test, label='Data (test)', linestyle = ':', marker='^', markersize=1, color=cmap(4), linewidth=0.75, alpha=0.5) 
+                    self.axes[0,0].plot(tseconds, tc_full_fit, label='Data (fit)', linestyle = ':', marker='v', markersize=1, color=cmap(5), linewidth=0.75, alpha=0.5) 
                 else:
                     self.axes[0,0].errorbar(tseconds, tc_full, yerr=tc_err, label='Data',  fmt = 's:k', markersize=1,  linewidth=0.3, zorder=1) 
                     
@@ -951,6 +960,8 @@ class visualize_results(object):
                         
                         
                         for model in [model for model in self.only_models if 'Norm' in model]:
+                            
+
 
                             ds_norm_baselines[f'{model} Param. B'] = Vertex2D_fix(p_r['Norm Param. B'][model], alpha[analysis][subj][model], subject=pycortex_subj, 
                                                                          vmin=np.nanquantile(p_r['Norm Param. B'][model][alpha[analysis][subj][model]>rsq_thresh],0.1), 
@@ -3009,33 +3020,104 @@ class visualize_results(object):
                                             ax.grid(False)
                                             ols_x0_dim = [ordered_dimensions[x_dim] for x_dim in x_dims][0]
                                             ols_x1_dim = [ordered_dimensions[x_dim] for x_dim in x_dims][1]
+                                            ols_y_dim = ordered_dimensions[y_dim]
                                             ax.set_xlabel(f"{ols_x0_dim.replace('Norm_abcd','')}",labelpad=50)
                                             ax.set_ylabel(f"{ols_x1_dim.replace('Norm_abcd','')}",labelpad=60)
-                                            ax.set_zlabel(f"{ordered_dimensions[y_dim].replace('Norm_abcd','')}",labelpad=50) 
+                                            ax.set_zlabel(f"{ols_y_dim.replace('Norm_abcd','')}",labelpad=50) 
                                             ax.xaxis.set_tick_params(pad=20)
                                             ax.zaxis.set_tick_params(pad=20)
                                             ax.yaxis.set_tick_params(pad=20)
                                             #ax.set_zlim(15,40)
 
-                                            # for rr in [rr for rr in rois if rr != 'Brain' and rr != 'combined' and np.sum(alpha[analysis][subj][rr]>rsq_thresh)>10]:
+                                            ds_ols_roi_mean = dd(lambda:dict())                          
+                                                                                            
+                                            for rr in [rr for rr in rois if rr != 'Brain' and rr != 'combined' and np.sum(alpha[analysis][subj][rr]>rsq_thresh)>10]:
                                                 
-                                            #     if rsq_weights and 'Norm_abcd' in ols_x0_dim:
-                                            #         weights_x0 = alpha[analysis][subj][rr][alpha[analysis][subj][rr]>rsq_thresh]                                                   
+                                                weights = alpha[analysis][subj][rr][alpha[analysis][subj][rr]>rsq_thresh]
+                                                    
+                                                rr_x0 = multidim_param_array[analysis][subj][rr][x_dims[0]][weights>rsq_thresh]
+                                                rr_x1 = multidim_param_array[analysis][subj][rr][x_dims[1]][weights>rsq_thresh]
+                                                
+                                                rr_y = multidim_param_array[analysis][subj][rr][y_dim][weights>rsq_thresh]
+                                                
+                                                
+                                                
+                                                if not rsq_weights or 'Norm_abcd' not in ols_x0_dim:
+                                                    weights_x0 = np.ones_like(weights)
+                                                else:
+                                                    weights_x0 = weights
+                                                    
+                                                if not rsq_weights or 'Norm_abcd' not in ols_x1_dim:
+                                                    weights_x1 = np.ones_like(weights)
+                                                else:
+                                                    weights_x1 = weights
+                                                    
+                                                if not rsq_weights or 'Norm_abcd' not in ols_y_dim:
+                                                    weights_y = np.ones_like(weights)
+                                                else:
+                                                    weights_y = weights                                                    
 
-                                            #         roi_wstats_x0 = weightstats.DescrStatsW(X[:,0],
-                                            #                                         weights=weights)                                            
+                                                rr_wstats_x0 = weightstats.DescrStatsW(rr_x0,
+                                                                                    weights=weights_x0)
+                                                rr_wstats_x1 = weightstats.DescrStatsW(rr_x1,
+                                                                                    weights=weights_x1)
+                                                rr_wstats_y = weightstats.DescrStatsW(rr_y,
+                                                                                    weights=weights_y)
+                                                                                                                                                
+                                                ds_ols_roi_mean[rr][f"{ols_x0_dim} mean"] = rr_wstats_x0.mean
+                                                ds_ols_roi_mean[rr][f"{ols_x0_dim} stdev"] = rr_wstats_x0.std_mean
+                                                ds_ols_roi_mean[rr][f"{ols_x1_dim} mean"] = rr_wstats_x1.mean
+                                                ds_ols_roi_mean[rr][f"{ols_x1_dim} stdev"] = rr_wstats_x1.std_mean
+                                                ds_ols_roi_mean[rr][f"{ols_y_dim} mean"] = rr_wstats_y.mean
+                                                ds_ols_roi_mean[rr][f"{ols_y_dim} stdev"] = rr_wstats_y.std_mean
+                                                
+                                                ds_ols_roi_mean[rr]["Mean rsq"] = weights.mean()
+
+    
+                                            rsq_alpha_plots_all_rois = [ds_ols_roi_mean[rr]["Mean rsq"] for rr in ds_ols_roi_mean]
                                             
-                                            xx0, xx1 = np.meshgrid(np.linspace(X[:,0].min(),X[:,0].max(),100),
-                                                                   np.linspace(X[:,1].min(),X[:,1].max(),100))
+                                            for rr_num,rr in enumerate(ds_ols_roi_mean):
+                                      
+                                                if rsq_weights and rsq_alpha_pca_plot:    
+                                                    rsq_alpha_plot_max = np.nanmax(rsq_alpha_plots_all_rois)
+                                                    rsq_alpha_plot_min = np.nanmin(rsq_alpha_plots_all_rois)   
+                                                                                              
+                                                    alpha_plot = 0.1+0.9*(ds_ols_roi_mean[rr]["Mean rsq"]-rsq_alpha_plot_min)/(rsq_alpha_plot_max-rsq_alpha_plot_min)
+                                                    
+                                                else:
+                                                    alpha_plot = 1
+    
+                                                alpha_plot = np.clip(alpha_plot,0,1)
+                                                if np.isnan(alpha_plot) or not np.isfinite(alpha_plot):
+                                                    alpha_plot = 0                                            
+                                                
+                                                
+                                                ax.errorbar(ds_ols_roi_mean[rr][f"{ols_x0_dim} mean"], ds_ols_roi_mean[rr][f"{ols_x1_dim} mean"], ds_ols_roi_mean[rr][f"{ols_y_dim} mean"],
+                                                            xerr=ds_ols_roi_mean[rr][f"{ols_x0_dim} stdev"]*upsampling_corr_factor**0.5, 
+                                                            yerr=ds_ols_roi_mean[rr][f"{ols_x1_dim} stdev"]*upsampling_corr_factor**0.5, 
+                                                            zerr=ds_ols_roi_mean[rr][f"{ols_y_dim} stdev"]*upsampling_corr_factor**0.5,
+                                                            color=cmap_rois[rr_num], fmt='s', mec='black', alpha=alpha_plot)
+                                                
+                                                ax.text(ds_ols_roi_mean[rr][f"{ols_x0_dim} mean"], ds_ols_roi_mean[rr][f"{ols_x1_dim} mean"], ds_ols_roi_mean[rr][f"{ols_y_dim} mean"],
+                                                        rr.replace('custom.','').replace('HCPQ1Q6.','') .replace('glasser_','') , 
+                                                        fontsize=16, color=cmap_rois[rr_num],  ha='left', va='bottom',alpha=alpha_plot)
+                                          
+                                            x0_min = np.min([ds_ols_roi_mean[rr][f"{ols_x0_dim} mean"] for rr in ds_ols_roi_mean])
+                                            x0_max = np.max([ds_ols_roi_mean[rr][f"{ols_x0_dim} mean"] for rr in ds_ols_roi_mean])
+                                            x1_min = np.min([ds_ols_roi_mean[rr][f"{ols_x1_dim} mean"] for rr in ds_ols_roi_mean])
+                                            x1_max = np.max([ds_ols_roi_mean[rr][f"{ols_x1_dim} mean"] for rr in ds_ols_roi_mean])
+                                            
+                                            xx0, xx1 = np.meshgrid(np.linspace(x0_min,x0_max,50),
+                                                                   np.linspace(x1_min,x1_max,50))
                                             xx0xx1 = np.array([xx0.flatten(), xx1.flatten()]).T
                                             Z_pred = ls1.predict(xx0xx1)
                                             
-                                            rgba_colors = np.zeros((X.shape[0],4))
+                                            #rgba_colors = np.zeros((X.shape[0],4))
                                             # the fourth column needs to be your alphas
-                                            rgba_colors[:, 3] = alpha[analysis][subj][roi][alpha[analysis][subj][roi]>rsq_thresh]
+                                            #rgba_colors[:, 3] = alpha[analysis][subj][roi][alpha[analysis][subj][roi]>rsq_thresh]
                                             
-                                            ax.scatter(X[:,0], X[:,1], y, zorder=15,s=1, color=rgba_colors)
-                                            ax.scatter(xx0.flatten(), xx1.flatten(), Z_pred, c=Z_pred, s=2,  alpha=0.25, cmap='jet')
+                                            #ax.scatter(X[:,0], X[:,1], y, zorder=15,s=1, color=rgba_colors)
+                                            ax.scatter(xx0.flatten(), xx1.flatten(), Z_pred,  s=2,  alpha=0.15, zorder=10, c=Z_pred, cmap='plasma')
                                         
                                         
                                         if cv_regression:
@@ -3262,7 +3344,7 @@ class visualize_results(object):
                                 
                                 
                                 if log_stim_sizes:
-                                    stim_sizes = np.log(stim_sizes[1:])
+                                    stim_sizes = np.log10(stim_sizes[1:])
                                     stims = stims[1:]
                                                 
                                 # for c in range(100):
@@ -3309,7 +3391,7 @@ class visualize_results(object):
                                         #ecc_max_min = curve_par_dict['Eccentricity'].zconfint_mean(alpha=0.05/upsampling_corr_factor)
                                         
                                     if dim_stim == 1:    
-                                        mean_srf = norm_1d_sr_function(curve_par_dict['Amplitude'].mean,curve_par_dict['Norm Param. B'].mean,curve_par_dict['Surround Amplitude'].mean,
+                                        mean_srf = norm_1d_sr_function(dx*curve_par_dict['Amplitude'].mean,curve_par_dict['Norm Param. B'].mean,dx*curve_par_dict['Surround Amplitude'].mean,
                                                                                       curve_par_dict['Norm Param. D'].mean,curve_par_dict['Size (sigma_1)'].mean,curve_par_dict['Size (sigma_2)'].mean,x,stims,
                                                                                       mu_x=ecc*np.sign(np.cos(curve_par_dict['Polar Angle'].mean)))
             
