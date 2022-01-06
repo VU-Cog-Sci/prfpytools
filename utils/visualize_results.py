@@ -2528,33 +2528,35 @@ class visualize_results(object):
                                 else:
                                     curr_alpha = subj_res['Processed Results']['Alpha'][self.only_models[0]]
                                     
-                                for param in parameters:                                
+                                                                
 
-                                    if roi in self.idx_rois[subj]:
+                                if roi in self.idx_rois[subj]:
 
-                                        #comparing same vertices
-                                        alpha[analysis][subj][roi] = roi_mask(self.idx_rois[subj][roi], curr_alpha)
-                                        
+                                    #comparing same vertices
+                                    alpha[analysis][subj][roi] = roi_mask(self.idx_rois[subj][roi], curr_alpha)
                                     
+                                
+                                else:
+                                    #if ROI is not defined
+                                    #if Brain use all available vertices
+                                    if roi == 'Brain':
+                                        alpha[analysis][subj][roi] = curr_alpha
+                                    #if all, combine all other rois
+                                    elif roi == 'combined':
+                                        alpha[analysis][subj][roi] = roi_mask(np.concatenate(tuple([self.idx_rois[subj][r] for r in rois if ('combined' not in r and 'Brain' not in r and r in self.idx_rois[subj])])), curr_alpha)
+                                    
+                                    elif roi == 'all_custom':
+                                        alpha[analysis][subj][roi] = roi_mask(np.concatenate(tuple([self.idx_rois[subj][r] for r in self.idx_rois[subj] if 'custom' in r])), curr_alpha)
+                                    
+                                    elif space == 'fsaverage' and roi in self.idx_rois['fsaverage']:
+                                        alpha[analysis][subj][roi] = (roi_mask(self.idx_rois['fsaverage'][roi], curr_alpha))
+                                                                                      
                                     else:
-                                        #if ROI is not defined
-                                        #if Brain use all available vertices
-                                        if roi == 'Brain':
-                                            alpha[analysis][subj][roi] = curr_alpha
-                                        #if all, combine all other rois
-                                        elif roi == 'combined':
-                                            alpha[analysis][subj][roi] = roi_mask(np.concatenate(tuple([self.idx_rois[subj][r] for r in rois if ('combined' not in r and 'Brain' not in r and r in self.idx_rois[subj])])), curr_alpha)
+                                        #, otherwise none
+                                        print(f"{roi}: undefined ROI")
+                                        alpha[analysis][subj][roi] = np.zeros_like(curr_alpha).astype('bool')
                                         
-                                        elif roi == 'all_custom':
-                                            alpha[analysis][subj][roi] = roi_mask(np.concatenate(tuple([self.idx_rois[subj][r] for r in self.idx_rois[subj] if 'custom' in r])), curr_alpha)
-                                        
-                                        elif space == 'fsaverage' and roi in self.idx_rois['fsaverage']:
-                                            alpha[analysis][subj][roi] = (roi_mask(self.idx_rois['fsaverage'][roi], curr_alpha))
-                                                                                          
-                                        else:
-                                            #, otherwise none
-                                            print(f"{roi}: undefined ROI")
-                                            alpha[analysis][subj][roi] = np.zeros_like(curr_alpha).astype('bool')
+                                for param in parameters:
                                             
                                     if parameter_toplevel != None:
                                         if param in subj_res['Processed Results'][parameter_toplevel] and alpha[analysis][subj][roi].sum()>0:  
@@ -2595,7 +2597,9 @@ class visualize_results(object):
                                                 # print(f"max min {param} {param_max} {param_min} {np.var(subj_res['Processed Results'][param][model][alpha[analysis][subj][roi]])}")
                                             else:
                                                 if 'rsq' not in param.lower() and 'eccentricity' not in param.lower() and 'polar angle' not in param.lower():
-                                                    alpha[analysis][subj][roi] *= (subj_res['Processed Results'][param][model]<np.nanquantile(subj_res['Processed Results'][param][model],quantile_exclusion))*(subj_res['Processed Results'][param][model]>np.nanquantile(subj_res['Processed Results'][param][model],1-quantile_exclusion))  
+
+                                                    alpha[analysis][subj][roi] *= (subj_res['Processed Results'][param][model]<np.nanquantile(subj_res['Processed Results'][param][model],quantile_exclusion))*(subj_res['Processed Results'][param][model]>np.nanquantile(subj_res['Processed Results'][param][model],1-quantile_exclusion))
+                                                    
 
                                                 
                     for i, roi in enumerate(rois):                              
@@ -2634,6 +2638,7 @@ class visualize_results(object):
                                                 multidim_param_array[analysis][subj][roi].append(copy[alpha[analysis][subj][roi]>rsq_thresh])
 
                                             else:
+
                                                 multidim_param_array[analysis][subj][roi].append(subj_res['Processed Results'][param][model][alpha[analysis][subj][roi]>rsq_thresh])
                                                 
                                     
@@ -2948,7 +2953,7 @@ class visualize_results(object):
                                             if vis_pca_pycortex:
                                                 ds_pca_pycortex[f"Component {c}"] = Vertex2D_fix(zz, alpha[analysis][subj][roi], subject=pycortex_subj, 
                                                                 vmin=np.nanquantile(zz[alpha[analysis][subj][roi]>rsq_thresh],0.1), vmax=np.nanquantile(zz[alpha[analysis][subj][roi]>rsq_thresh],0.9), 
-                                                                 vmin2=rsq_thresh, vmax2=0.4, cmap='nipy_spectral')
+                                                                 vmin2=rsq_thresh, vmax2=np.nanquantile(alpha[analysis][subj][roi][alpha[analysis][subj][roi]>rsq_thresh],0.1), cmap='nipy_spectral')
 
                                         
                                         pl.figure(figsize=(8,8))                                        
@@ -2996,7 +3001,11 @@ class visualize_results(object):
                                     for y_dim in y_dims:
                                         
                                         y = multidim_param_array[analysis][subj][roi][y_dim].T
+                                        print(np.max(y))
                                         
+                                        ols_x0_dim = [ordered_dimensions[x_dim] for x_dim in x_dims][0]
+                                        ols_x1_dim = [ordered_dimensions[x_dim] for x_dim in x_dims][1]
+                                        ols_y_dim = ordered_dimensions[y_dim]
                                         
                                         ls1 = LinearRegression()
                                         if rsq_weights:
@@ -3018,9 +3027,7 @@ class visualize_results(object):
                                             
                                             ax = fig.add_subplot(111, projection='3d', azim=-45, elev=50)
                                             ax.grid(False)
-                                            ols_x0_dim = [ordered_dimensions[x_dim] for x_dim in x_dims][0]
-                                            ols_x1_dim = [ordered_dimensions[x_dim] for x_dim in x_dims][1]
-                                            ols_y_dim = ordered_dimensions[y_dim]
+
                                             ax.set_xlabel(f"{ols_x0_dim.replace('Norm_abcd','')}",labelpad=50)
                                             ax.set_ylabel(f"{ols_x1_dim.replace('Norm_abcd','')}",labelpad=60)
                                             ax.set_zlabel(f"{ols_y_dim.replace('Norm_abcd','')}",labelpad=50) 
@@ -3117,7 +3124,7 @@ class visualize_results(object):
                                             #rgba_colors[:, 3] = alpha[analysis][subj][roi][alpha[analysis][subj][roi]>rsq_thresh]
                                             
                                             #ax.scatter(X[:,0], X[:,1], y, zorder=15,s=1, color=rgba_colors)
-                                            ax.scatter(xx0.flatten(), xx1.flatten(), Z_pred,  s=2,  alpha=0.15, zorder=10, c=Z_pred, cmap='plasma')
+                                            ax.scatter(xx0.flatten(), xx1.flatten(), Z_pred,  s=4,  alpha=0.15, zorder=0, c=Z_pred, cmap='plasma')
                                         
                                         
                                         if cv_regression:
@@ -3135,13 +3142,13 @@ class visualize_results(object):
                                                 corr_prediction = np.corrcoef(ls1.predict(X_cv), y_cv)[0,1]
                                                 print(f"CV corr prediction {corr_prediction}")      
                                         
-                                        pl.figure(f"OLS betas {roi.replace('custom.','').replace('HCPQ1Q6.','').replace('glasser_','')}",figsize=(9,9))
+                                        pl.figure(f"OLS {ols_y_dim.replace('Norm_abcd','')} betas {roi.replace('custom.','').replace('HCPQ1Q6.','').replace('glasser_','')}",figsize=(9,9))
                                         pl.bar(np.arange(len(ls1.coef_)), ls1.coef_, label=f"RSq {rsq_prediction:.3f}")
                                         pl.xticks(np.arange(len(ls1.coef_)),[ordered_dimensions[x_dim].replace('Norm_abcd','') for x_dim in x_dims],rotation='vertical')
-                                        pl.ylabel(f"{ordered_dimensions[y_dim]} OLS betas")
+                                        pl.ylabel(f"{ols_y_dim.replace('Norm_abcd','')} OLS betas")
                                         pl.legend()
                                         if save_figures:
-                                            pl.savefig(opj(figure_path,f"{ordered_dimensions[y_dim]}_OLSbetas_{roi.replace('custom.','').replace('HCPQ1Q6.','').replace('glasser_','')}.pdf"),dpi=600, bbox_inches='tight')
+                                            pl.savefig(opj(figure_path,f"{ols_y_dim.replace('Norm_abcd','')}_OLSbetas_{roi.replace('custom.','').replace('HCPQ1Q6.','').replace('glasser_','')}.pdf"),dpi=600, bbox_inches='tight')
                                 
                                 ##########Multidim regression
                                 if perform_pls and np.sum(alpha[analysis][subj][roi]>rsq_thresh)>10:                                     
@@ -3290,7 +3297,7 @@ class visualize_results(object):
                                 curve_par_dict = dict()
                                 
                                 dim_stim = 2
-                                factr = 8 #4 for pnas (determines max stim size)
+                                factr = 1 #4 for pnas (determines max stim size) (smaller factr larger stim)
                                 bar_stim = False
                                 center_prfs = True
                                 #note plot_data option has some specifics that only apply to spinoza data
@@ -3494,9 +3501,9 @@ class visualize_results(object):
                                             pl.plot(stim_sizes, mean_srf, c=cmap_rois[i], label=roi.replace('custom.','').replace('HCPQ1Q6.','').replace('glasser_',''), linewidth=3)
                                             if third_dim_sr_curves is not None:
                                                 #pl.figure(f"3D sr curves by {third_dim_sr_curves}")
-                                                #pl.plot(stim_sizes, third_dim*np.ones_like(stim_sizes), mean_srf, c=cmap_rois[i], label=roi.replace('custom.','').replace('HCPQ1Q6.','').replace('glasser_',''), linewidth=3)
-                                                ax.plot_surface(np.tile(stim_sizes,(3,1)), np.array([third_dim*np.ones_like(stim_sizes)-0.1,third_dim*np.ones_like(stim_sizes),third_dim*np.ones_like(stim_sizes)+0.1]), np.tile(mean_srf,(3,1)), color=cmap_rois[i], alpha=1, zorder=1)
-                                                ax.plot_surface(np.tile(stim_sizes,(3,1)), np.tile(third_dim*np.ones_like(stim_sizes),(3,1)), np.array([mean_srf-0.02,mean_srf,mean_srf+0.02]), color=cmap_rois[i], alpha=1, zorder=1)
+                                                ax.plot(stim_sizes, np.zeros_like(stim_sizes), mean_srf, c=cmap_rois[i], label=roi.replace('custom.','').replace('HCPQ1Q6.','').replace('glasser_',''), linewidth=2, zorder=100)
+                                                #ax.plot_surface(np.tile(stim_sizes,(3,1)), np.array([third_dim*np.ones_like(stim_sizes)-0.1,third_dim*np.ones_like(stim_sizes),third_dim*np.ones_like(stim_sizes)+0.1]), np.tile(mean_srf,(3,1)), color=cmap_rois[i], alpha=1, zorder=1)
+                                                #ax.plot_surface(np.tile(stim_sizes,(3,1)), np.tile(third_dim*np.ones_like(stim_sizes),(3,1)), np.array([mean_srf-0.02,mean_srf,mean_srf+0.02]), color=cmap_rois[i], alpha=1, zorder=1)
                                                 
                                                 #pl.figure(f"Size response {roi.replace('custom.','').replace('HCPQ1Q6.','').replace('glasser_','')}", figsize = (8,8))
                                         
