@@ -2,7 +2,7 @@ import os
 import numpy as np
 import scipy as sp
 import matplotlib.pyplot as pl
-from matplotlib import colors
+from matplotlib import cm, colors
 from tqdm import tqdm
 import cortex
 import yaml
@@ -252,17 +252,12 @@ class results(object):
                 else:
                     combined_results[key+'_fit-runs-CVmedian'][res] = np.median([unique_an_results[fold][res] for fold in folds if key in fold], axis=0)
                     
-            #for res in unique_an_results[folds[0]]:     
-                #final_mask = combined_results[key+'_fit-runs-5050CVmedian']['mask']
-                #if 'Norm' in res:
-                #    combined_results[key+'_fit-runs-5050CVmedian'][f'Size (fwhmax)_model-{res}'] = np.zeros(final_mask.shape)
-                #    combined_results[key+'_fit-runs-5050CVmedian'][f'Surround Size (fwatmin)_model-{res}']= np.zeros(final_mask.shape)
-                #    (combined_results[key+'_fit-runs-5050CVmedian'][f'Size (fwhmax)_model-{res}'][final_mask],
-                #     combined_results[key+'_fit-runs-5050CVmedian'][f'Surround Size (fwatmin)_model-{res}'][final_mask]) = np.median([fwhmax_fwatmin(res, unique_an_results[fold][res][final_mask], False, False) for fold in folds if key in fold], axis=0)
-                                
+                                   
         for key in no_folds:
             combined_results[key] = deepcopy(unique_an_results[key])
-            
+
+        for key in folds:
+            combined_results[key] = deepcopy(unique_an_results[key])            
  
         
         for an, an_res in combined_results.items():
@@ -587,64 +582,29 @@ def Vertex2D_fix(data1, data2, subject, cmap, vmin, vmax, vmin2, vmax2):
     # Create vertex RGB object out of R, G, B channels
     return cortex.VertexRGB(*display_data, subject)    
 
-# outdated
-# def make_2d_cmap(cmap_name):
-#     #####
-#     cmap = mpimg.imread(os.path.join(os.path.split(cortex.database.default_filestore)[
-#                           0], 'colormaps',f'{cmap_name}.png'))
+
+def simple_colorbar(vmin, vmax, cmap_name, ori, param_name):
+    fig, ax = pl.subplots(figsize=(8, 1))
+    fig.subplots_adjust(bottom=0.5)
     
-#     cmap = colors.rgb_to_hsv(cmap[...,:3])
-#     hue, alpha = np.meshgrid(cmap[...,0], 1-np.linspace(0, 1, 256))
-#     hsv = np.zeros(list(hue.shape)+[3])
+    if cmap_name == 'hsvx2':
+        top = cm.get_cmap('hsv', 256)
+        bottom = cm.get_cmap('hsv', 256)
 
-#     # hsv[..., 0] = cmap[...,0]  
-#     # hsv[..., 1] = np.ones_like(alpha)
-#     # hsv[..., 2] = np.ones_like(alpha)
-#     # hsv[-1,:,2] = 0
+        newcolors = np.vstack((top(np.linspace(0, 1, 256)),
+                       bottom(np.linspace(0, 1, 256))))
+        cmap = colors.ListedColormap(newcolors, name='hsvx2')
+        
+    else:
+        cmap = cm.get_cmap(cmap_name, 256)
 
-#     hsv[..., 0] = cmap[...,0]  
-#     hsv[..., 1] = cmap[...,1] 
-#     hsv[..., 2] = cmap[...,2] 
-#     #hsv[-1,:,2] = 0
-
-#     rgb = colors.hsv_to_rgb(hsv)
-#     rgba = np.vstack((rgb.T, alpha[..., np.newaxis].T)).T
-#     #pl.imshow(rgba)
-#     hsv_fn = os.path.join(os.path.split(cortex.database.default_filestore)[
-#                           0], 'colormaps', f'{cmap_name}_2D_alpha_unfix.png')
-#     mpimg.imsave(hsv_fn, rgba)
     
+    norm = colors.Normalize(vmin=vmin, vmax=vmax)
+    
+    fig.colorbar(cm.ScalarMappable(norm=norm, cmap=cmap),
+                 cax=ax, orientation=ori, label=param_name)
+    
+    fig.show()
+    
+    return fig
 
-# def create_retinotopy_colormaps():
-#     hue, alpha = np.meshgrid(np.linspace(
-#         0, 1, 256, endpoint=False), 1-np.linspace(0, 1, 256))
-
-#     hsv = np.zeros(list(hue.shape)+[3])
-
-#     hsv[..., 0] = hue 
-#     hsv[..., 1] = np.ones_like(alpha)
-#     hsv[..., 2] = np.ones_like(alpha)
-#     hsv[-1,:,2] = 0
-
-#     rgb = colors.hsv_to_rgb(hsv)
-#     rgba = np.vstack((rgb.T, alpha[..., np.newaxis].T)).T
-#     pl.imshow(rgba)
-#     hsv_fn = os.path.join(os.path.split(cortex.database.default_filestore)[
-#                           0], 'colormaps', 'Retinotopy_HSV_alpha.png')
-#     mpimg.imsave(hsv_fn, rgba)
-
-#     hue, alpha = np.meshgrid(
-#         np.fmod(np.linspace(0, 2, 256), 1.0), 1-np.linspace(0, 1, 256))
-#     hsv = np.zeros(list(hue.shape)+[3])
-
-#     hsv[..., 0] = hue
-#     hsv[..., 1] = np.ones_like(alpha)
-#     hsv[..., 2] = np.ones_like(alpha)
-#     hsv[-1,:,2] = 0
-
-#     rgb = colors.hsv_to_rgb(hsv)
-#     rgba = np.vstack((rgb.T, alpha[..., np.newaxis].T)).T
-#     pl.imshow(rgba)
-#     hsv_fn = os.path.join(os.path.split(cortex.database.default_filestore)[
-#                           0], 'colormaps', 'Retinotopy_HSV_2x_alpha.png')
-#     mpimg.imsave(hsv_fn, rgba)

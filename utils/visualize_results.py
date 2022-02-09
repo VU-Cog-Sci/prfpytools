@@ -20,7 +20,7 @@ from collections import defaultdict as dd
 from copy import deepcopy
 import itertools
 from pathlib import Path
-from utils.postproc_utils import model_wrapper, create_model_rf_wrapper, colorbar, norm_1d_sr_function, norm_2d_sr_function, Vertex2D_fix
+from utils.postproc_utils import model_wrapper, create_model_rf_wrapper, colorbar, norm_1d_sr_function, norm_2d_sr_function, Vertex2D_fix, simple_colorbar
 from utils.preproc_utils import roi_mask, create_full_stim
 #import seaborn as sns
 
@@ -242,7 +242,7 @@ class visualize_results(object):
 
         return
 
-    def set_alpha(self, space_names='all', only_models=None, ecc_min=0, ecc_max=5):
+    def set_alpha(self, space_names='all', only_models=None, ecc_min=0, ecc_max=5, min_number_sjs=0):
         
         self.only_models=only_models
         self.tc_min = dict()
@@ -297,6 +297,12 @@ class visualize_results(object):
                         for model in models:
                             p_r['Alpha'][model] = p_r['RSq'][model] * (p_r['Eccentricity'][model]>self.ecc_min) * (p_r['Eccentricity'][model]<self.ecc_max)\
                                 * (tc_stats['Mean']>self.tc_min[subj]) #* (p_r['Noise Ceiling']['Noise Ceiling (RSq)']!=0)
+                                
+                            if min_number_sjs > 0 and '#Subjects with CVRSq>0' in p_r:
+                                if model in p_r['#Subjects with CVRSq>0']:
+                                    print(f"thresholding at {min_number_sjs} subjects")
+                                    p_r['Alpha'][model] *= (p_r['#Subjects with CVRSq>0'][model]>min_number_sjs)
+                                    p_r['Alpha']['all'] *= (p_r['#Subjects with CVRSq>0'][model]>min_number_sjs)
                        
         return
 
@@ -304,10 +310,14 @@ class visualize_results(object):
     def pycortex_plots(self, rois, rsq_thresh,
                        space_names = 'fsnative', analysis_names = 'all', subject_ids='all',
                        timecourse_folder = None, screenshot_paths = [], pycortex_cmap = 'nipy_spectral',
-                       rsq_max_opacity = 0.5):        
+                       rsq_max_opacity = 0.5, pycortex_image_path = None):        
         pl.rcParams.update({'font.size': 16})
         pl.rcParams.update({'pdf.fonttype':42})        
         self.click=0
+        if pycortex_image_path is not None:
+            if not os.path.exists(pycortex_image_path):
+                os.makedirs(pycortex_image_path)
+        self.pycortex_image_path = pycortex_image_path
 
         #######PYCORTEX PICKERFUN
         #function to plot prf and timecourses when clicking surface vertex in webgl        
@@ -712,7 +722,7 @@ class visualize_results(object):
         
                         data_stats ={'mean':mean_ts_vert, 'var':var_ts_vert, 'tsnr':tsnr_vert}
         
-                        self.js_handle_dict[space][analysis][subj]['js_handle_stats'] = cortex.webgl.show(data_stats, pickerfun=clicker_function, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)
+                        self.js_handle_dict[space][analysis][subj]['stats'] = cortex.webgl.show(data_stats, pickerfun=clicker_function, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)
         
                         plotted_stats[subj] = True
                     
@@ -751,7 +761,7 @@ class visualize_results(object):
                         if glasser_rois_data.sum()>0:
                             ds_rois['Glasser ROIs'] = Vertex2D_fix(glasser_rois_data, glasser_rois_data.astype('bool'), subject=pycortex_subj, cmap=pycortex_cmap) 
                                                 
-                        self.js_handle_dict[space][analysis][subj]['js_handle_rois'] = cortex.webgl.show(ds_rois, pickerfun=clicker_function, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)
+                        self.js_handle_dict[space][analysis][subj]['rois'] = cortex.webgl.show(ds_rois, pickerfun=clicker_function, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)
         
                         plotted_rois[subj] = True
                                                 
@@ -776,6 +786,13 @@ class visualize_results(object):
                                                             vmin=np.nanquantile(p_r['RSq'][model][alpha[analysis][subj][model]>rsq_thresh],0.1), 
                                                             vmax=np.nanquantile(p_r['RSq'][model][alpha[analysis][subj][model]>rsq_thresh],0.9),
                                                             vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap=pycortex_cmap)
+                            
+                            fig = simple_colorbar(vmin=np.nanquantile(p_r['RSq'][model][alpha[analysis][subj][model]>rsq_thresh],0.1), 
+                                            vmax=np.nanquantile(p_r['RSq'][model][alpha[analysis][subj][model]>rsq_thresh],0.9),
+                                            cmap_name=pycortex_cmap, ori='horizontal', param_name='$R^2$')
+                            
+                            if pycortex_image_path is not None:
+                                fig.savefig(f"{pycortex_image_path}/{model}_rsq_cbar.pdf", dpi=600, bbox_inches='tight', transparent=True)
                             
                         if 'Noise Ceiling' in p_r:
                             for nc_type in p_r['Noise Ceiling']:
@@ -829,21 +846,28 @@ class visualize_results(object):
                                                                       vmin=rsq_thresh, vmax=0.6, vmin2=0.05, vmax2=rsq_thresh, cmap=pycortex_cmap)
                             ds_rsq_comp['Norm_abcd CV rsq (surface fit)'] = Vertex2D_fix(p_r['RSq']['Norm_abcd'], p_r['RSq']['Norm_abcd'], subject=pycortex_subj,
                                                                       vmin=rsq_thresh, vmax=0.6, vmin2=0.05, vmax2=rsq_thresh, cmap=pycortex_cmap)
-                            self.js_handle_dict[space][analysis][subj]['js_handle_rsq_comp'] = cortex.webgl.show(ds_rsq_comp, pickerfun=clicker_function, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)
+                            self.js_handle_dict[space][analysis][subj]['rsq_comp'] = cortex.webgl.show(ds_rsq_comp, pickerfun=clicker_function, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)
                         
                         
-                        self.js_handle_dict[space][analysis][subj]['js_handle_rsq'] = cortex.webgl.show(ds_rsq, pickerfun=clicker_function, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True) 
+                        self.js_handle_dict[space][analysis][subj]['rsq'] = cortex.webgl.show(ds_rsq, pickerfun=clicker_function, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True) 
                         
                     if self.plot_ecc_cortex:
                         ds_ecc = dict()
                         
                         for model in self.only_models:
-                            print("Note: eccentricity plot has vmax set at 0.98 quantile")
+                            print("Note: eccentricity plot has vmax set at 0.95 quantile")
                             ds_ecc[f"{model} Eccentricity"] = Vertex2D_fix(p_r['Eccentricity'][model], alpha[analysis][subj][model], subject=pycortex_subj, 
                                                             vmin=np.nanquantile(p_r['Eccentricity'][model][alpha[analysis][subj][model]>rsq_thresh],0.1), 
-                                                            vmax=np.nanquantile(p_r['Eccentricity'][model][alpha[analysis][subj][model]>rsq_thresh],0.98), vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap=pycortex_cmap) #np.nanquantile(alpha[analysis][subj][model][alpha[analysis][subj][model]>rsq_thresh],0.9
+                                                            vmax=np.nanquantile(p_r['Eccentricity'][model][alpha[analysis][subj][model]>rsq_thresh],0.95), vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap=pycortex_cmap) #np.nanquantile(alpha[analysis][subj][model][alpha[analysis][subj][model]>rsq_thresh],0.9
         
-                        self.js_handle_dict[space][analysis][subj]['js_handle_ecc'] = cortex.webgl.show(ds_ecc, pickerfun=clicker_function, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)
+                            fig = simple_colorbar(vmin=np.nanquantile(p_r['Eccentricity'][model][alpha[analysis][subj][model]>rsq_thresh],0.1), 
+                                            vmax=np.nanquantile(p_r['Eccentricity'][model][alpha[analysis][subj][model]>rsq_thresh],0.95),
+                                            cmap_name=pycortex_cmap, ori='horizontal', param_name='Eccentricity (°)')
+                            
+                            if pycortex_image_path is not None:
+                                fig.savefig(f"{pycortex_image_path}/{model}_ecc_cbar.pdf", dpi=600, bbox_inches='tight', transparent=True)
+                        
+                        self.js_handle_dict[space][analysis][subj]['ecc'] = cortex.webgl.show(ds_ecc, pickerfun=clicker_function, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)
         
                     if self.plot_polar_cortex:
                         ds_polar = dict()
@@ -853,10 +877,22 @@ class visualize_results(object):
                             ds_polar[f"{model} polar angle HSV2"] = Vertex2D_fix(p_r['Polar Angle'][model], alpha[analysis][subj][model], subject=pycortex_subj, 
                                                               vmin=-3.1415, vmax=3.1415,
                                                               vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap='hsvx2')
+                            
+                            fig = simple_colorbar(vmin=-3.1415, vmax=3.1415,
+                                            cmap_name='hsvx2', ori='horizontal', param_name='Polar Angle (°)')                                     
+                            
+                            if pycortex_image_path is not None:
+                                fig.savefig(f"{pycortex_image_path}/{model}_polar_hsvx2cbar.pdf", dpi=600, bbox_inches='tight', transparent=True)
 
                             ds_polar[f"{model} polar angle HSV1"] = Vertex2D_fix(p_r['Polar Angle'][model], alpha[analysis][subj][model], subject=pycortex_subj, 
                                                                         vmin=-3.1415, vmax=3.1415,
                                                                vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap='hsv')
+                            
+                            fig = simple_colorbar(vmin=-3.1415, vmax=3.1415,
+                                            cmap_name='hsv', ori='horizontal', param_name='Polar Angle (°)')                                     
+                            
+                            if pycortex_image_path is not None:
+                                fig.savefig(f"{pycortex_image_path}/{model}_polar_hsvcbar.pdf", dpi=600, bbox_inches='tight', transparent=True)                            
                         
                         if 'Processed Results' in self.main_dict['T1w'][analysis][subj] and self.compare_volume_surface:
                             ds_polar_comp = dict()
@@ -872,40 +908,67 @@ class visualize_results(object):
                                                                       vmin2=0.05, vmax2=rsq_thresh, cmap='hsvx2')
                             ds_polar_comp['Norm_abcd CV polar (surface fit)'] = Vertex2D_fix(p_r['Polar Angle']['Norm_abcd'], p_r['RSq']['Norm_abcd'], subject=pycortex_subj,
                                                                       vmin2=0.05, vmax2=rsq_thresh, cmap='hsvx2')
-                            self.js_handle_dict[space][analysis][subj]['js_handle_polar_comp'] = cortex.webgl.show(ds_polar_comp, pickerfun=clicker_function, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)
+                            self.js_handle_dict[space][analysis][subj]['polar_comp'] = cortex.webgl.show(ds_polar_comp, pickerfun=clicker_function, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)
 
                         
-                        self.js_handle_dict[space][analysis][subj]['js_handle_polar'] = cortex.webgl.show(ds_polar, pickerfun=clicker_function, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)
+                        self.js_handle_dict[space][analysis][subj]['polar'] = cortex.webgl.show(ds_polar, pickerfun=clicker_function, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)
         
                     if self.plot_size_cortex:
                         ds_size = dict()
                         
                         for model in self.only_models:
-                            print(np.nanquantile(p_r['Size (fwhmax)'][model][alpha[analysis][subj][model]>rsq_thresh],0.1))
-                            print(np.nanquantile(p_r['Size (fwhmax)'][model][alpha[analysis][subj][model]>rsq_thresh],0.9))
-                            print(np.nanquantile(p_r['Size (sigma_1)'][model][alpha[analysis][subj][model]>rsq_thresh],0.1))
-                            print(np.nanquantile(p_r['Size (sigma_1)'][model][alpha[analysis][subj][model]>rsq_thresh],0.9))
+
                             ds_size[f"{model} fwhmax"] = Vertex2D_fix(p_r['Size (fwhmax)'][model], alpha[analysis][subj][model], subject=pycortex_subj, 
                                                              vmin=np.nanquantile(p_r['Size (fwhmax)'][model][alpha[analysis][subj][model]>rsq_thresh],0.1), 
                                                              vmax=np.nanquantile(p_r['Size (fwhmax)'][model][alpha[analysis][subj][model]>rsq_thresh],0.9), 
                                                              vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap=pycortex_cmap)
+                            
+                                
                             ds_size[f"{model} sigma_1"] = Vertex2D_fix(p_r['Size (sigma_1)'][model], alpha[analysis][subj][model], subject=pycortex_subj, 
                                                              vmin=np.nanquantile(p_r['Size (sigma_1)'][model][alpha[analysis][subj][model]>rsq_thresh],0.1), 
                                                              vmax=np.nanquantile(p_r['Size (sigma_1)'][model][alpha[analysis][subj][model]>rsq_thresh],0.9), 
                                                              vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap=pycortex_cmap)
                             
-                        self.js_handle_dict[space][analysis][subj]['js_handle_size'] = cortex.webgl.show(ds_size, pickerfun=clicker_function, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)
+                            fig = simple_colorbar(vmin=np.nanquantile(p_r['Size (sigma_1)'][model][alpha[analysis][subj][model]>rsq_thresh],0.1), 
+                                            vmax=np.nanquantile(p_r['Size (sigma_1)'][model][alpha[analysis][subj][model]>rsq_thresh],0.9),
+                                            cmap_name=pycortex_cmap, ori='horizontal', param_name='$\sigma_1$ (°)')
+                            
+                            if pycortex_image_path is not None:
+                                fig.savefig(f"{pycortex_image_path}/{model}_sigma1_cbar.pdf", dpi=600, bbox_inches='tight', transparent=True)                            
+                            
+                        self.js_handle_dict[space][analysis][subj]['size'] = cortex.webgl.show(ds_size, pickerfun=clicker_function, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)
         
         
                     if self.plot_amp_cortex:
                         ds_amp = dict()
                         
                         for model in self.only_models:
-                            ds_amp[model] = Vertex2D_fix(p_r['Amplitude'][model], alpha[analysis][subj][model], subject=pycortex_subj, 
+                            ds_amp[f"{model} Amplitude"] = Vertex2D_fix(p_r['Amplitude'][model], alpha[analysis][subj][model], subject=pycortex_subj, 
                                                             vmin=np.nanquantile(p_r['Amplitude'][model][alpha[analysis][subj][model]>rsq_thresh],0.1), 
                                                             vmax=np.nanquantile(p_r['Amplitude'][model][alpha[analysis][subj][model]>rsq_thresh],0.9), vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap=pycortex_cmap)
+
+                            fig = simple_colorbar(vmin=np.nanquantile(p_r['Amplitude'][model][alpha[analysis][subj][model]>rsq_thresh],0.1), 
+                                            vmax=np.nanquantile(p_r['Amplitude'][model][alpha[analysis][subj][model]>rsq_thresh],0.9),
+                                            cmap_name=pycortex_cmap, ori='horizontal', param_name='Amplitude')
+                            
+                            if pycortex_image_path is not None:
+                                fig.savefig(f"{pycortex_image_path}/{model}_amplitude_cbar.pdf", dpi=600, bbox_inches='tight', transparent=True)  
+                            
+                            if model == 'DoG' or 'Norm' in model:
+                                ds_amp[f"{model} Surround Amplitude"] = Vertex2D_fix(p_r['Surround Amplitude'][model], alpha[analysis][subj][model], subject=pycortex_subj, 
+                                                            vmin=np.nanquantile(p_r['Surround Amplitude'][model][alpha[analysis][subj][model]>rsq_thresh],0.1), 
+                                                            vmax=np.nanquantile(p_r['Surround Amplitude'][model][alpha[analysis][subj][model]>rsq_thresh],0.9), vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap=pycortex_cmap)        
         
-                        self.js_handle_dict[space][analysis][subj]['js_handle_amp'] = cortex.webgl.show(ds_amp, pickerfun=clicker_function, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)
+                                fig = simple_colorbar(vmin=np.nanquantile(p_r['Surround Amplitude'][model][alpha[analysis][subj][model]>rsq_thresh],0.1), 
+                                                vmax=np.nanquantile(p_r['Surround Amplitude'][model][alpha[analysis][subj][model]>rsq_thresh],0.9),
+                                                cmap_name=pycortex_cmap, ori='horizontal', param_name='Surround Amplitude')
+                                
+                                if pycortex_image_path is not None:
+                                    fig.savefig(f"{pycortex_image_path}/{model}_surround_amplitude_cbar.pdf", dpi=600, bbox_inches='tight', transparent=True)  
+
+                        
+                        self.js_handle_dict[space][analysis][subj]['amp'] = cortex.webgl.show(ds_amp, pickerfun=clicker_function, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)
+
                         
                     if self.plot_css_exp_cortex and 'CSS' in self.only_models:
                         ds_css_exp = dict()
@@ -913,23 +976,15 @@ class visualize_results(object):
                         ds_css_exp['CSS Exponent'] = Vertex2D_fix(p_r['CSS Exponent']['CSS'], alpha[analysis][subj]['CSS'], subject=pycortex_subj, 
                                                                      vmin=0, vmax=1, vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap=pycortex_cmap)
         
-                        self.js_handle_dict[space][analysis][subj]['js_handle_css_exp'] = cortex.webgl.show(ds_css_exp, pickerfun=clicker_function, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)
+                        self.js_handle_dict[space][analysis][subj]['css_exp'] = cortex.webgl.show(ds_css_exp, pickerfun=clicker_function, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)
                         
                     if self.plot_surround_size_cortex:
                         ds_surround_size = dict()
                         
                         
                         for model in self.only_models:
-                            if model == 'DoG':
-                                ds_surround_size['DoG fwatmin'] = Vertex2D_fix(p_r['Surround Size (fwatmin)']['DoG'], alpha[analysis][subj]['DoG'], subject=pycortex_subj, 
-                                                            vmin=np.nanquantile(p_r['Surround Size (fwatmin)']['DoG'][alpha[analysis][subj][model]>rsq_thresh],0.1), 
-                                                            vmax=np.nanquantile(p_r['Surround Size (fwatmin)']['DoG'][alpha[analysis][subj][model]>rsq_thresh],0.9), vmin2=rsq_thresh, 
-                                                            vmax2=rsq_max_opacity, cmap=pycortex_cmap)
-                                ds_surround_size['DoG sigma_2'] = Vertex2D_fix(p_r['Size (sigma_2)']['DoG'], alpha[analysis][subj]['DoG'], subject=pycortex_subj, 
-                                                            vmin=np.nanquantile(p_r['Surround Size (fwatmin)']['DoG'][alpha[analysis][subj][model]>rsq_thresh],0.1), 
-                                                            vmax=np.nanquantile(p_r['Surround Size (fwatmin)']['DoG'][alpha[analysis][subj][model]>rsq_thresh],0.9),
-                                                            vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap=pycortex_cmap)
-                            elif 'Norm' in model:
+                            if model == 'DoG' or 'Norm' in model:
+
                                 ds_surround_size[f"{model} fwatmin"] = Vertex2D_fix(p_r['Surround Size (fwatmin)'][model], alpha[analysis][subj][model], subject=pycortex_subj, 
                                                             vmin=np.nanquantile(p_r['Surround Size (fwatmin)'][model][alpha[analysis][subj][model]>rsq_thresh],0.1), 
                                                             vmax=np.nanquantile(p_r['Surround Size (fwatmin)'][model][alpha[analysis][subj][model]>rsq_thresh],0.9),
@@ -938,8 +993,16 @@ class visualize_results(object):
                                                             vmin=np.nanquantile(p_r['Size (sigma_2)'][model][alpha[analysis][subj][model]>rsq_thresh],0.1), 
                                                             vmax=np.nanquantile(p_r['Size (sigma_2)'][model][alpha[analysis][subj][model]>rsq_thresh],0.9),
                                                             vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap=pycortex_cmap)    
+
+                                fig = simple_colorbar(vmin=np.nanquantile(p_r['Size (sigma_2)'][model][alpha[analysis][subj][model]>rsq_thresh],0.1), 
+                                                vmax=np.nanquantile(p_r['Size (sigma_2)'][model][alpha[analysis][subj][model]>rsq_thresh],0.9),
+                                                cmap_name=pycortex_cmap, ori='horizontal', param_name='$\sigma_2$ (°)')
                                 
-                        self.js_handle_dict[space][analysis][subj]['js_handle_surround_size'] = cortex.webgl.show(ds_surround_size, pickerfun=clicker_function, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)    
+                                if pycortex_image_path is not None:
+                                    fig.savefig(f"{pycortex_image_path}/{model}_sigma2_cbar.pdf", dpi=600, bbox_inches='tight', transparent=True)   
+                                
+                                
+                        self.js_handle_dict[space][analysis][subj]['surround_size'] = cortex.webgl.show(ds_surround_size, pickerfun=clicker_function, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)    
 
                     if self.plot_suppression_index_cortex:
                         ds_suppression_index = dict()
@@ -957,7 +1020,7 @@ class visualize_results(object):
                                 ds_suppression_index[f'{model} NI (aperture)'] = Vertex2D_fix(p_r['Suppression Index'][model], alpha[analysis][subj][model], subject=pycortex_subj, 
                                                                      vmin=0, vmax=1.5, vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap=pycortex_cmap)                      
         
-                        self.js_handle_dict[space][analysis][subj]['js_handle_suppression_index'] = cortex.webgl.show(ds_suppression_index, pickerfun=clicker_function, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)    
+                        self.js_handle_dict[space][analysis][subj]['suppression_index'] = cortex.webgl.show(ds_suppression_index, pickerfun=clicker_function, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)    
 
                     if self.plot_size_ratio_cortex:
                         ds_size_ratio = dict()           
@@ -966,8 +1029,15 @@ class visualize_results(object):
                                 ds_size_ratio[f'{model} size ratio'] = Vertex2D_fix(p_r['Size ratio (sigma_2/sigma_1)'][model], alpha[analysis][subj][model], subject=pycortex_subj, 
                                                             vmin=np.nanquantile(p_r['Size ratio (sigma_2/sigma_1)'][model][alpha[analysis][subj][model]>rsq_thresh],0.1), 
                                                             vmax=np.nanquantile(p_r['Size ratio (sigma_2/sigma_1)'][model][alpha[analysis][subj][model]>rsq_thresh],0.9), vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap=pycortex_cmap)                                                      
-        
-                        self.js_handle_dict[space][analysis][subj]['js_handle_size_ratio'] = cortex.webgl.show(ds_size_ratio, pickerfun=clicker_function, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)    
+
+                                fig = simple_colorbar(vmin=np.nanquantile(p_r['Size ratio (sigma_2/sigma_1)'][model][alpha[analysis][subj][model]>rsq_thresh],0.1), 
+                                                vmax=np.nanquantile(p_r['Size ratio (sigma_2/sigma_1)'][model][alpha[analysis][subj][model]>rsq_thresh],0.9),
+                                                cmap_name=pycortex_cmap, ori='horizontal', param_name='Size ratio ($\sigma_2/\sigma_1$)')
+                                
+                                if pycortex_image_path is not None:
+                                    fig.savefig(f"{pycortex_image_path}/{model}_sizeratio_cbar.pdf", dpi=600, bbox_inches='tight', transparent=True)  
+
+                        self.js_handle_dict[space][analysis][subj]['size_ratio'] = cortex.webgl.show(ds_size_ratio, pickerfun=clicker_function, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)    
                     
                     if self.plot_receptors_cortex:
                         if 'Receptor Maps' in p_r:
@@ -979,10 +1049,18 @@ class visualize_results(object):
                                     rec_mod_alpha = self.only_models[0]
 
                                 ds_receptors[receptor] = Vertex2D_fix(p_r['Receptor Maps'][receptor], alpha[analysis][subj][rec_mod_alpha], subject=pycortex_subj, 
-                                                                         vmin=np.nanquantile(p_r['Receptor Maps'][receptor][alpha[analysis][subj][rec_mod_alpha]>rsq_thresh],0.1), vmax=np.nanquantile(p_r['Receptor Maps'][receptor][alpha[analysis][subj][rec_mod_alpha]>rsq_thresh],0.9), 
-                                                                         vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap=pycortex_cmap)                                                      
+                                                                         vmin=np.nanquantile(p_r['Receptor Maps'][receptor][alpha[analysis][subj][rec_mod_alpha]>rsq_thresh],0.1),
+                                                                         vmax=np.nanquantile(p_r['Receptor Maps'][receptor][alpha[analysis][subj][rec_mod_alpha]>rsq_thresh],0.9), 
+                                                                         vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap=pycortex_cmap)    
+
+                                fig = simple_colorbar(vmin=np.nanquantile(p_r['Receptor Maps'][receptor][alpha[analysis][subj][rec_mod_alpha]>rsq_thresh],0.1),
+                                                vmax=np.nanquantile(p_r['Receptor Maps'][receptor][alpha[analysis][subj][rec_mod_alpha]>rsq_thresh],0.9), 
+                                                cmap_name=pycortex_cmap, ori='horizontal', param_name=f'{receptor} (pmol/ml)')
+                                
+                                if pycortex_image_path is not None:
+                                    fig.savefig(f"{pycortex_image_path}/{receptor}_cbar.pdf", dpi=600, bbox_inches='tight', transparent=True)                                                    
             
-                            self.js_handle_dict[space][analysis][subj]['js_handle_receptors'] = cortex.webgl.show(ds_receptors, pickerfun=clicker_function, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)    
+                            self.js_handle_dict[space][analysis][subj]['receptors'] = cortex.webgl.show(ds_receptors, pickerfun=clicker_function, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)    
 
                          
                     if self.plot_norm_baselines_cortex:
@@ -995,17 +1073,39 @@ class visualize_results(object):
 
                             ds_norm_baselines[f'{model} Param. B'] = Vertex2D_fix(p_r['Norm Param. B'][model], alpha[analysis][subj][model], subject=pycortex_subj, 
                                                                          vmin=np.nanquantile(p_r['Norm Param. B'][model][alpha[analysis][subj][model]>rsq_thresh],0.1), 
-                                                                         vmax=np.nanquantile(p_r['Norm Param. B'][model][alpha[analysis][subj][model]>rsq_thresh],0.9), vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap=pycortex_cmap)                    
+                                                                         vmax=np.nanquantile(p_r['Norm Param. B'][model][alpha[analysis][subj][model]>rsq_thresh],0.9), vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap=pycortex_cmap)     
+                            
+                            fig = simple_colorbar(vmin=np.nanquantile(p_r['Norm Param. B'][model][alpha[analysis][subj][model]>rsq_thresh],0.1), 
+                                            vmax=np.nanquantile(p_r['Norm Param. B'][model][alpha[analysis][subj][model]>rsq_thresh],0.9),
+                                            cmap_name=pycortex_cmap, ori='horizontal', param_name='Norm Param. B')
+                            
+                            if pycortex_image_path is not None:
+                                fig.savefig(f"{pycortex_image_path}/{model}_paramB_cbar.pdf", dpi=600, bbox_inches='tight', transparent=True)  
+                                    
                             ds_norm_baselines[f'{model} Param. D'] = Vertex2D_fix(p_r['Norm Param. D'][model], alpha[analysis][subj][model], subject=pycortex_subj, 
                                                                          vmin=np.nanquantile(p_r['Norm Param. D'][model][alpha[analysis][subj][model]>rsq_thresh],0.1), 
                                                                          vmax=np.nanquantile(p_r['Norm Param. D'][model][alpha[analysis][subj][model]>rsq_thresh],0.9), vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap=pycortex_cmap)
+                            
+                            fig = simple_colorbar(vmin=np.nanquantile(p_r['Norm Param. D'][model][alpha[analysis][subj][model]>rsq_thresh],0.1), 
+                                            vmax=np.nanquantile(p_r['Norm Param. D'][model][alpha[analysis][subj][model]>rsq_thresh],0.9),
+                                            cmap_name=pycortex_cmap, ori='horizontal', param_name='Norm Param. D')
+                            
+                            if pycortex_image_path is not None:
+                                fig.savefig(f"{pycortex_image_path}/{model}_paramD_cbar.pdf", dpi=600, bbox_inches='tight', transparent=True)                              
                             
                             if 'Ratio (B/D)' in p_r:
                                 ds_norm_baselines[f'{model} Ratio (B/D)'] = Vertex2D_fix(p_r['Ratio (B/D)'][model], alpha[analysis][subj][model], subject=pycortex_subj, 
                                                                           vmin=np.nanquantile(p_r['Ratio (B/D)'][model][alpha[analysis][subj][model]>rsq_thresh],0.1), 
                                                                           vmax=np.nanquantile(p_r['Ratio (B/D)'][model][alpha[analysis][subj][model]>rsq_thresh],0.9), vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap=pycortex_cmap)
-                        
-                        self.js_handle_dict[space][analysis][subj]['js_handle_norm_baselines'] = cortex.webgl.show(ds_norm_baselines, pickerfun=clicker_function, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)    
+
+                                fig = simple_colorbar(vmin=np.nanquantile(p_r['Ratio (B/D)'][model][alpha[analysis][subj][model]>rsq_thresh],0.1), 
+                                                vmax=np.nanquantile(p_r['Ratio (B/D)'][model][alpha[analysis][subj][model]>rsq_thresh],0.9),
+                                                cmap_name=pycortex_cmap, ori='horizontal', param_name='Ratio (B/D)')
+                                
+                                if pycortex_image_path is not None:
+                                    fig.savefig(f"{pycortex_image_path}/{model}_BDratio_cbar.pdf", dpi=600, bbox_inches='tight', transparent=True)   
+                            
+                        self.js_handle_dict[space][analysis][subj]['norm_baselines'] = cortex.webgl.show(ds_norm_baselines, pickerfun=clicker_function, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)    
 
                     if self.plot_correlations_per_roi is not None:
                         ds_correlations = dict()
@@ -1046,7 +1146,7 @@ class visualize_results(object):
                                                                           cmap=pycortex_cmap)                    
 
 
-                        self.js_handle_dict[space][analysis][subj]['js_handle_correlations'] = cortex.webgl.show(ds_correlations, pickerfun=clicker_function, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)    
+                        self.js_handle_dict[space][analysis][subj]['correlations_per_roi'] = cortex.webgl.show(ds_correlations, pickerfun=clicker_function, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)    
                     
                     if self.plot_means_per_roi is not None:
                         ds_means = dict()
@@ -1079,7 +1179,7 @@ class visualize_results(object):
                                                                   cmap=pycortex_cmap)                    
 
 
-                        self.js_handle_dict[space][analysis][subj]['js_handle_means'] = cortex.webgl.show(ds_means, pickerfun=clicker_function, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)    
+                        self.js_handle_dict[space][analysis][subj]['means_per_roi'] = cortex.webgl.show(ds_means, pickerfun=clicker_function, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)    
                                 
         
         
@@ -1090,19 +1190,21 @@ class visualize_results(object):
     def save_pycortex_views(self, js_handle, base_str, views, image_path = '/Crucial X8/marcoaqil/PRFMapping/Figures/'):
 
         
-        surfaces = dict(inflated=dict(unfold=1))#,
+        #surfaces = dict(inflated=dict(unfold=0.501))#,
                        # fiducial=dict(unfold=0.0))
+                       
 
-        
-        
+                       
+        surfaces = dict(flatmap=dict(unfold=1))
+
         # pattern of the saved images names
         file_pattern = "{base}_{view}_{surface}.png"
         
         # utility functions to set the different views
         prefix = dict(altitude='camera.', azimuth='camera.',
                       pivot='surface.{subject}.', radius='camera.', target='camera.',
-                      unfold='surface.{subject}.')
-        _tolists = lambda p: {prefix[k]+k:[v] for k,v in p.items()}
+                      unfold='surface.{subject}.',specularity='surface.{subject}.')
+        _tolists = lambda p: {prefix[k]+k:([v] if not isinstance(v,list) else v) for k,v in p.items()}
         _combine = lambda a,b: ( lambda c: [c, c.update(b)][0] )(dict(a))
         
         
@@ -1112,14 +1214,16 @@ class visualize_results(object):
                 # Combine basic, view, and surface parameters
                 params = _combine(vparams, sparams)
                 # Set the view
-                print(params)
+                #print(params)
+                print(_tolists(params))
                 time.sleep(5)
                 js_handle._set_view(**_tolists(params))
+
                 time.sleep(5)
                 # Save image
                 filename = file_pattern.format(base=base_str, view=view, surface=surf)
                 output_path = os.path.join(image_path, filename)
-                js_handle.getImage(output_path, size =(3200, 2800))
+                js_handle.getImage(output_path, size =(3200, 2400))
         
                 # the block below trims the edges of the image:
                 # wait for image to be written
@@ -1257,7 +1361,7 @@ class visualize_results(object):
                                 a = nb.load(temp_paths[4])
                                 b = nb.load(temp_paths[5])
 
-                                if parameter == 'RSq':
+                                if 'rsq' in parameter.lower():
                                     fsaverage_rsq[subj] = np.nan_to_num(np.concatenate((np.array([arr.data for arr in a.darrays])[0],np.array([arr.data for arr in b.darrays])[0])))
                                     fsaverage_rsq[subj][fsaverage_rsq[subj]<0] = 0
                                     print(np.any(np.isnan(fsaverage_rsq[subj])))
@@ -1271,7 +1375,7 @@ class visualize_results(object):
                                     
 
                         
-                        if parameter == 'RSq':
+                        if 'rsq' in parameter.lower():
                             fsaverage_group_average = np.nanmean([fsaverage_rsq[sid] for sid in fsaverage_rsq], axis=0)
                         elif parameter == 'Noise Ceiling':
                             fsaverage_group_average = np.nanmean([fsaverage_param[sid] for sid in fsaverage_param], axis=0)
@@ -1452,6 +1556,8 @@ class visualize_results(object):
                                 try:
                                     if subj.isdecimal() and space == 'HCP':
                                         pycortex_subj = '999999'
+                                    elif 'fsaverage' in subj:
+                                        pycortex_subj = 'fsaverage'                                        
                                     else:
                                         pycortex_subj = subj
                                         
@@ -1722,6 +1828,8 @@ class visualize_results(object):
                                         pl.ylabel(f"{subj} Mean {y_parameter} (°)")
                                     elif 'B/D' in y_parameter:
                                         pl.ylabel(f"{subj} Mean {y_parameter} (% signal change)")
+                                    elif y_parameter_toplevel is not None and 'Receptor' in y_parameter_toplevel:
+                                        pl.ylabel(f"{subj} Mean {y_parameter} (pmol/ml)")                                        
                                     else:
                                         pl.ylabel(f"{subj} Mean {y_parameter}")
                                         
@@ -2091,9 +2199,7 @@ class visualize_results(object):
                                                     rsq_regr_weight[analysis][subj][model][roi] = (rsq_y[analysis][subj][model][roi]+rsq_x[analysis][subj][model][roi])/2
                                                     if rsq_alpha_plot:
                                                         rsq_alpha_plots_all_rois = np.nan_to_num(np.array([np.nanmean((rsq_y[analysis][subj][model][roi]+rsq_x[analysis][subj][model][roi])/2) for r in rois if 'all' not in r and 'combined' not in r and 'Brain' not in r and len(y_par[analysis][subj][model][r])>10]))
-
-                                                
-    
+                                                    
                                             
                                             if bin_by == 'space':
                                             #equally spaced bins
@@ -2120,10 +2226,7 @@ class visualize_results(object):
     
     
                                             curr_x_bins = np.array([ss.mean for ss in x_par_stats[analysis][subj][model][roi]])
-                                            curr_y_bins = np.array([ss.mean for ss in y_par_stats[analysis][subj][model][roi]])
-    
-    
-                                    
+                                            curr_y_bins = np.array([ss.mean for ss in y_par_stats[analysis][subj][model][roi]])                                   
                 
                                         except:
                                             pass    
@@ -2253,7 +2356,9 @@ class visualize_results(object):
                                 if 'Eccentricity' in x_parameter or 'Size' in x_parameter:
                                     pl.xlabel(f"{x_parameter} (°)")
                                 elif 'B/D' in x_parameter:
-                                    pl.xlabel(f"{x_parameter} (% signal change)")                                
+                                    pl.xlabel(f"{x_parameter} (% signal change)")  
+                                elif x_parameter_toplevel is not None and 'Receptor' in x_parameter_toplevel:
+                                    pl.xlabel(f"{x_parameter} (pmol/ml)")                                                 
                                 else:
                                     pl.xlabel(f"{x_parameter}")  
         
@@ -2264,6 +2369,8 @@ class visualize_results(object):
                                     pl.ylabel(f"{subj} {roi.replace('custom.','').replace('HCPQ1Q6.','').replace('glasser_','')} {y_parameter} (°)")
                                 elif 'B/D' in y_parameter:
                                     pl.ylabel(f"{subj} {roi.replace('custom.','').replace('HCPQ1Q6.','').replace('glasser_','')} {y_parameter} (% signal change)")
+                                elif y_parameter_toplevel is not None and 'Receptor' in y_parameter_toplevel:
+                                    pl.ylabel(f"{subj} {roi.replace('custom.','').replace('HCPQ1Q6.','').replace('glasser_','')} {y_parameter} (pmol/ml)")                                                                   
                                 else:
                                     pl.ylabel(f"{subj} {roi.replace('custom.','').replace('HCPQ1Q6.','').replace('glasser_','')} {y_parameter}")
                                     
@@ -2306,6 +2413,13 @@ class visualize_results(object):
                                 if model in xlim:
                                     pl.xlim(xlim[model])
                                     
+                                all_rois_x_means = []
+                                all_rois_y_means = []
+                                all_rois_rsq_means = []
+                                all_rois_x = []
+                                all_rois_y = []
+                                all_rois_rsq = []
+                                    
                                 for i, roi in enumerate([r for r in rois if 'all' not in r and 'combined' not in r and 'Brain' not in r]):
                                     
                                     if len(y_par[analysis][subj][model][roi])>10:
@@ -2315,7 +2429,16 @@ class visualize_results(object):
                                         
                                         if not scatter:
                                             curr_x_bins = np.array([ss.mean for ss in x_par_stats[analysis][subj][model][roi]])
-                                            curr_y_bins = np.array([ss.mean for ss in y_par_stats[analysis][subj][model][roi]])              
+                                            curr_y_bins = np.array([ss.mean for ss in y_par_stats[analysis][subj][model][roi]])     
+                                            
+                                            if nr_bins == 1:
+                                                all_rois_x.append(x_par[analysis][subj][model][roi])
+                                                all_rois_y.append(y_par[analysis][subj][model][roi])
+                                                all_rois_rsq.append(rsq_regr_weight[analysis][subj][model][roi])
+                                                all_rois_x_means.append(curr_x_bins)
+                                                all_rois_y_means.append(curr_y_bins)
+                                                all_rois_rsq_means.append(np.nanmean(rsq_regr_weight[analysis][subj][model][roi]))
+                                                
                                             
                                             if fit:
                                                 try:
@@ -2394,13 +2517,25 @@ class visualize_results(object):
                                             except Exception as e:
                                                 print(e)
                                                 pass       
+ 
+      
+
+                                if nr_bins == 1:
+                                    #decided to only use weighted correlation on ROI means
+                                    #CC_fulldata = np.corrcoef(np.concatenate(all_rois_x),np.concatenate(all_rois_y))[0,1]
+                                    #CC_roimeans = np.corrcoef(np.concatenate(all_rois_x_means),np.concatenate(all_rois_y_means))[0,1]
                                     
-                                
+                                    #CC_fulldata_w = weightstats.DescrStatsW(np.stack((np.concatenate(all_rois_x),np.concatenate(all_rois_y))).T, weights=np.concatenate(all_rois_rsq)).corrcoef[0,1]
+                                    CC_roimeans_w = weightstats.DescrStatsW(np.stack((np.concatenate(all_rois_x_means),np.concatenate(all_rois_y_means))).T, weights=np.array(all_rois_rsq_means)).corrcoef[0,1]
+                                    
+                                    pl.title(f"wCC on ROI means={CC_roimeans_w:.2f}")
                                 
                                 if 'Eccentricity' in x_parameter or 'Size' in x_parameter:
                                     pl.xlabel(f"{x_parameter} (°)")
                                 elif 'B/D' in x_parameter:
                                     pl.xlabel(f"{x_parameter} (% signal change)")   
+                                elif x_parameter_toplevel is not None and 'Receptor' in x_parameter_toplevel:
+                                    pl.xlabel(f"{x_parameter} (pmol/ml)")                                                 
                                 else:
                                     pl.xlabel(f"{x_parameter}")
                                     
@@ -2410,7 +2545,9 @@ class visualize_results(object):
                                 if 'Eccentricity' in y_parameter or 'Size' in y_parameter:
                                     pl.ylabel(f"{subj} {model} {y_parameter} (°)")
                                 elif 'B/D' in y_parameter:
-                                    pl.ylabel(f"{subj} {model} {y_parameter} (% signal change)")   
+                                    pl.ylabel(f"{subj} {model} {y_parameter} (% signal change)")  
+                                elif y_parameter_toplevel is not None and 'Receptor' in y_parameter_toplevel:
+                                    pl.ylabel(f"{subj} {model} {y_parameter} (pmol/ml)")                                                 
                                 else:
                                     pl.ylabel(f"{subj} {model} {y_parameter}")
                                     
@@ -3085,9 +3222,9 @@ class visualize_results(object):
                                             rsq_prediction = ls1.score(X,y)
                                             
                                         print(f"Estimated OLS betas {ordered_dimensions[y_dim]} {ls1.coef_}")
-                                        print(f"RSq {rsq_prediction}")
-                                        corr_prediction = np.corrcoef(ls1.predict(X), y)[0,1]
-                                        print(f"corr prediction {corr_prediction}")
+                                        print(f"wRSq {rsq_prediction}")
+                                        corr_prediction = weightstats.DescrStatsW(np.stack((ls1.predict(X), y)).T, weights=multidim_param_array[analysis][subj][roi][ordered_dimensions.index('RSq Norm_abcd')]).corrcoef[0,1]
+                                        print(f"wCC prediction {corr_prediction}")
                                         
                                         if roi in vis_pca_comps_rois:
                                             fig = pl.figure(f"3D OLS prediction {roi.replace('custom.','').replace('HCPQ1Q6.','').replace('glasser_','')}", figsize=(8,8))
@@ -3180,22 +3317,27 @@ class visualize_results(object):
                                             #                        ((y - np.mean(y))**2).sum() 
                                             
                                             
-                                            print(f"R2 (on roi means), by sklearn: {rsq_on_roi_means:.6f}")
+                                            print(f"wR2 (fit on full data, eval on roi means), by sklearn: {rsq_on_roi_means:.3f}")
                                             #print(f"R2 (on roi means) manual: {rsq_on_roi_means_manual:.6f}")
                                             #print(f"R2 (on roi means), by sklearn, unweighted: {rsq_on_roi_means_unweighted:.6f}")
-                                            #print(f"R2 (on roi means) manual, unweighted: {rsq_on_roi_means_manual_unweighted:.6f}")                                            
+                                            #print(f"R2 (on roi means) manual, unweighted: {rsq_on_roi_means_manual_unweighted:.6f}")    
+                                            
 
-                                            corr_prediction_roi_means = np.corrcoef(Zs_pred, rois_ols_y_means)[0,1]
-                                            print(f"corr prediction (on roi means) {corr_prediction_roi_means:.6f}\n")
+                                            corr_prediction_roi_means = weightstats.DescrStatsW(np.stack((Zs_pred,rois_ols_y_means)).T, weights=np.array(rsq_alpha_plots_all_rois)).corrcoef[0,1]
+                                            print(f"wCC prediction (fit on full data, eval on roi means) {corr_prediction_roi_means:.4f}\n") 
                                             
                                             ls2 = LinearRegression()
                                             ls2.fit(np.stack((rois_ols_x0_means,rois_ols_x1_means)).T, rois_ols_y_means, sample_weight = rsq_alpha_plots_all_rois)
-                                            print(f"R2 (fit on roi means), by sklearn: {ls2.score(np.stack((rois_ols_x0_means,rois_ols_x1_means)).T, rois_ols_y_means, sample_weight = rsq_alpha_plots_all_rois):.6f}")
-                                            corr_prediction_fit_roi_means = np.corrcoef(ls2.predict(np.stack((rois_ols_x0_means,rois_ols_x1_means)).T), rois_ols_y_means)[0,1]
-                                            print(f"corr prediction (fit on roi means) {corr_prediction_fit_roi_means:.6f}\n")                                            
+                                            print(f"wR2 (fit on roi means, eval on roi means), by sklearn: {ls2.score(np.stack((rois_ols_x0_means,rois_ols_x1_means)).T, rois_ols_y_means, sample_weight = rsq_alpha_plots_all_rois):.4f}")
+                                            corr_prediction_fit_roi_means = weightstats.DescrStatsW(np.stack((ls2.predict(np.stack((rois_ols_x0_means,rois_ols_x1_means)).T),rois_ols_y_means)).T , weights=np.array(rsq_alpha_plots_all_rois)).corrcoef[0,1]
+                                            print(f"wCC prediction (fit on roi means, eval on roi means) {corr_prediction_fit_roi_means:.4f}")    
+                                            print(f"Estimated OLS betas (fit on roi means) {ordered_dimensions[y_dim]} {ls2.coef_}\n")
+                                            
                                                                                         
                                             
-                                            print(f"R2 (full data), by sklearn: {rsq_prediction:.6f}")
+                                            print(f"wR2 (fit on full data, eval on full data), by sklearn: {rsq_prediction:.4f}")
+                                            print(f"wCC prediction (fit on full data, eval on full data) {corr_prediction:.4f}")
+                                            print(f"Estimated OLS betas (fit on full data) {ordered_dimensions[y_dim]} {ls1.coef_}")
                                             #print(f"R2 (full data) manual: {rsq_full_data_manual:.6f}")
                                             #print(f"R2 (full data), by sklearn, unweighted: {rsq_prediction_unweighted:.6f}")
                                             #print(f"R2 (full data) manual, unweighted: {rsq_full_data_manual_unweighted:.6f}")
