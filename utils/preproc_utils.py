@@ -168,6 +168,7 @@ def prepare_data(subj,
         hemis = ['LR']
         
     tc_dict = dd(lambda:dd(dict))
+    raw_tcs = False
     
     for hemi in hemis:
         for task_name in prf_stim.task_names:
