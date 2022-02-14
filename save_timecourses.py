@@ -19,7 +19,7 @@ import yaml
 subj_list = [sj for sj in os.listdir('/home/marcoaq/PRFMapping/PRFMapping-HCP') if len(sj)==6 and sj.isdecimal()]
 
 subj_list.sort()
-subj_list = subj_list[:10]
+subj_list = subj_list[10:30]
 
 analysis_settings = '/home/marcoaq/savetimecourse_analysis_settings.yml'
 chunk_nr = 0
@@ -51,6 +51,12 @@ task_names = analysis_info["task_names"]
 data_path = analysis_info["data_path"]
 fitting_space = analysis_info["fitting_space"]
 save_raw_timecourse = analysis_info["save_raw_timecourse"]
+
+#this is specific only for the save_timecourse script
+if 'save_fit_timecourse' in analysis_info:
+    save_fit_timecourse = analysis_info["save_fit_timecourse"]
+else:
+    save_fit_timecourse = False
 
 filter_predictions = analysis_info["filter_predictions"]
 filter_type = analysis_info["filter_type"]
@@ -252,8 +258,8 @@ for subj in subj_list:
                 
                         
     
-    if chunk_nr == 0:
-        print("Preparing data for fitting (see utils.prepare_data)...")
+    if save_raw_timecourse:
+        print("Saving raw data")
         tc_full_iso_nonzerovar_dict = prepare_data(subj,
                                                    prf_stim,
                                                    test_prf_stim,
@@ -276,6 +282,33 @@ for subj in subj_list:
                                                    fit_runs,
                                                    fit_task,
                                                    save_noise_ceiling)
+
+
+    if save_fit_timecourse:
+        print("Saving full fit-timecourse not just single runs/conditions")
+        tc_full_iso_nonzerovar_dict = prepare_data(subj,
+                                                   prf_stim,
+                                                   test_prf_stim,
+                                                   
+                                                   discard_volumes,
+                                                   min_percent_var,
+                                                   fix_bold_baseline,
+                                                   
+                                                   filter_type,
+                                                   
+                                                   filter_params,
+                                                   
+                                                   data_path[:-5],
+                                                   fitting_space,
+                                                   data_scaling,
+                                                   roi_idx,
+                                                   False,
+                                                   
+                                                   crossvalidate,
+                                                   fit_runs,
+                                                   fit_task,
+                                                   save_noise_ceiling)
+
 
         order = tc_full_iso_nonzerovar_dict['order']
 
