@@ -96,7 +96,7 @@ class visualize_results(object):
     def get_subjects(self, curr_dict, subject_list = []):
         for k, v in curr_dict.items():
             if 'fsaverage' not in k:
-                if 'sub-' not in k and not k.isdecimal() and '999999' not in k:# and isinstance(v, (dict,dd)):
+                if 'sub-' not in k and not k.isdecimal() and '999999' not in k and 'rsq' not in k:# and isinstance(v, (dict,dd)):
                     self.get_subjects(v, subject_list)
                 else:
                     if k not in subject_list:
@@ -260,7 +260,7 @@ class visualize_results(object):
                         p_r = subj_res['Processed Results']
                         models = p_r['RSq'].keys()
                                                 
-                        if space != 'fsaverage':
+                        if space != 'fsaverage' and 'rsq' not in subj:
                             tc_stats = subj_res['Timecourse Stats']
                         else:
                             tc_stats=dict()
@@ -782,7 +782,7 @@ class visualize_results(object):
                         for model in self.only_models:
                             #print(np.nanquantile(p_r['RSq'][model][alpha[analysis][subj][model]>rsq_thresh],0.1))
                             #print(np.nanquantile(p_r['RSq'][model][alpha[analysis][subj][model]>rsq_thresh],0.9))
-                            ds_rsq[f"{model} rsq"] = Vertex2D_fix(p_r['RSq'][model], alpha[analysis][subj][model], subject=pycortex_subj, 
+                            ds_rsq[f"{model} rsq"] = Vertex2D_fix(p_r['RSq'][model], alpha[analysis][subj][model]>0, subject=pycortex_subj, 
                                                             vmin=np.nanquantile(p_r['RSq'][model][alpha[analysis][subj][model]>rsq_thresh],0.1), 
                                                             vmax=np.nanquantile(p_r['RSq'][model][alpha[analysis][subj][model]>rsq_thresh],0.9),
                                                             vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap=pycortex_cmap)

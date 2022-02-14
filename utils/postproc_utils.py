@@ -310,21 +310,36 @@ class results(object):
 
     
     
-    def process_results(self, results_dict, return_norm_profiles=False):
+    def process_results(self, results_dict, compute_suppression_index = False, return_norm_profiles=False):
         for k, v in tqdm(results_dict.items()):
             if 'sub-' not in k and not k.isdecimal() and '999999' not in k:
-                self.process_results(v, return_norm_profiles)
+                self.process_results(v, compute_suppression_index, return_norm_profiles)
             elif 'Results' in v and 'Processed Results' not in v:
                 mask = v['mask']
-                normalize_RFs = v['analysis_info']['normalize_RFs']
-                #for suppression index computation
-                prf_stim = PRFStimulus2D(screen_size_cm=v['analysis_info']['screen_size_cm'],
-                             screen_distance_cm=v['analysis_info']['screen_distance_cm'],
-                             design_matrix=np.zeros((v['analysis_info']['n_pix'],v['analysis_info']['n_pix'],10)),
-                             TR=1.0)
                 
-                aperture = ((prf_stim.x_coordinates**2+prf_stim.y_coordinates**2)**0.5 < (prf_stim.screen_size_degrees/2))
-    
+                #for suppression index computation
+                if not hasattr(self, 'prf_stim'):
+                    normalize_RFs = v['analysis_info']['normalize_RFs']
+                    
+                    self.prf_stim = PRFStimulus2D(screen_size_cm=v['analysis_info']['screen_size_cm'],
+                                 screen_distance_cm=v['analysis_info']['screen_distance_cm'],
+                                 design_matrix=np.zeros((v['analysis_info']['n_pix'],v['analysis_info']['n_pix'],10)),
+                                 TR=1.0)
+                                   
+                    aperture = ((self.prf_stim.x_coordinates**2+self.prf_stim.y_coordinates**2)**0.5 < (self.prf_stim.screen_size_degrees/2))
+                else:
+                    if [v['analysis_info']['screen_size_cm'],v['analysis_info']['screen_distance_cm'],v['analysis_info']['n_pix']] \
+                        != [self.prf_stim.screen_size_cm,self.prf_stim.screen_distance_cm,self.prf_stim.design_matrix.shape[0]]:
+                            
+                        normalize_RFs = v['analysis_info']['normalize_RFs']
+                        
+                        self.prf_stim = PRFStimulus2D(screen_size_cm=v['analysis_info']['screen_size_cm'],
+                                     screen_distance_cm=v['analysis_info']['screen_distance_cm'],
+                                     design_matrix=np.zeros((v['analysis_info']['n_pix'],v['analysis_info']['n_pix'],10)),
+                                     TR=1.0)
+                                       
+                        aperture = ((self.prf_stim.x_coordinates**2+self.prf_stim.y_coordinates**2)**0.5 < (self.prf_stim.screen_size_degrees/2))
+                
                 #store processed results in nested default dictionary
                 processed_results = dd(lambda:dd(lambda:np.zeros(mask.shape)))
     
@@ -350,8 +365,8 @@ class results(object):
                             (processed_results['Size (fwhmax)'][k2][mask],
                             processed_results['Surround Size (fwatmin)'][k2][mask]) = fwhmax_fwatmin(k2, v2, normalize_RFs)
                             processed_results['Suppression Index (full)'][k2][mask] = (v2[:,5] * v2[:,6]**2)/(v2[:,3] * v2[:,2]**2)
-                            
-                            processed_results['Suppression Index'][k2][mask] = suppression_index(prf_stim, aperture, v2, normalize_RFs)
+                            if compute_suppression_index:
+                                processed_results['Suppression Index'][k2][mask] = suppression_index(self.prf_stim, aperture, v2, normalize_RFs)
     
                         elif 'Norm' in k2:
                             processed_results['Surround Amplitude'][k2][mask] = np.copy(v2[:,5])
@@ -362,7 +377,8 @@ class results(object):
                             processed_results['Ratio (B/D)'][k2][mask] = v2[:,7]/v2[:,8]
                             processed_results['Suppression Index (full)'][k2][mask] = (v2[:,5] * v2[:,6]**2)/(v2[:,3] * v2[:,2]**2)
                             
-                            processed_results['Suppression Index'][k2][mask] = suppression_index(prf_stim, aperture, v2, normalize_RFs)
+                            if compute_suppression_index:
+                                processed_results['Suppression Index'][k2][mask] = suppression_index(self.prf_stim, aperture, v2, normalize_RFs)
                             
     
                             if return_norm_profiles and len(mask.shape)<2:
@@ -555,7 +571,7 @@ def Vertex2D_fix(data1, data2, subject, cmap, vmin, vmax, vmin2, vmax2):
     curv = cortex.db.get_surfinfo(subject)
     # Adjust curvature contrast / color. Alternately, you could work
     # with curv.data, maybe threshold it, and apply a color map. 
-    curv.data = np.sign(curv.data) * .25
+    curv.data = curv.data * .5#np.sign(curv.data) * .25
     #curv.vmin = -1
     #curv.vmax = 1
     #curv.cmap = 'gray'  
