@@ -292,11 +292,16 @@ class visualize_results(object):
             
                         #alpha dictionary
                         p_r['Alpha'] = {}          
-                        p_r['Alpha']['all'] = rsq.max(-1) * (tc_stats['Mean']>self.tc_min[subj]) * (ecc.min(-1)<self.ecc_max) * (ecc.max(-1)>self.ecc_min) * (rsq.min(-1)>0) #* (p_r['Noise Ceiling']['Noise Ceiling (RSq)']>0)
+                        p_r['Alpha']['all'] = rsq.max(-1) * (ecc.min(-1)<self.ecc_max) * (ecc.max(-1)>self.ecc_min) * (rsq.min(-1)>0) #* (p_r['Noise Ceiling']['Noise Ceiling (RSq)']>0)
+
+                        if 'Mean' in tc_stats:
+                            p_r['Alpha']['all'] *= (tc_stats['Mean']>self.tc_min[subj])                        
                         
                         for model in models:
                             p_r['Alpha'][model] = p_r['RSq'][model] * (p_r['Eccentricity'][model]>self.ecc_min) * (p_r['Eccentricity'][model]<self.ecc_max)\
-                                * (tc_stats['Mean']>self.tc_min[subj]) #* (p_r['Noise Ceiling']['Noise Ceiling (RSq)']!=0)
+                                 #* (p_r['Noise Ceiling']['Noise Ceiling (RSq)']!=0)
+                            if 'Mean' in tc_stats:
+                                p_r['Alpha'][model] *= (tc_stats['Mean']>self.tc_min[subj])
                                 
                             if min_number_sjs > 0 and '#Subjects with CVRSq>0' in p_r:
                                 if model in p_r['#Subjects with CVRSq>0']:
@@ -384,9 +389,9 @@ class visualize_results(object):
                 tc_test = dict()
                 tc_fit = dict()
                 
-                for task in an_info['task_names']:
+                for i,task in enumerate(an_info['task_names']):
                     if task not in self.prf_stims:
-                        self.prf_stims[task] = create_full_stim(screenshot_paths=[s_p for s_p in screenshot_paths if task in s_p],
+                        self.prf_stims[task] = create_full_stim(screenshot_paths=[screenshot_paths[i]],
                                 n_pix=an_info['n_pix'],
                                 discard_volumes=an_info['discard_volumes'],
                                 baseline_volumes_begin_end=an_info['baseline_volumes_begin_end'],
@@ -400,14 +405,14 @@ class visualize_results(object):
                     tc_runs=[]
                     
                     for run in all_runs:
-                        mask_run = [np.load(mask_path) for mask_path in mask_paths if task in mask_path and f"run-{run}" in mask_path][0]
+                        mask_run = [np.load(mask_path) for mask_path in mask_paths if f"task-{task}_" in mask_path and f"run-{run}." in mask_path][0]
                         
                         if space == 'HCP':
                             tc_run_idx = np.sum(subj_res['mask'][:index])
                         else:
                             tc_run_idx = np.sum(mask_run[:index])
                         
-                        tc_runs.append([np.load(tc_path)[tc_run_idx] for tc_path in tc_paths if task in tc_path and f"run-{run}" in tc_path][0])
+                        tc_runs.append([np.load(tc_path)[tc_run_idx] for tc_path in tc_paths if f"task-{task}_" in tc_path and f"run-{run}." in tc_path][0])
                         
                         #tc_runs[-1] *=(100/tc_runs[-1].mean(-1))[...,np.newaxis]
                         #tc_runs[-1] += (tc_runs[-1].mean(-1)-np.median(tc_runs[-1][...,self.prf_stims[task].late_iso_dict[task]], axis=-1))[...,np.newaxis]
@@ -568,7 +573,7 @@ class visualize_results(object):
                 #self.axes[0,0].set_ylim(-3.5,6.5)
                 self.axes[0,0].set_xlim(0,tseconds.max())
                 #self.axes[0,0].set_ylabel('% signal change')
-                self.axes[0,0].set_title(f"Vertex {index} timecourse")
+                self.axes[0,0].set_title(f"Sj: {subj}, Vx: {index} timecourse")
                 
                 if prfs['Norm_abcd'][0].min() < 0:
                     im = self.axes[0,1].imshow(prfs['Norm_abcd'][0], cmap='RdBu_r', vmin=prfs['Norm_abcd'][0].min(), vmax=-prfs['Norm_abcd'][0].min())
@@ -782,14 +787,15 @@ class visualize_results(object):
                         for model in self.only_models:
                             #print(np.nanquantile(p_r['RSq'][model][alpha[analysis][subj][model]>rsq_thresh],0.1))
                             #print(np.nanquantile(p_r['RSq'][model][alpha[analysis][subj][model]>rsq_thresh],0.9))
-                            ds_rsq[f"{model} rsq"] = Vertex2D_fix(p_r['RSq'][model], alpha[analysis][subj][model]>0, subject=pycortex_subj, 
-                                                            vmin=np.nanquantile(p_r['RSq'][model][alpha[analysis][subj][model]>rsq_thresh],0.1), 
-                                                            vmax=np.nanquantile(p_r['RSq'][model][alpha[analysis][subj][model]>rsq_thresh],0.9),
-                                                            vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap=pycortex_cmap)
+                            ds_rsq[f"{model} rsq"] = Vertex2D_fix(p_r['RSq'][model], 
+                                                            np.ones_like(alpha[analysis][subj][model]), subject=pycortex_subj, 
+                                                            vmin=0,#np.nanquantile(p_r['RSq'][model][alpha[analysis][subj][model]>rsq_thresh],0.1), 
+                                                            vmax=0.15,#np.nanquantile(p_r['RSq'][model][alpha[analysis][subj][model]>rsq_thresh],0.9),
+                                                            vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap='inferno')
                             
-                            fig = simple_colorbar(vmin=np.nanquantile(p_r['RSq'][model][alpha[analysis][subj][model]>rsq_thresh],0.1), 
-                                            vmax=np.nanquantile(p_r['RSq'][model][alpha[analysis][subj][model]>rsq_thresh],0.9),
-                                            cmap_name=pycortex_cmap, ori='horizontal', param_name='$R^2$')
+                            fig = simple_colorbar(vmin=0,#np.nanquantile(p_r['RSq'][model][alpha[analysis][subj][model]>rsq_thresh],0.1), 
+                                            vmax=0.15,#np.nanquantile(p_r['RSq'][model][alpha[analysis][subj][model]>rsq_thresh],0.9),
+                                            cmap_name='inferno', ori='horizontal', param_name='$R^2$')
                             
                             if pycortex_image_path is not None:
                                 fig.savefig(f"{pycortex_image_path}/{model}_rsq_cbar.pdf", dpi=600, bbox_inches='tight', transparent=True)
@@ -798,11 +804,37 @@ class visualize_results(object):
                             for nc_type in p_r['Noise Ceiling']:
                                 #print(np.nanquantile(p_r['Noise Ceiling'][nc_type][alpha[analysis][subj][model]>rsq_thresh],0.1))
                                 #print(np.nanquantile(p_r['Noise Ceiling'][nc_type][alpha[analysis][subj][model]>rsq_thresh],0.9))
-                                ds_rsq[nc_type] = Vertex2D_fix(p_r['Noise Ceiling'][nc_type], alpha[analysis][subj][model], subject=pycortex_subj, 
+                                ds_rsq[nc_type] = Vertex2D_fix(p_r['Noise Ceiling'][nc_type],
+                                                               np.ones_like(alpha[analysis][subj][model]), subject=pycortex_subj, 
                                                             vmin=-1.25,#np.nanquantile(p_r['Noise Ceiling'][nc_type][alpha[analysis][subj][model]>rsq_thresh],0.1), 
                                                             vmax=-0.75,#np.nanquantile(p_r['Noise Ceiling'][nc_type][alpha[analysis][subj][model]>rsq_thresh],0.9),
-                                                            vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap=pycortex_cmap)                            
+                                                            vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap=pycortex_cmap)   
+                                
+                                fig = simple_colorbar(vmin=-1.25,#np.nanquantile(p_r['RSq'][model][alpha[analysis][subj][model]>rsq_thresh],0.1), 
+                                                vmax=-0.75,#np.nanquantile(p_r['RSq'][model][alpha[analysis][subj][model]>rsq_thresh],0.9),
+                                                cmap_name=pycortex_cmap, ori='horizontal', param_name='Inter-run $R^2$')
+                                
+                                if pycortex_image_path is not None:
+                                    fig.savefig(f"{pycortex_image_path}/nc_cbar.pdf", dpi=600, bbox_inches='tight', transparent=True)                                
+ 
                             
+                        if '#Subjects with CVRSq>0' in p_r:
+                            for model in self.only_models:
+                                #print(np.nanquantile(p_r['Noise Ceiling'][nc_type][alpha[analysis][subj][model]>rsq_thresh],0.1))
+                                #print(np.nanquantile(p_r['Noise Ceiling'][nc_type][alpha[analysis][subj][model]>rsq_thresh],0.9))
+                                ds_rsq[model] = Vertex2D_fix(p_r['#Subjects with CVRSq>0'][model],
+                                                               np.ones_like(alpha[analysis][subj][model]), subject=pycortex_subj, 
+                                                            vmin=0,#np.nanquantile(p_r['Noise Ceiling'][nc_type][alpha[analysis][subj][model]>rsq_thresh],0.1), 
+                                                            vmax=100,#np.nanquantile(p_r['Noise Ceiling'][nc_type][alpha[analysis][subj][model]>rsq_thresh],0.9),
+                                                            vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap=pycortex_cmap)   
+                                
+                                fig = simple_colorbar(vmin=0,#np.nanquantile(p_r['RSq'][model][alpha[analysis][subj][model]>rsq_thresh],0.1), 
+                                                vmax=100,#np.nanquantile(p_r['RSq'][model][alpha[analysis][subj][model]>rsq_thresh],0.9),
+                                                cmap_name=pycortex_cmap, ori='horizontal', param_name='#Subjects with cv$R^2$>0')
+                                
+                                if pycortex_image_path is not None:
+                                    fig.savefig(f"{pycortex_image_path}/nsubj_cbar.pdf", dpi=600, bbox_inches='tight', transparent=True)     
+                                    
                         if 'CSS' in models and p_r['RSq']['CSS'].sum()>0:
                             ds_rsq['CSS - Gauss'] = Vertex2D_fix(p_r['RSq']['CSS']-p_r['RSq']['Gauss'], alpha[analysis][subj]['all'], subject=pycortex_subj,
                                                                       vmin=-0.1, vmax=0.1, vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap=pycortex_cmap)   
@@ -1269,7 +1301,7 @@ class visualize_results(object):
                 
                 for model in models:
                     fsaverage_rsq = dict()
-                    for parameter in parameters:
+                    for parameter in tqdm(parameters):
                         
                         fsaverage_param = dict()
                         
@@ -3067,11 +3099,11 @@ class visualize_results(object):
                                     
                                     if roi in vis_pca_comps_rois:
                                                                                   
-                                        
-                                        f, axes = pl.subplots(1, ncomp, figsize=(ncomp*6,7))
+                                        ncomp_bar_plots = 4
+                                        f, axes = pl.subplots(1, ncomp_bar_plots, figsize=(ncomp_bar_plots*6,7))
                                         
                                        
-                                        for j in range(ncomp):                                           
+                                        for j in range(ncomp_bar_plots):                                           
                                             if j == 0:
                                                 axes[j].set_yticks(np.arange(full_dataset.shape[1]))
                                                 axes[j].set_yticklabels([ordered_dimensions[x_dim].replace('Norm_abcd','') for x_dim in x_dims]+[ordered_dimensions[y_dim].replace('Norm_abcd','') for y_dim in y_dims])
@@ -3725,9 +3757,9 @@ class visualize_results(object):
                                         mean_srf /= mean_srf.max()
                                         
                                         
-    
+                                    #specific to spinoza data. needs update for more generality
                                     if plot_data:
-                                        #specific to spinoza data. update for more generality
+                                        
                                         #actual_response_1R = weightstats.DescrStatsW(multidim_param_array['fit-task-1R_fit-runs-all'][subj][roi][ordered_dimensions.index(resp_measure)],
                                         #                                          weights=multidim_param_array['fit-task-1R_fit-runs-all'][subj][roi][ordered_dimensions.index('RSq Norm_abcd')])
                                         actual_response_2R = weightstats.DescrStatsW(multidim_param_array['fit-task-2R_fit-runs-all'][subj][roi][ordered_dimensions.index(resp_measure)],

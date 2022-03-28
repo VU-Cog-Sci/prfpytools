@@ -302,7 +302,8 @@ class results(object):
             raw_tc_stats['TSNR'] = tc_tsnr_full
             
             for ke in self.main_dict[space]:
-                self.main_dict[space][ke][subj]['Timecourse Stats'] = deepcopy(raw_tc_stats)
+                if subj in ke:
+                    self.main_dict[space][ke][subj]['Timecourse Stats'] = deepcopy(raw_tc_stats)
                 
         return
         
@@ -316,29 +317,28 @@ class results(object):
                 self.process_results(v, compute_suppression_index, return_norm_profiles)
             elif 'Results' in v and 'Processed Results' not in v:
                 mask = v['mask']
+                normalize_RFs = v['analysis_info']['normalize_RFs']
                 
-                #for suppression index computation
-                if not hasattr(self, 'prf_stim'):
-                    normalize_RFs = v['analysis_info']['normalize_RFs']
-                    
-                    self.prf_stim = PRFStimulus2D(screen_size_cm=v['analysis_info']['screen_size_cm'],
-                                 screen_distance_cm=v['analysis_info']['screen_distance_cm'],
-                                 design_matrix=np.zeros((v['analysis_info']['n_pix'],v['analysis_info']['n_pix'],10)),
-                                 TR=1.0)
-                                   
-                    aperture = ((self.prf_stim.x_coordinates**2+self.prf_stim.y_coordinates**2)**0.5 < (self.prf_stim.screen_size_degrees/2))
-                else:
-                    if [v['analysis_info']['screen_size_cm'],v['analysis_info']['screen_distance_cm'],v['analysis_info']['n_pix']] \
-                        != [self.prf_stim.screen_size_cm,self.prf_stim.screen_distance_cm,self.prf_stim.design_matrix.shape[0]]:
-                            
-                        normalize_RFs = v['analysis_info']['normalize_RFs']
-                        
+                if compute_suppression_index or return_norm_profiles:
+                    #for suppression index computation
+                    if not hasattr(self, 'prf_stim'):
+                                            
                         self.prf_stim = PRFStimulus2D(screen_size_cm=v['analysis_info']['screen_size_cm'],
                                      screen_distance_cm=v['analysis_info']['screen_distance_cm'],
                                      design_matrix=np.zeros((v['analysis_info']['n_pix'],v['analysis_info']['n_pix'],10)),
                                      TR=1.0)
                                        
                         aperture = ((self.prf_stim.x_coordinates**2+self.prf_stim.y_coordinates**2)**0.5 < (self.prf_stim.screen_size_degrees/2))
+                    else:
+                        if [v['analysis_info']['screen_size_cm'],v['analysis_info']['screen_distance_cm'],v['analysis_info']['n_pix']] \
+                            != [self.prf_stim.screen_size_cm,self.prf_stim.screen_distance_cm,self.prf_stim.design_matrix.shape[0]]:
+                                
+                            self.prf_stim = PRFStimulus2D(screen_size_cm=v['analysis_info']['screen_size_cm'],
+                                         screen_distance_cm=v['analysis_info']['screen_distance_cm'],
+                                         design_matrix=np.zeros((v['analysis_info']['n_pix'],v['analysis_info']['n_pix'],10)),
+                                         TR=1.0)
+                                           
+                            aperture = ((self.prf_stim.x_coordinates**2+self.prf_stim.y_coordinates**2)**0.5 < (self.prf_stim.screen_size_degrees/2))
                 
                 #store processed results in nested default dictionary
                 processed_results = dd(lambda:dd(lambda:np.zeros(mask.shape)))
@@ -354,6 +354,11 @@ class results(object):
                         processed_results['Polar Angle'][k2][mask] = np.arctan2(v2[:,1], v2[:,0])
                         processed_results['Amplitude'][k2][mask] = np.copy(v2[:,3])
                         processed_results['Size (sigma_1)'][k2][mask] = np.copy(v2[:,2])
+                        
+                        if v['analysis_info']['fit_hrf']:
+                            processed_results['hrf_1'][k2][mask] = np.copy(v2[:,-3])
+                            processed_results['hrf_2'][k2][mask] = np.copy(v2[:,-2])
+                            
     
                         if k2 == 'CSS':
                             processed_results['CSS Exponent'][k2][mask] =  np.copy(v2[:,5])
@@ -600,8 +605,13 @@ def Vertex2D_fix(data1, data2, subject, cmap, vmin, vmax, vmin2, vmax2):
 
 
 def simple_colorbar(vmin, vmax, cmap_name, ori, param_name):
-    fig, ax = pl.subplots(figsize=(8, 1))
-    fig.subplots_adjust(bottom=0.5)
+    if ori == 'horizontal':
+        fig, ax = pl.subplots(figsize=(8, 1))
+        fig.subplots_adjust(bottom=0.5)
+    else:
+        fig, ax = pl.subplots(figsize=(3 ,8))
+        fig.subplots_adjust(right=0.5)
+        
     
     if cmap_name == 'hsvx2':
         top = cm.get_cmap('hsv', 256)
