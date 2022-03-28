@@ -66,6 +66,12 @@ for subj in subjects.split(','):
     dog_grid = analysis_info["dog_grid"]
     css_grid = analysis_info["css_grid"]
     
+    if 'scratch' in data_path:
+        replacer = 'home'
+    else:
+        replacer = data_path.split(os.path.sep)[1]
+    
+    
     if refit_mode == previous_analysis_refit_mode and refit_mode!="overwrite":
         analysis_time = previous_analysis_time
     
@@ -144,7 +150,7 @@ for subj in subjects.split(','):
     
             grid_result[order] = np.copy(grid_result)
     
-            np.save(grid_path.replace(grid_path.split(os.path.sep)[1], 'home'), grid_result) 
+            np.save(grid_path.replace(grid_path.split(os.path.sep)[1], replacer), grid_result) 
     
         iter_path = opj(data_path, subj+"_iterparams-"+model+"_space-"+fitting_space)
     
@@ -154,16 +160,16 @@ for subj in subjects.split(','):
     
         model_result[order] = np.copy(model_result)
     
-        np.save(iter_path.replace(iter_path.split(os.path.sep)[1], 'home'), model_result)
+        np.save(iter_path.replace(iter_path.split(os.path.sep)[1], replacer), model_result)
     
     #mask is saved in original order so only need to copypaste
     mask_path=opj(data_path,  f"{subj}_mask_space-{fitting_space}.npy")
-    cp(mask_path, mask_path.replace(mask_path.split(os.path.sep)[1], 'home').replace('.npy',analysis_time+'.npy'))
+    cp(mask_path, mask_path.replace(mask_path.split(os.path.sep)[1], replacer).replace('.npy',analysis_time+'.npy'))
     
     #save noise ceiling
     if save_noise_ceiling:
         nc_path = opj(data_path,f"{subj}_noise-ceiling_space-{fitting_space}.npy")
-        cp(nc_path, nc_path.replace(nc_path.split(os.path.sep)[1], 'home').replace('.npy',analysis_time+'.npy'))
+        cp(nc_path, nc_path.replace(nc_path.split(os.path.sep)[1], replacer).replace('.npy',analysis_time+'.npy'))
     
     
     if "--grab" in sys.argv:
@@ -174,7 +180,7 @@ for subj in subjects.split(','):
         tc = np.load(tc_path)
         tc_ordered = np.zeros_like(tc)
         tc_ordered[order] = np.copy(tc)
-        np.save(tc_path.replace(tc_path.split(os.path.sep)[1], 'home').replace('.npy',analysis_time+'.npy'), tc_ordered)
+        np.save(tc_path.replace(tc_path.split(os.path.sep)[1], replacer).replace('.npy',analysis_time+'.npy'), tc_ordered)
         
             
         if crossvalidate:
@@ -182,10 +188,10 @@ for subj in subjects.split(','):
             tc_test = np.load(tc_test_path)
             tc_test_ordered = np.zeros_like(tc_test)
             tc_test_ordered[order] = np.copy(tc_test)
-            np.save(tc_test_path.replace(tc_test_path.split(os.path.sep)[1], 'home').replace('.npy',analysis_time+'.npy'), tc_test_ordered)
+            np.save(tc_test_path.replace(tc_test_path.split(os.path.sep)[1], replacer).replace('.npy',analysis_time+'.npy'), tc_test_ordered)
     
     
             
-    cp(analysis_settings, analysis_settings.replace(analysis_settings.split(os.path.sep)[1], 'home').replace('.yml',analysis_time+'.yml'))
+    cp(analysis_settings, analysis_settings.replace(analysis_settings.split(os.path.sep)[1], replacer).replace('.yml',analysis_time+'.yml'))
     print(f"harvest subj {subj} completed")
 
