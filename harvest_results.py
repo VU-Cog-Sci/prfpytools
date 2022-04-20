@@ -113,7 +113,7 @@ for subj in subjects.split(','):
     
                     filepath = opj(data_path,subj+"_iterparams-"+model+"_space-"+fitting_space+str(value)+".npy")
                     if refit_mode == "overwrite":
-                        print("Renaming unfinished files to _old, so can run next in skip mode.")
+                        #print("Renaming unfinished files to _old, so can run next in skip mode.")
                         os.rename(filepath,filepath[:-4]+"_old.npy")
     
     
