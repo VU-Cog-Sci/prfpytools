@@ -133,9 +133,9 @@ class results(object):
                     tc_runs=[]
                     
                     for run in all_runs:
-                        mask_run = [np.load(mask_path) for mask_path in mask_paths if task in mask_path and f"run-{run}" in mask_path][0]
+                        mask_run = [np.load(mask_path) for mask_path in mask_paths if f"task-{task}" in mask_path and f"run-{run}" in mask_path][0]
 
-                        tc_run = ([np.load(tc_path) for tc_path in tc_paths if task in tc_path and f"run-{run}" in tc_path][0])
+                        tc_run = ([np.load(tc_path) for tc_path in tc_paths if f"task-{task}" in tc_path and f"run-{run}" in tc_path][0])
                         
                         #tc_run *= (100/tc_run.mean(-1))[...,np.newaxis]
                         #tc_run += (tc_run.mean(-1)-np.median(tc_run[...,prf_stim.late_iso_dict[task]], axis=-1))[...,np.newaxis]
@@ -180,8 +180,8 @@ class results(object):
                                 normalize_integral_dx=merged_an_info['normalize_integral_dx'])
                         
 
-                    all_tcs_task = [np.load(tc_path) for tc_path in tc_paths if task in tc_path]
-                    all_masks_task = [np.load(mask_path) for mask_path in mask_paths if task in mask_path]
+                    all_tcs_task = [np.load(tc_path) for tc_path in tc_paths if f"task-{task}" in tc_path]
+                    all_masks_task = [np.load(mask_path) for mask_path in mask_paths if f"task-{task}" in mask_path]
                     
                     mask_task = np.product(all_masks_task, axis=0).astype('bool')
                     tc_full = np.zeros((mask_task.shape[0], all_tcs_task[0].shape[-1]))
@@ -354,6 +354,9 @@ class results(object):
                         processed_results['Polar Angle'][k2][mask] = np.arctan2(v2[:,1], v2[:,0])
                         processed_results['Amplitude'][k2][mask] = np.copy(v2[:,3])
                         processed_results['Size (sigma_1)'][k2][mask] = np.copy(v2[:,2])
+                        
+                        processed_results['x_pos'][k2][mask] = np.copy(v2[:,0])
+                        processed_results['y_pos'][k2][mask] = np.copy(v2[:,1])
                         
                         if v['analysis_info']['fit_hrf']:
                             processed_results['hrf_1'][k2][mask] = np.copy(v2[:,-3])
@@ -576,7 +579,7 @@ def Vertex2D_fix(data1, data2, subject, cmap, vmin, vmax, vmin2, vmax2):
     curv = cortex.db.get_surfinfo(subject)
     # Adjust curvature contrast / color. Alternately, you could work
     # with curv.data, maybe threshold it, and apply a color map. 
-    curv.data = curv.data * .5#np.sign(curv.data) * .25
+    curv.data = 0.1+curv.data * .75#np.sign(curv.data) * .25
     #curv.vmin = -1
     #curv.vmax = 1
     #curv.cmap = 'gray'  
@@ -608,9 +611,11 @@ def simple_colorbar(vmin, vmax, cmap_name, ori, param_name):
     if ori == 'horizontal':
         fig, ax = pl.subplots(figsize=(8, 1))
         fig.subplots_adjust(bottom=0.5)
-    else:
+    elif ori == 'vertical':
         fig, ax = pl.subplots(figsize=(3 ,8))
         fig.subplots_adjust(right=0.5)
+    elif ori == 'polar':
+        fig, ax = pl.subplots(figsize=(3,3), subplot_kw={'projection': 'polar'})
         
     
     if cmap_name == 'hsvx2':
@@ -623,11 +628,44 @@ def simple_colorbar(vmin, vmax, cmap_name, ori, param_name):
         
     else:
         cmap = cm.get_cmap(cmap_name, 256)
-
     
     norm = colors.Normalize(vmin=vmin, vmax=vmax)
     
-    fig.colorbar(cm.ScalarMappable(norm=norm, cmap=cmap),
+    if ori == 'polar':
+        if 'Polar' in param_name:
+            t = np.linspace(-np.pi,np.pi,200,endpoint=True)
+            r = [0,1]
+            rg, tg = np.meshgrid(r,t)
+            ax.pcolormesh(t, r, tg.T, norm=norm, cmap=cmap)
+            ax.set_yticklabels([])
+            ax.set_xticklabels([])
+            ax.set_theta_zero_location("W")
+            ax.spines['polar'].set_visible(False)
+        elif 'Ecc' in param_name:
+            n = 200
+            t = np.linspace(0,2*np.pi, n)
+            r = np.linspace(0,1, n)
+            rg, tg = np.meshgrid(r,t)
+            c = tg
+            ax.pcolormesh(t, r, c, norm = colors.Normalize(0, 2*np.pi), cmap=cmap)
+            ax.tick_params(pad=1,labelsize=15)
+            ax.spines['polar'].set_visible(False)
+            box = ax.get_position()
+            ax.set_yticklabels([])
+            ax.set_xticklabels([])
+            axl = fig.add_axes([0.97*box.xmin,0.5*(box.ymin+box.ymax), box.width/600,box.height*0.5])
+            axl.spines['top'].set_visible(False)
+            axl.spines['right'].set_visible(False)
+            axl.spines['bottom'].set_visible(False)
+            axl.yaxis.set_ticks_position('left')
+            axl.xaxis.set_ticks_position('none')
+            axl.set_xticklabels([])
+            axl.set_yticklabels([f"{vmin:.1f}",f"{(vmin+vmax)/2:.1f}",f"{vmax:.1f}"],size = 'x-large')
+            #axl.set_ylabel('$dva$\t\t', rotation=0, size='x-large')
+            axl.yaxis.set_label_coords(box.xmax+30,0.4)
+            axl.patch.set_alpha(0.5)            
+    else:
+        fig.colorbar(cm.ScalarMappable(norm=norm, cmap=cmap),
                  cax=ax, orientation=ori, label=param_name)
     
     fig.show()

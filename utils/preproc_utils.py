@@ -19,6 +19,11 @@ def roi_mask(roi, array):
     masked_array = array * array_2
     return masked_array
 
+def inverse_roi_mask(roi, array):
+    array_2 = np.ones(array.shape).astype('bool')
+    array_2[roi] = False
+    masked_array = array * array_2
+    return masked_array
 
 def create_dm_from_screenshots(screenshot_path,
                                n_pix=40,
