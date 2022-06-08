@@ -21,8 +21,9 @@ from copy import deepcopy
 import itertools
 from pathlib import Path
 from utils.postproc_utils import model_wrapper, create_model_rf_wrapper, colorbar, norm_1d_sr_function, norm_2d_sr_function, Vertex2D_fix, simple_colorbar
-from utils.preproc_utils import roi_mask, create_full_stim
+from utils.preproc_utils import roi_mask, inverse_roi_mask, create_full_stim
 #import seaborn as sns
+from skimage import filters
 
 import time
 from scipy.stats import sem, ks_2samp, ttest_1samp, wilcoxon, pearsonr, ttest_ind, ttest_rel, zscore, spearmanr
@@ -162,9 +163,9 @@ class visualize_results(object):
                         print(e)
             
                 self.idx_rois[subj]['visual_system'] = np.concatenate(tuple([self.idx_rois[subj][roi] for roi in self.idx_rois[subj]]), axis=0)
-                self.idx_rois[subj]['V1']=np.concatenate((self.idx_rois[subj]['V1v'],self.idx_rois[subj]['V1d']))
-                self.idx_rois[subj]['V2']=np.concatenate((self.idx_rois[subj]['V2v'],self.idx_rois[subj]['V2d']))
-                self.idx_rois[subj]['V3']=np.concatenate((self.idx_rois[subj]['V3v'],self.idx_rois[subj]['V3d']))
+                self.idx_rois[subj]['V1'] = np.concatenate((self.idx_rois[subj]['V1v'],self.idx_rois[subj]['V1d']))
+                self.idx_rois[subj]['V2'] = np.concatenate((self.idx_rois[subj]['V2v'],self.idx_rois[subj]['V2d']))
+                self.idx_rois[subj]['V3'] = np.concatenate((self.idx_rois[subj]['V3v'],self.idx_rois[subj]['V3d']))
                 self.idx_rois[subj]['VO'] = np.concatenate((self.idx_rois[subj]['VO1'],self.idx_rois[subj]['VO2']))
                 self.idx_rois[subj]['TO'] = np.concatenate((self.idx_rois[subj]['TO1'],self.idx_rois[subj]['TO2']))
                 self.idx_rois[subj]['LO'] = np.concatenate((self.idx_rois[subj]['LO1'],self.idx_rois[subj]['LO2']))
@@ -185,6 +186,20 @@ class visualize_results(object):
 
                 #parse glasser ROIs if they have been created
                 for roi in [el for el in os.listdir(opj(self.fs_dir, subj, 'label')) if 'glasser' in el]:
+                    roi = roi.replace('lh.','').replace('rh.','').replace('.label','')
+                    try:
+                        self.idx_rois[subj][roi], _ = cortex.freesurfer.get_label(subj,
+                                                              label=roi,
+                                                              fs_dir=self.fs_dir,
+                                                              src_subject=subj,
+                                                              hemisphere=['lh', 'rh'])
+                    except Exception as e:
+                        print(e)
+                        pass
+
+
+                #parse exclusion ROIs if they have been created
+                for roi in [el for el in os.listdir(opj(self.fs_dir, subj, 'label')) if 'excl' in el]:
                     roi = roi.replace('lh.','').replace('rh.','').replace('.label','')
                     try:
                         self.idx_rois[subj][roi], _ = cortex.freesurfer.get_label(subj,
@@ -242,7 +257,7 @@ class visualize_results(object):
 
         return
 
-    def set_alpha(self, space_names='all', only_models=None, ecc_min=0, ecc_max=5, min_number_sjs=0):
+    def set_alpha(self, space_names='all', only_models=None, ecc_min=0, ecc_max=5, threshold_li=True, excluded_rois=[]):
         
         self.only_models=only_models
         self.tc_min = dict()
@@ -303,11 +318,23 @@ class visualize_results(object):
                             if 'Mean' in tc_stats:
                                 p_r['Alpha'][model] *= (tc_stats['Mean']>self.tc_min[subj])
                                 
-                            if min_number_sjs > 0 and '#Subjects with CVRSq>0' in p_r:
+                            if threshold_li and '#Subjects with CVRSq>0' in p_r:
+                                
                                 if model in p_r['#Subjects with CVRSq>0']:
+                                    
+                                    min_number_sjs = filters.threshold_li(p_r['#Subjects with CVRSq>0'][model])
                                     print(f"thresholding at {min_number_sjs} subjects")
+                                    
                                     p_r['Alpha'][model] *= (p_r['#Subjects with CVRSq>0'][model]>min_number_sjs)
                                     p_r['Alpha']['all'] *= (p_r['#Subjects with CVRSq>0'][model]>min_number_sjs)
+                            
+                            if len(excluded_rois)>0:
+                                if all(r in self.idx_rois[subj] for r in excluded_rois):
+
+                                    p_r['Alpha'][model] = (inverse_roi_mask(np.concatenate(tuple([self.idx_rois[subj][r] for r in excluded_rois])), p_r['Alpha'][model]))
+                                    p_r['Alpha']['all'] = (inverse_roi_mask(np.concatenate(tuple([self.idx_rois[subj][r] for r in excluded_rois])), p_r['Alpha']['all']))   
+                                else:
+                                    print("WARNING: excluded_rois contains undefined rois. roi exclusion not performed.")
                        
         return
 
@@ -646,7 +673,7 @@ class visualize_results(object):
                         curr_models.append('all')
                     
                     for model in curr_models:
-                        curr_alpha = p_r['Alpha'][model]
+                        curr_alpha = np.copy(p_r['Alpha'][model])
                     
                         if all(roi in self.idx_rois[subj] for roi in rois):
     
@@ -671,45 +698,42 @@ class visualize_results(object):
 
                     #output freesurefer-format polar angle maps to draw custom ROIs in freeview    
                     if self.output_freesurfer_maps:
-                                      
-                        lh_c = read_morph_data(opj(self.fs_dir, subj+'/surf/lh.curv'))
+                        
+                        if 'fsaverage' in subj:
+                            fs_sj = 'fsaverage'
+                        
+                        lh_c = read_morph_data(opj(self.fs_dir, fs_sj+'/surf/lh.curv'))
         
                         polar_freeview = np.copy(p_r['Polar Angle']['Norm_abcd'])#np.mean(polar, axis=-1)
                         ecc_freeview = np.copy(p_r['Eccentricity']['Norm_abcd'])#np.mean(ecc, axis=-1)
+                        alpha_freeview = np.copy(alpha[analysis][subj]['Norm_abcd'])
                         
-                        if subj != 'fsaverage':
-                            alpha_freeview = p_r['RSq']['Norm_abcd']* (tc_stats['Mean']>self.tc_min[subj])# rsq.max(-1) * (tc_stats['Mean']>self.tc_min[subj]) * (rsq.min(-1)>0)
-                        else:
-                            alpha_freeview = p_r['RSq']['Norm_abcd']
+                        # if space!='fsaverage' and hasattr(self, 'tc_min'):
+                        #     if subj in self.tc_min:
+                        #         alpha_freeview = p_r['RSq']['Norm_abcd']* (tc_stats['Mean']>self.tc_min[subj])# rsq.max(-1) * (tc_stats['Mean']>self.tc_min[subj]) * (rsq.min(-1)>0)
+                        # else:
+                        #     alpha_freeview = p_r['RSq']['Norm_abcd']
                             
-                        polar_freeview[alpha_freeview<rsq_thresh] = -10
-                        ecc_freeview[alpha_freeview<rsq_thresh] = -10
+                        #print(rsq_thresh)
+                        #print(alpha_freeview)
+                        #print(np.sum(alpha_freeview<=rsq_thresh))
+                            
+                        polar_freeview[alpha_freeview<=rsq_thresh] = -10
+                        ecc_freeview[alpha_freeview<=rsq_thresh] = -10
+                        
+                        #print(np.sum(polar_freeview == -10))
         
-                        write_morph_data(opj(self.fs_dir, subj+'/surf/lh.polar_norm')
+                        write_morph_data(opj(self.fs_dir, f"{fs_sj}/surf/lh.polar_norm_maxecc{self.ecc_max:.1f}_minrsq{rsq_thresh:.2f}")
                                                                ,polar_freeview[:lh_c.shape[0]])
-                        write_morph_data(opj(self.fs_dir, subj+'/surf/rh.polar_norm')
+                        write_morph_data(opj(self.fs_dir, f"{fs_sj}/surf/rh.polar_norm_maxecc{self.ecc_max:.1f}_minrsq{rsq_thresh:.2f}")
                                                                ,polar_freeview[lh_c.shape[0]:])
-                        write_morph_data(opj(self.fs_dir, subj+'/surf/lh.ecc_norm')
+                        write_morph_data(opj(self.fs_dir, f"{fs_sj}/surf/lh.ecc_norm_maxecc{self.ecc_max:.1f}_minrsq{rsq_thresh:.2f}")
                                                                ,ecc_freeview[:lh_c.shape[0]])
-                        write_morph_data(opj(self.fs_dir, subj+'/surf/rh.ecc_norm')
+                        write_morph_data(opj(self.fs_dir, f"{fs_sj}/surf/rh.ecc_norm_maxecc{self.ecc_max:.1f}_minrsq{rsq_thresh:.2f}")
                                                                ,ecc_freeview[lh_c.shape[0]:])
                         
                         
-                        polar_freeview_masked = np.copy(polar_freeview)
-                        ecc_freeview_masked = np.copy(ecc_freeview)
-                        alpha_freeview_masked = alpha_freeview * (ecc_freeview<self.ecc_max) * (ecc_freeview>self.ecc_min)
-        
-                        polar_freeview_masked[alpha_freeview_masked<rsq_thresh] = -10
-                        ecc_freeview_masked[alpha_freeview_masked<rsq_thresh] = -10
-        
-                        write_morph_data(opj(self.fs_dir, subj+'/surf/lh.polar_masked_norm')
-                                                               ,polar_freeview_masked[:lh_c.shape[0]])
-                        write_morph_data(opj(self.fs_dir, subj+'/surf/rh.polar_masked_norm')
-                                                               ,polar_freeview_masked[lh_c.shape[0]:])
-                        write_morph_data(opj(self.fs_dir, subj+'/surf/lh.ecc_masked_norm')
-                                                               ,ecc_freeview_masked[:lh_c.shape[0]])
-                        write_morph_data(opj(self.fs_dir, subj+'/surf/rh.ecc_masked_norm')
-                                                               ,ecc_freeview_masked[lh_c.shape[0]:])
+
                         
                     ##START PYCORTEX VISUALIZATIONS                            
                     #data quality/stats cortex visualization 
@@ -727,7 +751,7 @@ class visualize_results(object):
         
                         data_stats ={'mean':mean_ts_vert, 'var':var_ts_vert, 'tsnr':tsnr_vert}
         
-                        self.js_handle_dict[space][analysis][subj]['stats'] = cortex.webgl.show(data_stats, pickerfun=clicker_function, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)
+                        self.js_handle_dict[space][analysis][subj]['stats'] = cortex.webgl.show(data_stats, pickerfun=clicker_function,  overlays_visible=[], labels_visible=[]) 
         
                         plotted_stats[subj] = True
                     
@@ -766,7 +790,7 @@ class visualize_results(object):
                         if glasser_rois_data.sum()>0:
                             ds_rois['Glasser ROIs'] = Vertex2D_fix(glasser_rois_data, glasser_rois_data.astype('bool'), subject=pycortex_subj, cmap=pycortex_cmap, vmin=0, vmax=glasser_rois_data.max(), vmin2=0, vmax2=1) 
                                                 
-                        self.js_handle_dict[space][analysis][subj]['rois'] = cortex.webgl.show(ds_rois, pickerfun=clicker_function, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)
+                        self.js_handle_dict[space][analysis][subj]['rois'] = cortex.webgl.show(ds_rois, pickerfun=clicker_function,  overlays_visible=[], labels_visible=[]) 
         
                         plotted_rois[subj] = True
                                                 
@@ -795,10 +819,10 @@ class visualize_results(object):
                             
                             fig = simple_colorbar(vmin=0,#np.nanquantile(p_r['RSq'][model][alpha[analysis][subj][model]>rsq_thresh],0.1), 
                                             vmax=0.15,#np.nanquantile(p_r['RSq'][model][alpha[analysis][subj][model]>rsq_thresh],0.9),
-                                            cmap_name='inferno', ori='vertical', param_name='$R^2$')
+                                            cmap_name='inferno', ori='horizontal', param_name='$R^2$')
                             
-                            if pycortex_image_path is not None:
-                                fig.savefig(f"{pycortex_image_path}/{model}_rsq_cbar.pdf", dpi=600, bbox_inches='tight', transparent=True)
+                            if self.pycortex_image_path is not None:
+                                fig.savefig(f"{self.pycortex_image_path}/{model}_rsq_cbar.pdf", dpi=600, bbox_inches='tight', transparent=True)
                             
                         if 'Noise Ceiling' in p_r:
                             for nc_type in p_r['Noise Ceiling']:
@@ -812,10 +836,10 @@ class visualize_results(object):
                                 
                                 fig = simple_colorbar(vmin=-1.25,#np.nanquantile(p_r['RSq'][model][alpha[analysis][subj][model]>rsq_thresh],0.1), 
                                                 vmax=-0.75,#np.nanquantile(p_r['RSq'][model][alpha[analysis][subj][model]>rsq_thresh],0.9),
-                                                cmap_name=pycortex_cmap, ori='vertical', param_name='Inter-run $R^2$')
+                                                cmap_name=pycortex_cmap, ori='horizontal', param_name='Inter-run $R^2$')
                                 
-                                if pycortex_image_path is not None:
-                                    fig.savefig(f"{pycortex_image_path}/nc_cbar.pdf", dpi=600, bbox_inches='tight', transparent=True)                                
+                                if self.pycortex_image_path is not None:
+                                    fig.savefig(f"{self.pycortex_image_path}/nc_cbar.pdf", dpi=600, bbox_inches='tight', transparent=True)                                
  
                             
                         if '#Subjects with CVRSq>0' in p_r:
@@ -830,10 +854,10 @@ class visualize_results(object):
                                 
                                 fig = simple_colorbar(vmin=0,#np.nanquantile(p_r['RSq'][model][alpha[analysis][subj][model]>rsq_thresh],0.1), 
                                                 vmax=100,#np.nanquantile(p_r['RSq'][model][alpha[analysis][subj][model]>rsq_thresh],0.9),
-                                                cmap_name=pycortex_cmap, ori='vertical', param_name='#Subjects with cv$R^2$>0')
+                                                cmap_name=pycortex_cmap, ori='horizontal', param_name='#Subjects with cv$R^2$>0')
                                 
-                                if pycortex_image_path is not None:
-                                    fig.savefig(f"{pycortex_image_path}/nsubj_cbar.pdf", dpi=600, bbox_inches='tight', transparent=True)     
+                                if self.pycortex_image_path is not None:
+                                    fig.savefig(f"{self.pycortex_image_path}/nsubj_cbar.pdf", dpi=600, bbox_inches='tight', transparent=True)     
                                     
                         if 'CSS' in models and p_r['RSq']['CSS'].sum()>0:
                             ds_rsq['CSS - Gauss'] = Vertex2D_fix(p_r['RSq']['CSS']-p_r['RSq']['Gauss'], alpha[analysis][subj]['all'], subject=pycortex_subj,
@@ -878,28 +902,29 @@ class visualize_results(object):
                                                                       vmin=rsq_thresh, vmax=0.6, vmin2=0.05, vmax2=rsq_thresh, cmap=pycortex_cmap)
                             ds_rsq_comp['Norm_abcd CV rsq (surface fit)'] = Vertex2D_fix(p_r['RSq']['Norm_abcd'], p_r['RSq']['Norm_abcd'], subject=pycortex_subj,
                                                                       vmin=rsq_thresh, vmax=0.6, vmin2=0.05, vmax2=rsq_thresh, cmap=pycortex_cmap)
-                            self.js_handle_dict[space][analysis][subj]['rsq_comp'] = cortex.webgl.show(ds_rsq_comp, pickerfun=clicker_function, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)
+                            self.js_handle_dict[space][analysis][subj]['rsq_comp'] = cortex.webgl.show(ds_rsq_comp, pickerfun=clicker_function,  overlays_visible=[], labels_visible=[]) 
                         
                         
-                        self.js_handle_dict[space][analysis][subj]['rsq'] = cortex.webgl.show(ds_rsq, pickerfun=clicker_function, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True) 
+                        self.js_handle_dict[space][analysis][subj]['rsq'] = cortex.webgl.show(ds_rsq, pickerfun=clicker_function,  overlays_visible=[], labels_visible=[])  
                         
                     if self.plot_ecc_cortex:
                         ds_ecc = dict()
                         
                         for model in self.only_models:
-                            print("Note: eccentricity plot has vmax set at 0.95 quantile")
+                            #print("Note: eccentricity plot has vmax set at 0.95 quantile")
                             ds_ecc[f"{model} Eccentricity"] = Vertex2D_fix(p_r['Eccentricity'][model], alpha[analysis][subj][model], subject=pycortex_subj, 
-                                                            vmin=np.nanquantile(p_r['Eccentricity'][model][alpha[analysis][subj][model]>rsq_thresh],0.1), 
-                                                            vmax=np.nanquantile(p_r['Eccentricity'][model][alpha[analysis][subj][model]>rsq_thresh],0.95), vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap=pycortex_cmap) #np.nanquantile(alpha[analysis][subj][model][alpha[analysis][subj][model]>rsq_thresh],0.9
+                                                            vmin=self.ecc_min,#np.nanquantile(p_r['Eccentricity'][model][alpha[analysis][subj][model]>rsq_thresh],0.1), 
+                                                            vmax=0.8*self.ecc_max,#np.nanquantile(p_r['Eccentricity'][model][alpha[analysis][subj][model]>rsq_thresh],0.9), 
+                                                            vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap=pycortex_cmap) #np.nanquantile(alpha[analysis][subj][model][alpha[analysis][subj][model]>rsq_thresh],0.9
         
-                            fig = simple_colorbar(vmin=np.nanquantile(p_r['Eccentricity'][model][alpha[analysis][subj][model]>rsq_thresh],0.1), 
-                                            vmax=np.nanquantile(p_r['Eccentricity'][model][alpha[analysis][subj][model]>rsq_thresh],0.95),
-                                            cmap_name=pycortex_cmap, ori='vertical', param_name='Eccentricity (°)')
+                            fig = simple_colorbar(vmin=self.ecc_min,#np.nanquantile(p_r['Eccentricity'][model][alpha[analysis][subj][model]>rsq_thresh],0.1), 
+                                            vmax=0.8*self.ecc_max,#np.nanquantile(p_r['Eccentricity'][model][alpha[analysis][subj][model]>rsq_thresh],0.9),
+                                            cmap_name=pycortex_cmap, ori='polar', param_name='Eccentricity (°)')
                             
-                            if pycortex_image_path is not None:
-                                fig.savefig(f"{pycortex_image_path}/{model}_ecc_cbar.pdf", dpi=600, bbox_inches='tight', transparent=True)
+                            if self.pycortex_image_path is not None:
+                                fig.savefig(f"{self.pycortex_image_path}/{model}_ecc_cbar.pdf", dpi=600, bbox_inches='tight', transparent=True)
                         
-                        self.js_handle_dict[space][analysis][subj]['ecc'] = cortex.webgl.show(ds_ecc, pickerfun=clicker_function, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)
+                        self.js_handle_dict[space][analysis][subj]['ecc'] = cortex.webgl.show(ds_ecc, pickerfun=clicker_function,  overlays_visible=[], labels_visible=[]) 
         
                     if self.plot_polar_cortex:
                         ds_polar = dict()
@@ -911,20 +936,20 @@ class visualize_results(object):
                                                               vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap='hsvx2')
                             
                             fig = simple_colorbar(vmin=-3.1415, vmax=3.1415,
-                                            cmap_name='hsvx2', ori='vertical', param_name='Polar Angle (°)')                                     
+                                            cmap_name='hsvx2', ori='polar', param_name='Polar Angle (°)')                                     
                             
-                            if pycortex_image_path is not None:
-                                fig.savefig(f"{pycortex_image_path}/{model}_polar_hsvx2cbar.pdf", dpi=600, bbox_inches='tight', transparent=True)
+                            if self.pycortex_image_path is not None:
+                                fig.savefig(f"{self.pycortex_image_path}/{model}_polar_hsvx2cbar.pdf", dpi=600, bbox_inches='tight', transparent=True)
 
                             ds_polar[f"{model} polar angle HSV1"] = Vertex2D_fix(p_r['Polar Angle'][model], alpha[analysis][subj][model], subject=pycortex_subj, 
                                                                         vmin=-3.1415, vmax=3.1415,
                                                                vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap='hsv')
                             
                             fig = simple_colorbar(vmin=-3.1415, vmax=3.1415,
-                                            cmap_name='hsv', ori='vertical', param_name='Polar Angle (°)')                                     
+                                            cmap_name='hsv', ori='polar', param_name='Polar Angle (°)')                                     
                             
-                            if pycortex_image_path is not None:
-                                fig.savefig(f"{pycortex_image_path}/{model}_polar_hsvcbar.pdf", dpi=600, bbox_inches='tight', transparent=True)                            
+                            if self.pycortex_image_path is not None:
+                                fig.savefig(f"{self.pycortex_image_path}/{model}_polar_hsvcbar.pdf", dpi=600, bbox_inches='tight', transparent=True)                            
                         
                         if 'Processed Results' in self.main_dict['T1w'][analysis][subj] and self.compare_volume_surface:
                             ds_polar_comp = dict()
@@ -940,10 +965,10 @@ class visualize_results(object):
                                                                       vmin2=0.05, vmax2=rsq_thresh, cmap='hsvx2')
                             ds_polar_comp['Norm_abcd CV polar (surface fit)'] = Vertex2D_fix(p_r['Polar Angle']['Norm_abcd'], p_r['RSq']['Norm_abcd'], subject=pycortex_subj,
                                                                       vmin2=0.05, vmax2=rsq_thresh, cmap='hsvx2')
-                            self.js_handle_dict[space][analysis][subj]['polar_comp'] = cortex.webgl.show(ds_polar_comp, pickerfun=clicker_function, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)
+                            self.js_handle_dict[space][analysis][subj]['polar_comp'] = cortex.webgl.show(ds_polar_comp, pickerfun=clicker_function,  overlays_visible=[], labels_visible=[]) 
 
                         
-                        self.js_handle_dict[space][analysis][subj]['polar'] = cortex.webgl.show(ds_polar, pickerfun=clicker_function, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)
+                        self.js_handle_dict[space][analysis][subj]['polar'] = cortex.webgl.show(ds_polar, pickerfun=clicker_function,  overlays_visible=[], labels_visible=[]) 
         
                     if self.plot_size_cortex:
                         ds_size = dict()
@@ -963,12 +988,12 @@ class visualize_results(object):
                             
                             fig = simple_colorbar(vmin=1.1,#np.nanquantile(p_r['Size (sigma_1)'][model][alpha[analysis][subj][model]>rsq_thresh],0.025), 
                                             vmax=4.4,#np.nanquantile(p_r['Size (sigma_1)'][model][alpha[analysis][subj][model]>rsq_thresh],0.9),
-                                            cmap_name=pycortex_cmap, ori='vertical', param_name='$\sigma_1$ (°)')
+                                            cmap_name=pycortex_cmap, ori='horizontal', param_name='$\sigma_1$ (°)')
                             
-                            if pycortex_image_path is not None:
-                                fig.savefig(f"{pycortex_image_path}/{model}_sigma1_cbar.pdf", dpi=600, bbox_inches='tight', transparent=True)                            
+                            if self.pycortex_image_path is not None:
+                                fig.savefig(f"{self.pycortex_image_path}/{model}_sigma1_cbar.pdf", dpi=600, bbox_inches='tight', transparent=True)                            
                             
-                        self.js_handle_dict[space][analysis][subj]['size'] = cortex.webgl.show(ds_size, pickerfun=clicker_function, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)
+                        self.js_handle_dict[space][analysis][subj]['size'] = cortex.webgl.show(ds_size, pickerfun=clicker_function,  overlays_visible=[], labels_visible=[]) 
         
         
                     if self.plot_amp_cortex:
@@ -981,10 +1006,10 @@ class visualize_results(object):
 
                             fig = simple_colorbar(vmin=np.nanquantile(p_r['Amplitude'][model][alpha[analysis][subj][model]>rsq_thresh],0.1), 
                                             vmax=np.nanquantile(p_r['Amplitude'][model][alpha[analysis][subj][model]>rsq_thresh],0.9),
-                                            cmap_name=pycortex_cmap, ori='vertical', param_name='Amplitude')
+                                            cmap_name=pycortex_cmap, ori='horizontal', param_name='Amplitude')
                             
-                            if pycortex_image_path is not None:
-                                fig.savefig(f"{pycortex_image_path}/{model}_amplitude_cbar.pdf", dpi=600, bbox_inches='tight', transparent=True)  
+                            if self.pycortex_image_path is not None:
+                                fig.savefig(f"{self.pycortex_image_path}/{model}_amplitude_cbar.pdf", dpi=600, bbox_inches='tight', transparent=True)  
                             
                             if model == 'DoG' or 'Norm' in model:
                                 ds_amp[f"{model} Surround Amplitude"] = Vertex2D_fix(p_r['Surround Amplitude'][model], alpha[analysis][subj][model], subject=pycortex_subj, 
@@ -993,13 +1018,13 @@ class visualize_results(object):
         
                                 fig = simple_colorbar(vmin=np.nanquantile(p_r['Surround Amplitude'][model][alpha[analysis][subj][model]>rsq_thresh],0.1), 
                                                 vmax=np.nanquantile(p_r['Surround Amplitude'][model][alpha[analysis][subj][model]>rsq_thresh],0.9),
-                                                cmap_name=pycortex_cmap, ori='vertical', param_name='Surround Amplitude')
+                                                cmap_name=pycortex_cmap, ori='horizontal', param_name='Surround Amplitude')
                                 
-                                if pycortex_image_path is not None:
-                                    fig.savefig(f"{pycortex_image_path}/{model}_surround_amplitude_cbar.pdf", dpi=600, bbox_inches='tight', transparent=True)  
+                                if self.pycortex_image_path is not None:
+                                    fig.savefig(f"{self.pycortex_image_path}/{model}_surround_amplitude_cbar.pdf", dpi=600, bbox_inches='tight', transparent=True)  
 
                         
-                        self.js_handle_dict[space][analysis][subj]['amp'] = cortex.webgl.show(ds_amp, pickerfun=clicker_function, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)
+                        self.js_handle_dict[space][analysis][subj]['amp'] = cortex.webgl.show(ds_amp, pickerfun=clicker_function,  overlays_visible=[], labels_visible=[]) 
 
                         
                     if self.plot_css_exp_cortex and 'CSS' in self.only_models:
@@ -1008,7 +1033,7 @@ class visualize_results(object):
                         ds_css_exp['CSS Exponent'] = Vertex2D_fix(p_r['CSS Exponent']['CSS'], alpha[analysis][subj]['CSS'], subject=pycortex_subj, 
                                                                      vmin=0, vmax=1, vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap=pycortex_cmap)
         
-                        self.js_handle_dict[space][analysis][subj]['css_exp'] = cortex.webgl.show(ds_css_exp, pickerfun=clicker_function, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)
+                        self.js_handle_dict[space][analysis][subj]['css_exp'] = cortex.webgl.show(ds_css_exp, pickerfun=clicker_function,  overlays_visible=[], labels_visible=[]) 
                         
                     if self.plot_surround_size_cortex:
                         ds_surround_size = dict()
@@ -1028,13 +1053,13 @@ class visualize_results(object):
 
                                 fig = simple_colorbar(vmin=np.nanquantile(p_r['Size (sigma_2)'][model][alpha[analysis][subj][model]>rsq_thresh],0.1), 
                                                 vmax=np.nanquantile(p_r['Size (sigma_2)'][model][alpha[analysis][subj][model]>rsq_thresh],0.9),
-                                                cmap_name=pycortex_cmap, ori='vertical', param_name='$\sigma_2$ (°)')
+                                                cmap_name=pycortex_cmap, ori='horizontal', param_name='$\sigma_2$ (°)')
                                 
-                                if pycortex_image_path is not None:
-                                    fig.savefig(f"{pycortex_image_path}/{model}_sigma2_cbar.pdf", dpi=600, bbox_inches='tight', transparent=True)   
+                                if self.pycortex_image_path is not None:
+                                    fig.savefig(f"{self.pycortex_image_path}/{model}_sigma2_cbar.pdf", dpi=600, bbox_inches='tight', transparent=True)   
                                 
                                 
-                        self.js_handle_dict[space][analysis][subj]['surround_size'] = cortex.webgl.show(ds_surround_size, pickerfun=clicker_function, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)    
+                        self.js_handle_dict[space][analysis][subj]['surround_size'] = cortex.webgl.show(ds_surround_size, pickerfun=clicker_function,  overlays_visible=[], labels_visible=[])  
 
                     if self.plot_suppression_index_cortex:
                         ds_suppression_index = dict()
@@ -1052,7 +1077,7 @@ class visualize_results(object):
                                 ds_suppression_index[f'{model} NI (aperture)'] = Vertex2D_fix(p_r['Suppression Index'][model], alpha[analysis][subj][model], subject=pycortex_subj, 
                                                                      vmin=0, vmax=1.5, vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap=pycortex_cmap)                      
         
-                        self.js_handle_dict[space][analysis][subj]['suppression_index'] = cortex.webgl.show(ds_suppression_index, pickerfun=clicker_function, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)    
+                        self.js_handle_dict[space][analysis][subj]['suppression_index'] = cortex.webgl.show(ds_suppression_index, pickerfun=clicker_function,  overlays_visible=[], labels_visible=[])    
 
                     if self.plot_size_ratio_cortex:
                         ds_size_ratio = dict()           
@@ -1064,12 +1089,12 @@ class visualize_results(object):
 
                                 fig = simple_colorbar(vmin=np.nanquantile(p_r['Size ratio (sigma_2/sigma_1)'][model][alpha[analysis][subj][model]>rsq_thresh],0.1), 
                                                 vmax=np.nanquantile(p_r['Size ratio (sigma_2/sigma_1)'][model][alpha[analysis][subj][model]>rsq_thresh],0.9),
-                                                cmap_name=pycortex_cmap, ori='vertical', param_name='Size ratio ($\sigma_2/\sigma_1$)')
+                                                cmap_name=pycortex_cmap, ori='horizontal', param_name='Size ratio ($\sigma_2/\sigma_1$)')
                                 
-                                if pycortex_image_path is not None:
-                                    fig.savefig(f"{pycortex_image_path}/{model}_sizeratio_cbar.pdf", dpi=600, bbox_inches='tight', transparent=True)  
+                                if self.pycortex_image_path is not None:
+                                    fig.savefig(f"{self.pycortex_image_path}/{model}_sizeratio_cbar.pdf", dpi=600, bbox_inches='tight', transparent=True)  
 
-                        self.js_handle_dict[space][analysis][subj]['size_ratio'] = cortex.webgl.show(ds_size_ratio, pickerfun=clicker_function, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)    
+                        self.js_handle_dict[space][analysis][subj]['size_ratio'] = cortex.webgl.show(ds_size_ratio, pickerfun=clicker_function,  overlays_visible=[], labels_visible=[])     
                     
                     if self.plot_receptors_cortex:
                         if 'Receptor Maps' in p_r:
@@ -1087,12 +1112,12 @@ class visualize_results(object):
 
                                 fig = simple_colorbar(vmin=np.nanquantile(p_r['Receptor Maps'][receptor][alpha[analysis][subj][rec_mod_alpha]>rsq_thresh],0.1),
                                                 vmax=np.nanquantile(p_r['Receptor Maps'][receptor][alpha[analysis][subj][rec_mod_alpha]>rsq_thresh],0.9), 
-                                                cmap_name=pycortex_cmap, ori='vertical', param_name=f'{receptor} (pmol/ml)')
+                                                cmap_name=pycortex_cmap, ori='horizontal', param_name=f'{receptor} (pmol/ml)')
                                 
-                                if pycortex_image_path is not None:
-                                    fig.savefig(f"{pycortex_image_path}/{receptor}_cbar.pdf", dpi=600, bbox_inches='tight', transparent=True)                                                    
+                                if self.pycortex_image_path is not None:
+                                    fig.savefig(f"{self.pycortex_image_path}/{receptor}_cbar.pdf", dpi=600, bbox_inches='tight', transparent=True)                                                    
             
-                            self.js_handle_dict[space][analysis][subj]['receptors'] = cortex.webgl.show(ds_receptors, pickerfun=clicker_function, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)    
+                            self.js_handle_dict[space][analysis][subj]['receptors'] = cortex.webgl.show(ds_receptors, pickerfun=clicker_function,  overlays_visible=[], labels_visible=[])     
 
                          
                     if self.plot_norm_baselines_cortex:
@@ -1104,30 +1129,30 @@ class visualize_results(object):
                             pycortex_cmap = 'viridis_r'
 
                             ds_norm_baselines[f'{model} Param. B'] = Vertex2D_fix(p_r['Norm Param. B'][model], alpha[analysis][subj][model], subject=pycortex_subj, 
-                                                                         vmin=0,#np.nanquantile(p_r['Norm Param. B'][model][alpha[analysis][subj][model]>rsq_thresh],0.1), 
-                                                                         vmax=100,#np.nanquantile(p_r['Norm Param. B'][model][alpha[analysis][subj][model]>rsq_thresh],0.9), 
+                                                                         vmin=0,#np.nanquantile(p_r['Norm Param. B'][model][alpha[analysis][subj][model]>rsq_thresh],0.01), 
+                                                                         vmax=100,#np.nanquantile(p_r['Norm Param. B'][model][alpha[analysis][subj][model]>rsq_thresh],0.99), 
                                                                          vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap=pycortex_cmap)     
                             
-                            fig = simple_colorbar(vmin=0,#np.nanquantile(p_r['Norm Param. B'][model][alpha[analysis][subj][model]>rsq_thresh],0.1), 
-                                            vmax=100,#np.nanquantile(p_r['Norm Param. B'][model][alpha[analysis][subj][model]>rsq_thresh],0.9),
-                                            cmap_name=pycortex_cmap, ori='vertical', param_name='Norm Param. B')
+                            fig = simple_colorbar(vmin=0,#np.nanquantile(p_r['Norm Param. B'][model][alpha[analysis][subj][model]>rsq_thresh],0.01), 
+                                            vmax=100,#np.nanquantile(p_r['Norm Param. B'][model][alpha[analysis][subj][model]>rsq_thresh],0.99),
+                                            cmap_name=pycortex_cmap, ori='horizontal', param_name='Norm Param. B')
                             
-                            if pycortex_image_path is not None:
-                                fig.savefig(f"{pycortex_image_path}/{model}_paramB_cbar.pdf", dpi=600, bbox_inches='tight', transparent=True)  
+                            if self.pycortex_image_path is not None:
+                                fig.savefig(f"{self.pycortex_image_path}/{model}_paramB_cbar.pdf", dpi=600, bbox_inches='tight', transparent=True)  
                             
                             pycortex_cmap = 'inferno_r'
                                 
                             ds_norm_baselines[f'{model} Param. D'] = Vertex2D_fix(p_r['Norm Param. D'][model], alpha[analysis][subj][model], subject=pycortex_subj, 
-                                                                         vmin=1,#np.nanquantile(p_r['Norm Param. D'][model][alpha[analysis][subj][model]>rsq_thresh],0.1), 
-                                                                         vmax=100,#np.nanquantile(p_r['Norm Param. D'][model][alpha[analysis][subj][model]>rsq_thresh],0.9),
+                                                                         vmin=1,#np.nanquantile(p_r['Norm Param. D'][model][alpha[analysis][subj][model]>rsq_thresh],0.01), 
+                                                                         vmax=100,#np.nanquantile(p_r['Norm Param. D'][model][alpha[analysis][subj][model]>rsq_thresh],0.99),
                                                                          vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap=pycortex_cmap)
                             
-                            fig = simple_colorbar(vmin=1,#np.nanquantile(p_r['Norm Param. D'][model][alpha[analysis][subj][model]>rsq_thresh],0.1), 
-                                            vmax=100,#np.nanquantile(p_r['Norm Param. D'][model][alpha[analysis][subj][model]>rsq_thresh],0.9),
-                                            cmap_name=pycortex_cmap, ori='vertical', param_name='Norm Param. D')
+                            fig = simple_colorbar(vmin=1,#np.nanquantile(p_r['Norm Param. D'][model][alpha[analysis][subj][model]>rsq_thresh],0.01), 
+                                            vmax=100,#np.nanquantile(p_r['Norm Param. D'][model][alpha[analysis][subj][model]>rsq_thresh],0.99),
+                                            cmap_name=pycortex_cmap, ori='horizontal', param_name='Norm Param. D')
                             
-                            if pycortex_image_path is not None:
-                                fig.savefig(f"{pycortex_image_path}/{model}_paramD_cbar.pdf", dpi=600, bbox_inches='tight', transparent=True)                              
+                            if self.pycortex_image_path is not None:
+                                fig.savefig(f"{self.pycortex_image_path}/{model}_paramD_cbar.pdf", dpi=600, bbox_inches='tight', transparent=True)                              
                             
                             if 'Ratio (B/D)' in p_r:
                                 ds_norm_baselines[f'{model} Ratio (B/D)'] = Vertex2D_fix(p_r['Ratio (B/D)'][model], alpha[analysis][subj][model], subject=pycortex_subj, 
@@ -1136,12 +1161,12 @@ class visualize_results(object):
 
                                 fig = simple_colorbar(vmin=np.nanquantile(p_r['Ratio (B/D)'][model][alpha[analysis][subj][model]>rsq_thresh],0.1), 
                                                 vmax=np.nanquantile(p_r['Ratio (B/D)'][model][alpha[analysis][subj][model]>rsq_thresh],0.9),
-                                                cmap_name=pycortex_cmap, ori='vertical', param_name='Ratio (B/D)')
+                                                cmap_name=pycortex_cmap, ori='horizontal', param_name='Ratio (B/D)')
                                 
-                                if pycortex_image_path is not None:
-                                    fig.savefig(f"{pycortex_image_path}/{model}_BDratio_cbar.pdf", dpi=600, bbox_inches='tight', transparent=True)   
+                                if self.pycortex_image_path is not None:
+                                    fig.savefig(f"{self.pycortex_image_path}/{model}_BDratio_cbar.pdf", dpi=600, bbox_inches='tight', transparent=True)   
                             
-                        self.js_handle_dict[space][analysis][subj]['norm_baselines'] = cortex.webgl.show(ds_norm_baselines, pickerfun=clicker_function, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)    
+                        self.js_handle_dict[space][analysis][subj]['norm_baselines'] = cortex.webgl.show(ds_norm_baselines, pickerfun=clicker_function,  overlays_visible=[], labels_visible=[]) 
 
                     if self.plot_correlations_per_roi is not None:
                         ds_correlations = dict()
@@ -1182,7 +1207,7 @@ class visualize_results(object):
                                                                           cmap=pycortex_cmap)                    
 
 
-                        self.js_handle_dict[space][analysis][subj]['correlations_per_roi'] = cortex.webgl.show(ds_correlations, pickerfun=clicker_function, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)    
+                        self.js_handle_dict[space][analysis][subj]['correlations_per_roi'] = cortex.webgl.show(ds_correlations, pickerfun=clicker_function,  overlays_visible=[], labels_visible=[])     
                     
                     if self.plot_means_per_roi is not None:
                         ds_means = dict()
@@ -1210,12 +1235,13 @@ class visualize_results(object):
                                     
 
                                 ds_means[f'Mean {y_param_topl} {y_param_lowl} per roi'] = Vertex2D_fix(mean_per_roi_data, alpha_per_roi, subject=pycortex_subj, 
-                                                                  vmin=np.nanquantile(mean_per_roi_data[all_rois_alpha>rsq_thresh],0.1), vmin2=rsq_thresh, vmax2=rsq_max_opacity,
-                                                                  vmax=np.nanquantile(mean_per_roi_data[all_rois_alpha>rsq_thresh],0.9), #alpha=(np.clip(alpha_per_roi, rsq_thresh, 0.6)-rsq_thresh)/(0.6-rsq_thresh),
+                                                                  vmin=0,#np.nanquantile(mean_per_roi_data[all_rois_alpha>rsq_thresh],0.1), 
+                                                                  vmin2=rsq_thresh, vmax2=rsq_max_opacity,
+                                                                  vmax=100,#np.nanquantile(mean_per_roi_data[all_rois_alpha>rsq_thresh],0.9), #alpha=(np.clip(alpha_per_roi, rsq_thresh, 0.6)-rsq_thresh)/(0.6-rsq_thresh),
                                                                   cmap=pycortex_cmap)                    
 
 
-                        self.js_handle_dict[space][analysis][subj]['means_per_roi'] = cortex.webgl.show(ds_means, pickerfun=clicker_function, with_curvature=False, with_labels=True, with_rois=True, with_borders=True, with_colorbar=True)    
+                        self.js_handle_dict[space][analysis][subj]['means_per_roi'] = cortex.webgl.show(ds_means, pickerfun=clicker_function,  overlays_visible=[], labels_visible=[]) 
                                 
         
         
@@ -1223,54 +1249,39 @@ class visualize_results(object):
         print('-----')                              
         return    
         
-    def save_pycortex_views(self, js_handle, base_str, unfold, views, image_path = '/Crucial X8/marcoaqil/PRFMapping/Figures/'):
+    def save_pycortex_views(self, space, analysis, subj, js_handle, param_to_save, views_dict, image_path = '/Crucial X8/marcoaqil/PRFMapping/Figures/'):
 
-        
-        #surfaces = dict(inflated=dict(unfold=0.501))#,
-                       # fiducial=dict(unfold=0.0))
-                       
-        
-                       
-        surfaces = dict(flatmap=dict(unfold=unfold))
 
-        # pattern of the saved images names
-        file_pattern = "{base}_{view}_{surface}.png"
+        self.js_handle_dict[space][analysis][subj][js_handle].setData([param_to_save])
+        time.sleep(1)
         
-        # utility functions to set the different views
-        prefix = dict(altitude='camera.', azimuth='camera.',
-                      pivot='surface.{subject}.', radius='camera.', target='camera.',
-                      unfold='surface.{subject}.',specularity='surface.{subject}.')
-        _tolists = lambda p: {prefix[k]+k:([v] if not isinstance(v,list) else v) for k,v in p.items()}
-        _combine = lambda a,b: ( lambda c: [c, c.update(b)][0] )(dict(a))
-        
-        
+        base_str = f"{subj}_{param_to_save}".replace('/','')
+ 
         # Save images by iterating over the different views and surfaces
-        for view,vparams in views.items():
-            for surf,sparams in surfaces.items():
-                # Combine basic, view, and surface parameters
-                params = _combine(vparams, sparams)
-                # Set the view
-                #print(params)
-                print(_tolists(params))
-                time.sleep(5)
-                js_handle._set_view(**_tolists(params))
-
-                time.sleep(5)
-                # Save image
-                filename = file_pattern.format(base=base_str, view=view, surface=surf)
-                output_path = os.path.join(image_path, filename)
-                js_handle.getImage(output_path, size =(3200, 2400))
+        for view, view_params in views_dict.items():
+            filename = f"{base_str}_{view}.png"
+            output_path = os.path.join(image_path, filename)
+            #print(view)
+            for param_name, param_value in view_params.items():
+                #print(param_name)
+                #print(param_value)
+                time.sleep(1)
+                self.js_handle_dict[space][analysis][subj][js_handle].ui.set(param_name, param_value)
+                
+                
+            # Save image           
+            self.js_handle_dict[space][analysis][subj][js_handle].getImage(output_path, size =(3200, 2400))
         
-                # the block below trims the edges of the image:
-                # wait for image to be written
-                while not os.path.exists(output_path):
-                    pass
-                time.sleep(0.5)
-                try:
-                    import subprocess
-                    subprocess.call(["convert", "-trim", output_path, output_path])
-                except:
-                    pass
+            # the block below trims the edges of the image:
+            # wait for image to be written
+            while not os.path.exists(output_path):
+                pass
+            time.sleep(1)
+            try:
+                import subprocess
+                subprocess.call(["convert", "-trim", output_path, output_path])
+            except:
+                pass
                 
     def project_to_fsaverage(self, models, parameters, space_names = 'all', analysis_names = 'all', subject_ids='all',
                              hcp_atlas_mask_path = None,
@@ -1317,12 +1328,17 @@ class visualize_results(object):
                             
                                 lh_c = read_morph_data(opj(self.fs_dir, f"{subj}/surf/lh.curv"))
                                 
-                                if parameter not in ['x_pos', 'y_pos']:
+                                if parameter in p_r:
                                     param = np.copy(p_r[parameter][model])
-                                elif parameter == 'x_pos':
-                                    param = p_r['Eccentricity'][model]*np.cos(p_r['Polar Angle'][model])
-                                elif parameter == 'y_pos':
-                                    param = p_r['Eccentricity'][model]*np.sin(p_r['Polar Angle'][model])
+                                else:
+                                    if parameter == 'x_pos':
+                                        param = p_r['Eccentricity'][model]*np.cos(p_r['Polar Angle'][model])
+                                    elif parameter == 'y_pos':
+                                        param = p_r['Eccentricity'][model]*np.sin(p_r['Polar Angle'][model])
+                                    else:
+                                        print(f"WARNING: unidentified parameter {parameter}")
+                                        raise IOError
+                                        
                                               
                                 
                                 lh_file_path = opj(self.fs_dir, f"{subj}/surf/lh.{''.join(filter(str.isalnum, parameter))}_{model}")
@@ -1365,16 +1381,19 @@ class visualize_results(object):
                                 
                                 output = np.zeros(len(cifti_brain_model))
                                 
-                                if parameter not in ['x_pos', 'y_pos']:                              
+                                if parameter in p_r:                              
                                     output[:np.sum(data_1)] = p_r[parameter][model][:len(data_1)][data_1]
                                     output[np.sum(data_1):(np.sum(data_1) + np.sum(data_2))] = p_r[parameter][model][len(data_1):][data_2]
-                                elif parameter == 'x_pos':
-                                    output[:np.sum(data_1)] = p_r['Eccentricity'][model][:len(data_1)][data_1]*np.cos(p_r['Polar Angle'][model][:len(data_1)][data_1])
-                                    output[np.sum(data_1):(np.sum(data_1) + np.sum(data_2))] = p_r['Eccentricity'][model][len(data_1):][data_2]*np.cos(p_r['Polar Angle'][model][len(data_1):][data_2])                          
-                                elif parameter == 'y_pos':
-                                    output[:np.sum(data_1)] = p_r['Eccentricity'][model][:len(data_1)][data_1]*np.sin(p_r['Polar Angle'][model][:len(data_1)][data_1])
-                                    output[np.sum(data_1):(np.sum(data_1) + np.sum(data_2))] = p_r['Eccentricity'][model][len(data_1):][data_2]*np.sin(p_r['Polar Angle'][model][len(data_1):][data_2])   
-                                    
+                                else:
+                                    if parameter == 'x_pos':
+                                        output[:np.sum(data_1)] = p_r['Eccentricity'][model][:len(data_1)][data_1]*np.cos(p_r['Polar Angle'][model][:len(data_1)][data_1])
+                                        output[np.sum(data_1):(np.sum(data_1) + np.sum(data_2))] = p_r['Eccentricity'][model][len(data_1):][data_2]*np.cos(p_r['Polar Angle'][model][len(data_1):][data_2])                          
+                                    elif parameter == 'y_pos':
+                                        output[:np.sum(data_1)] = p_r['Eccentricity'][model][:len(data_1)][data_1]*np.sin(p_r['Polar Angle'][model][:len(data_1)][data_1])
+                                        output[np.sum(data_1):(np.sum(data_1) + np.sum(data_2))] = p_r['Eccentricity'][model][len(data_1):][data_2]*np.sin(p_r['Polar Angle'][model][len(data_1):][data_2])   
+                                    else:
+                                        print(f"WARNING: unidentified parameter {parameter}")              
+                                        raise IOError
                                     
                                 temp_filenames = ['temp_cii.nii', 'temp_cii_subvol.nii.gz', 'temp_gii_L.func.gii',
                                                   'temp_gii_R.func.gii', 'fsaverage_gii_L.func.gii', 'fsaverage_gii_R.func.gii']
@@ -2520,7 +2539,7 @@ class visualize_results(object):
                                                 rsq_alpha_plot_max = np.nanmax(rsq_alpha_plots_all_rois)
                                                 rsq_alpha_plot_min = np.nanmin(rsq_alpha_plots_all_rois)   
                                                                                           
-                                                alpha_plot = (np.nanmean(rsq_regr_weight[analysis][subj][model][roi])-rsq_alpha_plot_min)/(rsq_alpha_plot_max-rsq_alpha_plot_min)
+                                                alpha_plot = np.nanmean(rsq_regr_weight[analysis][subj][model][roi])/rsq_alpha_plot_max#(1-rsq_alpha_plot_min)*(np.nanmean(rsq_regr_weight[analysis][subj][model][roi])-rsq_alpha_plot_min)/(rsq_alpha_plot_max-rsq_alpha_plot_min) + rsq_alpha_plot_min
                                                 
                                             else:
                                                 alpha_plot = 1
@@ -2564,7 +2583,27 @@ class visualize_results(object):
                                     #CC_fulldata_w = weightstats.DescrStatsW(np.stack((np.concatenate(all_rois_x),np.concatenate(all_rois_y))).T, weights=np.concatenate(all_rois_rsq)).corrcoef[0,1]
                                     CC_roimeans_w = weightstats.DescrStatsW(np.stack((np.concatenate(all_rois_x_means),np.concatenate(all_rois_y_means))).T, weights=np.array(all_rois_rsq_means)).corrcoef[0,1]
                                     
-                                    pl.title(f"wCC on ROI means={CC_roimeans_w:.2f}")
+                                    CC_boot = []
+                                    for perm in range(10000):
+                                        perm_x = np.copy(np.concatenate(all_rois_x_means))
+                                        perm_y = np.copy(np.concatenate(all_rois_y_means))
+                                        perm_w = np.copy(np.array(all_rois_rsq_means))                                        
+                                        np.random.shuffle(perm_x)
+                                        np.random.shuffle(perm_y)
+                                        np.random.shuffle(perm_w)
+                                        CC_boot.append(weightstats.DescrStatsW(np.stack((perm_x,perm_y)).T, weights=perm_w).corrcoef[0,1])
+                                    
+                                    pval_wcc_roimeans = np.sum(np.abs(CC_roimeans_w)<np.abs(np.array(CC_boot)))/len(CC_boot)
+                                    if pval_wcc_roimeans<1e-2:
+                                        pval_string = '*'
+                                        if pval_wcc_roimeans<1e-4:
+                                            pval_string = '**'
+                                            if pval_wcc_roimeans<1e-6:
+                                                pval_string = '***'                                                                                        
+                                    else:
+                                        pval_string = 'n.s.'
+                                    
+                                    pl.title(f"wCC on ROI means={CC_roimeans_w:.2f}, {pval_string}")
                                 
                                 if 'Eccentricity' in x_parameter or 'Size' in x_parameter:
                                     pl.xlabel(f"{x_parameter} (°)")
@@ -2684,6 +2723,7 @@ class visualize_results(object):
                     subjects.append(('Group', {}))
                 
                 upsampling_corr_factors = []
+
                 for subj, subj_res in subjects:
                     print(space+" "+analysis+" "+subj)
 
@@ -2896,7 +2936,7 @@ class visualize_results(object):
                             
                     
                         ordered_dimensions = sorted(dimensions[analysis][subj][roi])
-                        print(f"Ordered dimensions: {ordered_dimensions}")
+                        #print(f"Ordered dimensions: {ordered_dimensions}")
                 
                 #correlation matrices
                 for subj, subj_res in subjects:  
@@ -2948,7 +2988,8 @@ class visualize_results(object):
                                     tick_y.set_color(tick_color)
 
                 #PLS/OLS regressions, PCA, orthoplots
-                pls_result_dict = dd(lambda:dd(list))
+                self.pls_result_dict = dd(lambda:dd(list))
+                self.ols_result_dict = dd(lambda:dd(lambda:dd(list)))
                 
                 for subj, subj_res in subjects: 
                     if polar_plots:
@@ -2960,9 +3001,9 @@ class visualize_results(object):
                             print(f"{analysis} {subj} {roi}")
                             if x_dims_idx is None or y_dims_idx is None:    
                                 if parameter_toplevel is not None:
-                                    print("X and Y dims not specified. Using receptors as Y, everything else as X.")
-                                    x_dims = [dim for dim, _ in enumerate(ordered_dimensions) if dim not in rec_dims]
-                                    y_dims = rec_dims
+                                    print("X and Y dims not specified. Using receptors as X, everything else as Y.")
+                                    x_dims = rec_dims
+                                    y_dims = [dim for dim, _ in enumerate(ordered_dimensions) if dim not in rec_dims]
                                 else:
                                     print("X and Y dims not specified. Using norm model parameters as X, everything else as Y.")
                                     x_dims = list(set([dim for dim, dim_name in enumerate(ordered_dimensions) if 'Norm_abcd' in dim_name]))
@@ -3206,25 +3247,31 @@ class visualize_results(object):
                                                     rsq_alpha_plot_max = np.nanmax(rsq_alpha_plots_all_rois)
                                                     rsq_alpha_plot_min = np.nanmin(rsq_alpha_plots_all_rois)   
                                                                                               
-                                                    alpha_plot = (ds_pca_roi_mean[rr]["Mean rsq"]-rsq_alpha_plot_min)/(rsq_alpha_plot_max-rsq_alpha_plot_min)
+                                                    alpha_plot = ds_pca_roi_mean[rr]["Mean rsq"]/rsq_alpha_plot_max#(ds_pca_roi_mean[rr]["Mean rsq"]-rsq_alpha_plot_min)/(rsq_alpha_plot_max-rsq_alpha_plot_min)
                                                     
                                                 else:
                                                     alpha_plot = 1
     
                                                 alpha_plot = np.clip(alpha_plot,0,1)
                                                 if np.isnan(alpha_plot) or not np.isfinite(alpha_plot):
-                                                    alpha_plot = 0                                            
+                                                    alpha_plot = 0     
+                                                    
                                                 
+                                                ax.set_xlim(-5.25,3.25)
+                                                ax.set_ylim(-2.75,2.25)
+                                                ax.set_zlim(-2.25,3.25)
                                                 if len(vis_pca_comps_axes)>2:
+                                                    
                                                     ax.errorbar(ds_pca_roi_mean[rr][f"Component {vis_pca_comps_axes[0]}"], ds_pca_roi_mean[rr][f"Component {vis_pca_comps_axes[1]}"], ds_pca_roi_mean[rr][f"Component {vis_pca_comps_axes[2]}"],
-                                                                xerr=ds_pca_roi_mean[rr][f"Component {vis_pca_comps_axes[0]} stdev"]*upsampling_corr_factor**0.5, 
-                                                                yerr=ds_pca_roi_mean[rr][f"Component {vis_pca_comps_axes[1]} stdev"]*upsampling_corr_factor**0.5, 
-                                                                zerr=ds_pca_roi_mean[rr][f"Component {vis_pca_comps_axes[2]} stdev"]*upsampling_corr_factor**0.5,
+                                                                xerr=0,#ds_pca_roi_mean[rr][f"Component {vis_pca_comps_axes[0]} stdev"]*upsampling_corr_factor**0.5, 
+                                                                yerr=0,#ds_pca_roi_mean[rr][f"Component {vis_pca_comps_axes[1]} stdev"]*upsampling_corr_factor**0.5, 
+                                                                zerr=0,#ds_pca_roi_mean[rr][f"Component {vis_pca_comps_axes[2]} stdev"]*upsampling_corr_factor**0.5,
                                                                 color=cmap_rois[rr_num], fmt='s', mec='black', alpha=alpha_plot)
                                                     
                                                     ax.text(ds_pca_roi_mean[rr][f"Component {vis_pca_comps_axes[0]}"], ds_pca_roi_mean[rr][f"Component {vis_pca_comps_axes[1]}"], ds_pca_roi_mean[rr][f"Component {vis_pca_comps_axes[2]}"], 
                                                             rr.replace('custom.','').replace('HCPQ1Q6.','') .replace('glasser_','') , 
                                                             fontsize=16, color=cmap_rois[rr_num],  ha='left', va='bottom',alpha=alpha_plot)
+                                                    
                                                 else:
                                                     ax.errorbar(ds_pca_roi_mean[rr][f"Component {vis_pca_comps_axes[0]}"], ds_pca_roi_mean[rr][f"Component {vis_pca_comps_axes[1]}"], 
                                                                 xerr=ds_pca_roi_mean[rr][f"Component {vis_pca_comps_axes[0]} stdev"]*upsampling_corr_factor**0.5, 
@@ -3234,6 +3281,9 @@ class visualize_results(object):
                                                     ax.text(ds_pca_roi_mean[rr][f"Component {vis_pca_comps_axes[0]}"], ds_pca_roi_mean[rr][f"Component {vis_pca_comps_axes[1]}"], 
                                                             rr.replace('custom.','').replace('HCPQ1Q6.','') .replace('glasser_','') , 
                                                             fontsize=16, color=cmap_rois[rr_num],  ha='left', va='bottom',alpha=alpha_plot)
+
+                                                
+
                                             
                                         if save_figures:
                                             pl.savefig(opj(figure_path,f"PCA_mean_roi_dims-{''.join(str(e) for e in vis_pca_comps_axes)}_{roi.replace('custom.','').replace('HCPQ1Q6.','').replace('glasser_','')}.pdf"),dpi=600, bbox_inches='tight')
@@ -3250,140 +3300,113 @@ class visualize_results(object):
                                         
                                         y = multidim_param_array[analysis][subj][roi][y_dim].T
                                         
-                                        ols_x0_dim = [ordered_dimensions[x_dim] for x_dim in x_dims][0]
-                                        ols_x1_dim = [ordered_dimensions[x_dim] for x_dim in x_dims][1]
+                                        if len(x_dims) == 2:
+                                            ols_x0_dim = [ordered_dimensions[x_dim] for x_dim in x_dims][vis_pca_comps_axes[0]]
+                                            ols_x1_dim = [ordered_dimensions[x_dim] for x_dim in x_dims][vis_pca_comps_axes[1]]
                                         ols_y_dim = ordered_dimensions[y_dim]
+                                        
                                         
                                         ls1 = LinearRegression()
                                         if rsq_weights:
-                                            #print(ordered_dimensions.index('RSq Norm_abcd'))
-                                            #print(multidim_param_array[analysis][subj][roi][ordered_dimensions.index('RSq Norm_abcd')])
                                             ls1.fit(X,y,sample_weight = multidim_param_array[analysis][subj][roi][ordered_dimensions.index('RSq Norm_abcd')])
                                             rsq_prediction = ls1.score(X,y,sample_weight = multidim_param_array[analysis][subj][roi][ordered_dimensions.index('RSq Norm_abcd')])
                                         else: 
                                             ls1.fit(X,y)
                                             rsq_prediction = ls1.score(X,y)
                                             
-                                        print(f"Estimated OLS betas {ordered_dimensions[y_dim]} {ls1.coef_}")
-                                        print(f"wRSq {rsq_prediction}")
+                                        print(f"Estimated OLS betas (full data) {ordered_dimensions[y_dim]} {ls1.coef_}")
+                                        print(f"wRSq (full data) {rsq_prediction}")
                                         corr_prediction = weightstats.DescrStatsW(np.stack((ls1.predict(X), y)).T, weights=multidim_param_array[analysis][subj][roi][ordered_dimensions.index('RSq Norm_abcd')]).corrcoef[0,1]
-                                        print(f"wCC prediction {corr_prediction}")
+                                        print(f"wCC prediction (full data) {corr_prediction}")
                                         
                                         if roi in vis_pca_comps_rois:
-                                            fig = pl.figure(f"3D OLS prediction {roi.replace('custom.','').replace('HCPQ1Q6.','').replace('glasser_','')}", figsize=(8,8))
-                                            
-                                            ax = fig.add_subplot(111, projection='3d', azim=-45, elev=50)
-                                            #ax.grid(False)
-
-                                            ax.set_xlabel(f"{ols_x0_dim.replace('Norm_abcd','')}",labelpad=20)
-                                            ax.set_ylabel(f"{ols_x1_dim.replace('Norm_abcd','')}",labelpad=20)
-                                            ax.set_zlabel(f"{ols_y_dim.replace('Norm_abcd','')}",labelpad=20) 
-                                            ax.xaxis.set_tick_params(pad=10)
-                                            ax.zaxis.set_tick_params(pad=10)
-                                            ax.yaxis.set_tick_params(pad=10)
-                                            #ax.set_title(f"R2 (full data) {rsq_prediction:.2f}")
-                                            #ax.set_zlim(15,40)
 
                                             ds_ols_roi_mean = dd(lambda:dict())                          
                                                                                             
                                             for rr in [rr for rr in rois if rr != 'Brain' and rr != 'combined' and np.sum(alpha[analysis][subj][rr]>rsq_thresh)>10]:
                                                 
                                                 weights = alpha[analysis][subj][rr][alpha[analysis][subj][rr]>rsq_thresh]
-                                                    
-                                                rr_x0 = multidim_param_array[analysis][subj][rr][x_dims[0]][weights>rsq_thresh]
-                                                rr_x1 = multidim_param_array[analysis][subj][rr][x_dims[1]][weights>rsq_thresh]
+                                                rr_y = multidim_param_array[analysis][subj][rr][y_dim][weights>rsq_thresh]
                                                 
-                                                rr_y = multidim_param_array[analysis][subj][rr][y_dim][weights>rsq_thresh]                                                                                                
                                                 
-                                                if not rsq_weights or 'Norm_abcd' not in ols_x0_dim:
-                                                    weights_x0 = np.ones_like(weights)
-                                                else:
-                                                    weights_x0 = weights
+                                                for x_dim in x_dims:
+                                                    rr_x = multidim_param_array[analysis][subj][rr][x_dim][weights>rsq_thresh]
                                                     
-                                                if not rsq_weights or 'Norm_abcd' not in ols_x1_dim:
-                                                    weights_x1 = np.ones_like(weights)
-                                                else:
-                                                    weights_x1 = weights
+                                                    if not rsq_weights or 'Norm_abcd' not in ordered_dimensions[x_dim]:
+                                                        weights_x = np.ones_like(weights)
+                                                    else:
+                                                        weights_x = weights
+                                                    
+                                                    rr_wstats_x = weightstats.DescrStatsW(rr_x,
+                                                                                    weights=weights_x)
+                                                    
+                                                    ds_ols_roi_mean[rr][f"{ordered_dimensions[x_dim]} mean"] = rr_wstats_x.mean
+                                                    ds_ols_roi_mean[rr][f"{ordered_dimensions[x_dim]} stdev"] = rr_wstats_x.std_mean                                                    
+                                                    
                                                     
                                                 if not rsq_weights or 'Norm_abcd' not in ols_y_dim:
                                                     weights_y = np.ones_like(weights)
                                                 else:
                                                     weights_y = weights                                                    
 
-                                                rr_wstats_x0 = weightstats.DescrStatsW(rr_x0,
-                                                                                    weights=weights_x0)
-                                                rr_wstats_x1 = weightstats.DescrStatsW(rr_x1,
-                                                                                    weights=weights_x1)
+
                                                 rr_wstats_y = weightstats.DescrStatsW(rr_y,
                                                                                     weights=weights_y)
                                                                                                                                                 
-                                                ds_ols_roi_mean[rr][f"{ols_x0_dim} mean"] = rr_wstats_x0.mean
-                                                ds_ols_roi_mean[rr][f"{ols_x0_dim} stdev"] = rr_wstats_x0.std_mean
-                                                ds_ols_roi_mean[rr][f"{ols_x1_dim} mean"] = rr_wstats_x1.mean
-                                                ds_ols_roi_mean[rr][f"{ols_x1_dim} stdev"] = rr_wstats_x1.std_mean
+
                                                 ds_ols_roi_mean[rr][f"{ols_y_dim} mean"] = rr_wstats_y.mean
                                                 ds_ols_roi_mean[rr][f"{ols_y_dim} stdev"] = rr_wstats_y.std_mean
                                                 
-                                                ds_ols_roi_mean[rr]["Mean rsq"] = weights.mean()
+                                                ds_ols_roi_mean[rr]["Mean rsq"] = weights_y.mean()
 
     
                                             rsq_alpha_plots_all_rois = np.array([ds_ols_roi_mean[rr]["Mean rsq"] for rr in ds_ols_roi_mean])
                                             
-                                            rois_ols_x0_means = np.array([ds_ols_roi_mean[rr][f"{ols_x0_dim} mean"] for rr in ds_ols_roi_mean])
-                                            rois_ols_x1_means = np.array([ds_ols_roi_mean[rr][f"{ols_x1_dim} mean"] for rr in ds_ols_roi_mean])
+                                            rois_ols_x_means = np.array([[ds_ols_roi_mean[rr][f"{ordered_dimensions[x_dim]} mean"] for x_dim in x_dims] for rr in ds_ols_roi_mean])
+
                                             rois_ols_y_means = np.array([ds_ols_roi_mean[rr][f"{ols_y_dim} mean"] for rr in ds_ols_roi_mean])                                                                                      
                                             
-                                            rsq_on_roi_means = ls1.score(np.stack((rois_ols_x0_means,rois_ols_x1_means)).T, rois_ols_y_means, sample_weight = rsq_alpha_plots_all_rois)
+                                            rsq_on_roi_means = ls1.score(rois_ols_x_means, rois_ols_y_means, sample_weight = rsq_alpha_plots_all_rois)
                                             
 
-                                            Zs_pred = ls1.predict(np.stack((rois_ols_x0_means,rois_ols_x1_means)).T)
+                                            Zs_pred = ls1.predict(rois_ols_x_means)
+                                                                                        
                                             
-                                            # Zs_full_pred = ls1.predict(X)
-                                            
-                                            # rsq_on_roi_means_manual =  1 - (rsq_alpha_plots_all_rois*(Zs_pred - rois_ols_y_means)**2).sum() /\
-                                            #                        (rsq_alpha_plots_all_rois*(rois_ols_y_means - np.average(rois_ols_y_means, weights=rsq_alpha_plots_all_rois))**2).sum() 
-                                         
-                                            
-                                            # rsq_on_roi_means_unweighted = ls1.score(np.stack((rois_ols_x0_means,rois_ols_x1_means)).T, rois_ols_y_means)
-
-                                            # rsq_on_roi_means_manual_unweighted =  1 - ((Zs_pred - rois_ols_y_means)**2).sum() /\
-                                            #                        ((rois_ols_y_means - np.mean(rois_ols_y_means))**2).sum() 
-
-
-                                            # rsq_full_data_manual =  1 - (multidim_param_array[analysis][subj][roi][ordered_dimensions.index('RSq Norm_abcd')]*(Zs_full_pred - y)**2).sum() /\
-                                            #                        (multidim_param_array[analysis][subj][roi][ordered_dimensions.index('RSq Norm_abcd')]*(y - np.average(y, weights=multidim_param_array[analysis][subj][roi][ordered_dimensions.index('RSq Norm_abcd')]))**2).sum() 
-                                         
-                                            
-                                            # rsq_prediction_unweighted = ls1.score(X,y)
-                                            
-                                            # rsq_full_data_manual_unweighted =  1 - ((Zs_full_pred - y)**2).sum() /\
-                                            #                        ((y - np.mean(y))**2).sum() 
-                                            
-                                            
-                                            print(f"wR2 (fit on full data, eval on roi means), by sklearn: {rsq_on_roi_means:.3f}")
-                                            #print(f"R2 (on roi means) manual: {rsq_on_roi_means_manual:.6f}")
-                                            #print(f"R2 (on roi means), by sklearn, unweighted: {rsq_on_roi_means_unweighted:.6f}")
-                                            #print(f"R2 (on roi means) manual, unweighted: {rsq_on_roi_means_manual_unweighted:.6f}")    
-                                            
+                                            print(f"wR2 (fit on full data, eval on roi means): {rsq_on_roi_means:.3f}")                                       
 
                                             corr_prediction_roi_means = weightstats.DescrStatsW(np.stack((Zs_pred,rois_ols_y_means)).T, weights=np.array(rsq_alpha_plots_all_rois)).corrcoef[0,1]
                                             print(f"wCC prediction (fit on full data, eval on roi means) {corr_prediction_roi_means:.4f}\n") 
                                             
                                             ls2 = LinearRegression()
-                                            ls2.fit(np.stack((rois_ols_x0_means,rois_ols_x1_means)).T, rois_ols_y_means, sample_weight = rsq_alpha_plots_all_rois)
-                                            print(f"wR2 (fit on roi means, eval on roi means), by sklearn: {ls2.score(np.stack((rois_ols_x0_means,rois_ols_x1_means)).T, rois_ols_y_means, sample_weight = rsq_alpha_plots_all_rois):.4f}")
-                                            corr_prediction_fit_roi_means = weightstats.DescrStatsW(np.stack((ls2.predict(np.stack((rois_ols_x0_means,rois_ols_x1_means)).T),rois_ols_y_means)).T , weights=np.array(rsq_alpha_plots_all_rois)).corrcoef[0,1]
+                                            ls2.fit(rois_ols_x_means, rois_ols_y_means, sample_weight = rsq_alpha_plots_all_rois)
+                                            Zs_pred_fit_roi_means = ls2.predict(rois_ols_x_means)
+                                            
+                                            print(f"wR2 (fit on roi means, eval on roi means): {ls2.score(rois_ols_x_means, rois_ols_y_means, sample_weight = rsq_alpha_plots_all_rois):.4f}")
+                                            
+                                            corr_prediction_fit_roi_means = weightstats.DescrStatsW(np.stack((Zs_pred_fit_roi_means,rois_ols_y_means)).T , weights=np.array(rsq_alpha_plots_all_rois)).corrcoef[0,1]
                                             print(f"wCC prediction (fit on roi means, eval on roi means) {corr_prediction_fit_roi_means:.4f}")    
                                             print(f"Estimated OLS betas (fit on roi means) {ordered_dimensions[y_dim]} {ls2.coef_}\n")
                                             
                                                                                         
                                             
-                                            print(f"wR2 (fit on full data, eval on full data), by sklearn: {rsq_prediction:.4f}")
+                                            print(f"wR2 (fit on full data, eval on full data): {rsq_prediction:.4f}")
                                             print(f"wCC prediction (fit on full data, eval on full data) {corr_prediction:.4f}")
                                             print(f"Estimated OLS betas (fit on full data) {ordered_dimensions[y_dim]} {ls1.coef_}")
-                                            #print(f"R2 (full data) manual: {rsq_full_data_manual:.6f}")
-                                            #print(f"R2 (full data), by sklearn, unweighted: {rsq_prediction_unweighted:.6f}")
-                                            #print(f"R2 (full data) manual, unweighted: {rsq_full_data_manual_unweighted:.6f}")
+                                            
+                                            if len(x_dims) == 2:
+                                                fig = pl.figure(f"3D OLS prediction {roi.replace('custom.','').replace('HCPQ1Q6.','').replace('glasser_','')}", figsize=(8,8))
+                                                
+                                                ax = fig.add_subplot(111, projection='3d', azim=-45, elev=50)
+                                                #ax.grid(False)
+    
+                                                ax.set_xlabel(f"{ols_x0_dim.replace('Norm_abcd','')}",labelpad=20)
+                                                ax.set_ylabel(f"{ols_x1_dim.replace('Norm_abcd','')}",labelpad=20)
+                                                ax.set_zlabel(f"{ols_y_dim.replace('Norm_abcd','')}",labelpad=20) 
+                                                ax.xaxis.set_tick_params(pad=10)
+                                                ax.zaxis.set_tick_params(pad=10)
+                                                ax.yaxis.set_tick_params(pad=10)
+                                                #ax.set_title(f"R2 (full data) {rsq_prediction:.2f}")
+                                                #ax.set_zlim(15,40)
                                             
 
                                             for rr_num,rr in enumerate([rr for rr in rois if rr != 'Brain' and rr != 'combined']):
@@ -3394,7 +3417,7 @@ class visualize_results(object):
                                                         rsq_alpha_plot_max = np.nanmax(rsq_alpha_plots_all_rois)
                                                         rsq_alpha_plot_min = np.nanmin(rsq_alpha_plots_all_rois)   
                                                                                                   
-                                                        alpha_plot = (ds_ols_roi_mean[rr]["Mean rsq"]-rsq_alpha_plot_min)/(rsq_alpha_plot_max-rsq_alpha_plot_min)
+                                                        alpha_plot = ds_ols_roi_mean[rr]["Mean rsq"]/rsq_alpha_plot_max#(ds_ols_roi_mean[rr]["Mean rsq"]-rsq_alpha_plot_min)/(rsq_alpha_plot_max-rsq_alpha_plot_min)
                                                         
                                                     else:
                                                         alpha_plot = 1
@@ -3403,82 +3426,165 @@ class visualize_results(object):
                                                     if np.isnan(alpha_plot) or not np.isfinite(alpha_plot):
                                                         alpha_plot = 0                                            
                                                     
-                                                    
-                                                    ax.errorbar(ds_ols_roi_mean[rr][f"{ols_x0_dim} mean"], ds_ols_roi_mean[rr][f"{ols_x1_dim} mean"], ds_ols_roi_mean[rr][f"{ols_y_dim} mean"],
-                                                                xerr=ds_ols_roi_mean[rr][f"{ols_x0_dim} stdev"]*upsampling_corr_factor**0.5, 
-                                                                yerr=ds_ols_roi_mean[rr][f"{ols_x1_dim} stdev"]*upsampling_corr_factor**0.5, 
-                                                                zerr=ds_ols_roi_mean[rr][f"{ols_y_dim} stdev"]*upsampling_corr_factor**0.5,
-                                                                color=cmap_rois[rr_num], fmt='s', mec='black', alpha=alpha_plot)
-                                                    
-                                                    ax.text(ds_ols_roi_mean[rr][f"{ols_x0_dim} mean"], ds_ols_roi_mean[rr][f"{ols_x1_dim} mean"], ds_ols_roi_mean[rr][f"{ols_y_dim} mean"],
-                                                            rr.replace('custom.','').replace('HCPQ1Q6.','') .replace('glasser_','') , 
-                                                            fontsize=16, color=cmap_rois[rr_num],  ha='left', va='bottom',alpha=alpha_plot)
-                                          
-                                            x0_min = np.min([ds_ols_roi_mean[rr][f"{ols_x0_dim} mean"] for rr in ds_ols_roi_mean])
-                                            x0_max = np.max([ds_ols_roi_mean[rr][f"{ols_x0_dim} mean"] for rr in ds_ols_roi_mean])
-                                            x1_min = np.min([ds_ols_roi_mean[rr][f"{ols_x1_dim} mean"] for rr in ds_ols_roi_mean])
-                                            x1_max = np.max([ds_ols_roi_mean[rr][f"{ols_x1_dim} mean"] for rr in ds_ols_roi_mean])
+                                                    if len(x_dims) == 2:
+                                                        ax.errorbar(ds_ols_roi_mean[rr][f"{ols_x0_dim} mean"], ds_ols_roi_mean[rr][f"{ols_x1_dim} mean"], ds_ols_roi_mean[rr][f"{ols_y_dim} mean"],
+                                                                    xerr=ds_ols_roi_mean[rr][f"{ols_x0_dim} stdev"]*upsampling_corr_factor**0.5, 
+                                                                    yerr=ds_ols_roi_mean[rr][f"{ols_x1_dim} stdev"]*upsampling_corr_factor**0.5, 
+                                                                    zerr=ds_ols_roi_mean[rr][f"{ols_y_dim} stdev"]*upsampling_corr_factor**0.5,
+                                                                    color=cmap_rois[rr_num], fmt='s', mec='black', alpha=alpha_plot)
+                                                        
+                                                        ax.text(ds_ols_roi_mean[rr][f"{ols_x0_dim} mean"], ds_ols_roi_mean[rr][f"{ols_x1_dim} mean"], ds_ols_roi_mean[rr][f"{ols_y_dim} mean"],
+                                                                rr.replace('custom.','').replace('HCPQ1Q6.','') .replace('glasser_','') , 
+                                                                fontsize=16, color=cmap_rois[rr_num],  ha='left', va='bottom',alpha=alpha_plot)
                                             
-                                            grid_points_x0 = np.linspace(x0_min,x0_max,50)
-                                            grid_points_x1 = np.linspace(x1_min,x1_max,50)
-
-                                            
-                                            if 'Norm Param. D' in ols_y_dim:
-                                                ax.set_zlim(6,39)
-                                            if '5-HT1B' in ols_x0_dim:
-                                                ax.set_xlim(12,31)
-                                                grid_points_x0 = np.linspace(12,31,50)
+                                            if len(x_dims) == 2:
+                                                x0_min = np.min([ds_ols_roi_mean[rr][f"{ols_x0_dim} mean"] for rr in ds_ols_roi_mean])
+                                                x0_max = np.max([ds_ols_roi_mean[rr][f"{ols_x0_dim} mean"] for rr in ds_ols_roi_mean])
+                                                x1_min = np.min([ds_ols_roi_mean[rr][f"{ols_x1_dim} mean"] for rr in ds_ols_roi_mean])
+                                                x1_max = np.max([ds_ols_roi_mean[rr][f"{ols_x1_dim} mean"] for rr in ds_ols_roi_mean])
                                                 
-                                            if '5-HT2A' in ols_x1_dim:
-                                                ax.set_ylim(40,68)
-                                                grid_points_x1 = np.linspace(40,68,50)
-
-                                            if 'Norm Param. B' in ols_y_dim:
-                                                ax.set_zlim(-2,92)
-                                            if '5-HT1A' in ols_x0_dim:
-                                                ax.set_xlim(11,50)
-                                                grid_points_x0 = np.linspace(11,50,50)
-                                            if 'GABA_A' in ols_x1_dim:
-                                                ax.set_ylim(760,1080)  
-                                                grid_points_x1 = np.linspace(760,1080,50)
-                                            
-                                            
-                                            xx0, xx1 = np.meshgrid(grid_points_x0,
-                                                                   grid_points_x1)
-                                            
-                                            xx0xx1 = np.array([xx0.flatten(), xx1.flatten()]).T
-                                            
-                                            Z_pred = ls1.predict(xx0xx1)                                            
-                                            
-                                            
-                                            #ax.set_title(f"$R^2$={rsq_on_roi_means:.2f}")
-                                            ax.scatter(xx0.flatten(), xx1.flatten(), Z_pred,  s=4,  alpha=0.2, zorder=0, c=Z_pred, cmap='plasma')#, label=f"R2 (full data) {rsq_prediction:.2f}")
-                                            #pl.legend()
-                                        
-                                        
-                                        if cv_regression:
-                                            for cv_subj in [s for s,_ in subjects if s!='fsaverage' and s!='Group' and s!=subj]:
-                                                print(f"CV regression (fit on {subj}, test on {cv_subj})")
-                                                X_cv = multidim_param_array[analysis][cv_subj][roi][x_dims].T
-                                                y_cv = multidim_param_array[analysis][cv_subj][roi][y_dim].T
+                                                grid_points_x0 = np.linspace(x0_min,x0_max,50)
+                                                grid_points_x1 = np.linspace(x1_min,x1_max,50)
+    
                                                 
-                                                if rsq_weights:
-                                                    rsq_prediction = ls1.score(X_cv,y_cv, sample_weight = multidim_param_array[analysis][cv_subj][roi][ordered_dimensions.index('RSq Norm_abcd')])
-                                                else:
-                                                    rsq_prediction = ls1.score(X_cv,y_cv)
+                                                if 'Norm Param. D' in ols_y_dim:
+                                                    ax.set_zlim(25,75)
+                                                if '5-HT1B' in ols_x0_dim:
+                                                    ax.set_xlim(13,32)
+                                                    grid_points_x0 = np.linspace(13,32,50)
                                                     
-                                                print(f"CV RSq {rsq_prediction}")
-                                                corr_prediction = np.corrcoef(ls1.predict(X_cv), y_cv)[0,1]
-                                                print(f"CV corr prediction {corr_prediction}")      
+                                                if '5-HT2A' in ols_x1_dim:
+                                                    ax.set_ylim(39,66)
+                                                    grid_points_x1 = np.linspace(39,66,50)
+    
+                                                if 'Norm Param. B' in ols_y_dim:
+                                                    ax.set_zlim(10,150)
+                                                if '5-HT1A' in ols_x0_dim:
+                                                    ax.set_xlim(7,43)
+                                                    grid_points_x0 = np.linspace(7,43,50)
+                                                if 'GABA_A' in ols_x1_dim:
+                                                    ax.set_ylim(720,1080)  
+                                                    grid_points_x1 = np.linspace(720,1080,50)
+                                                
+                                                
+                                                xx0, xx1 = np.meshgrid(grid_points_x0,
+                                                                       grid_points_x1)
+                                                
+                                                xx0xx1 = np.array([xx0.flatten(), xx1.flatten()]).T
+                                                
+                                                Z_pred = ls2.predict(xx0xx1)                                            
+                                                
+                                                
+                                                #ax.set_title(f"$R^2$={rsq_on_roi_means:.2f}")
+                                                ax.scatter(xx0.flatten(), xx1.flatten(), Z_pred,  s=4,  alpha=0.2, zorder=0, c=Z_pred, cmap='plasma')#, label=f"R2 (full data) {rsq_prediction:.2f}")
+                                                #pl.legend()
                                         
-                                        pl.figure(f"OLS {ols_y_dim.replace('Norm_abcd','')} betas {roi.replace('custom.','').replace('HCPQ1Q6.','').replace('glasser_','')}",figsize=(9,9))
-                                        pl.bar(np.arange(len(ls1.coef_)), ls1.coef_, label=f"RSq {rsq_prediction:.3f}")
-                                        pl.xticks(np.arange(len(ls1.coef_)),[ordered_dimensions[x_dim].replace('Norm_abcd','') for x_dim in x_dims],rotation='vertical')
-                                        pl.ylabel(f"{ols_y_dim.replace('Norm_abcd','')} OLS betas")
-                                        pl.legend()
-                                        if save_figures:
-                                            pl.savefig(opj(figure_path,f"{ols_y_dim.replace('Norm_abcd','')}_OLSbetas_{roi.replace('custom.','').replace('HCPQ1Q6.','').replace('glasser_','')}.pdf"),dpi=600, bbox_inches='tight')
-                                
+                                        
+                                            if cv_regression:
+                                                for cv_subj in [s for s,_ in subjects if s!='fsaverage' and s!='Group' and s!=subj]:
+                                                    print(f"CV regression (fit on {subj}, test on {cv_subj})")
+    
+                                                    ds_ols_roi_mean_cv = dd(lambda:dict())                          
+                                                                                                    
+                                                    for rr in [rr for rr in rois if rr != 'Brain' and rr != 'combined' and np.sum(alpha[analysis][cv_subj][rr]>rsq_thresh)>10]:
+
+
+
+                                                        weights_cv = alpha[analysis][cv_subj][rr][alpha[analysis][cv_subj][rr]>rsq_thresh]
+                                                        rr_y_cv = multidim_param_array[analysis][cv_subj][rr][y_dim][weights_cv>rsq_thresh]
+                                                        
+                                                        
+                                                        for x_dim in x_dims:
+                                                            rr_x_cv = multidim_param_array[analysis][cv_subj][rr][x_dim][weights_cv>rsq_thresh]
+                                                            
+                                                            if not rsq_weights or 'Norm_abcd' not in ordered_dimensions[x_dim]:
+                                                                weights_x_cv = np.ones_like(weights_cv)
+                                                            else:
+                                                                weights_x_cv = weights_cv
+                                                            
+                                                            rr_wstats_x_cv = weightstats.DescrStatsW(rr_x_cv,
+                                                                                            weights=weights_x_cv)
+                                                            
+                                                            ds_ols_roi_mean_cv[rr][f"{ordered_dimensions[x_dim]} mean"] = rr_wstats_x_cv.mean
+                                                            ds_ols_roi_mean_cv[rr][f"{ordered_dimensions[x_dim]} stdev"] = rr_wstats_x_cv.std_mean                                                    
+                                                            
+                                                            
+                                                        if not rsq_weights or 'Norm_abcd' not in ols_y_dim:
+                                                            weights_y_cv = np.ones_like(weights_cv)
+                                                        else:
+                                                            weights_y_cv = weights_cv                                                    
+        
+        
+                                                        rr_wstats_y_cv = weightstats.DescrStatsW(rr_y_cv,
+                                                                                            weights=weights_y_cv)
+                                                                                                                                                        
+        
+                                                        ds_ols_roi_mean_cv[rr][f"{ols_y_dim} mean"] = rr_wstats_y_cv.mean
+                                                        ds_ols_roi_mean_cv[rr][f"{ols_y_dim} stdev"] = rr_wstats_y_cv.std_mean
+                                                        
+                                                        ds_ols_roi_mean_cv[rr]["Mean rsq"] = weights_y_cv.mean()
+
+
+
+                                                    rsq_alpha_plots_all_rois_cv = np.array([ds_ols_roi_mean_cv[rr]["Mean rsq"] for rr in ds_ols_roi_mean_cv])
+                                                    
+                                                    rois_ols_x_means_cv = np.array([[ds_ols_roi_mean_cv[rr][f"{ordered_dimensions[x_dim]} mean"] for x_dim in x_dims] for rr in ds_ols_roi_mean_cv])
+        
+                                                    rois_ols_y_means_cv = np.array([ds_ols_roi_mean_cv[rr][f"{ols_y_dim} mean"] for rr in ds_ols_roi_mean_cv])                                                                                      
+                                                    
+                                                    rsq_on_roi_means_cv = ls1.score(rois_ols_x_means_cv, rois_ols_y_means_cv, sample_weight = rsq_alpha_plots_all_rois_cv)
+                                                    
+        
+                                                    Zs_pred_cv = ls1.predict(rois_ols_x_means_cv)
+                                                                                                
+                                                    
+                                                    print(f"wR2 (fit on {subj} full data, eval on {cv_subj} roi means): {rsq_on_roi_means_cv:.3f}")                                       
+        
+                                                    corr_prediction_roi_means_cv = weightstats.DescrStatsW(np.stack((Zs_pred_cv,rois_ols_y_means_cv)).T, weights=np.array(rsq_alpha_plots_all_rois_cv)).corrcoef[0,1]
+                                                    print(f"wCC prediction (fit on {subj} full data, eval on {cv_subj} roi means) {corr_prediction_roi_means_cv:.4f}\n") 
+                                                    
+
+                                                    Zs_pred_fit_roi_means_cv = ls2.predict(rois_ols_x_means_cv)
+                                                    
+                                                    print(f"wR2 (fit on {subj} roi means, eval on {cv_subj} roi means): {ls2.score(rois_ols_x_means_cv, rois_ols_y_means_cv, sample_weight = rsq_alpha_plots_all_rois_cv):.4f}")
+                                                    
+                                                    corr_prediction_fit_roi_means_cv = weightstats.DescrStatsW(np.stack((Zs_pred_fit_roi_means_cv,rois_ols_y_means_cv)).T , weights=np.array(rsq_alpha_plots_all_rois_cv)).corrcoef[0,1]
+                                                    print(f"wCC prediction (fit on {subj} roi means, eval on {cv_subj} roi means) {corr_prediction_fit_roi_means_cv:.4f}\n")    
+
+                                                    self.ols_result_dict[ols_y_dim][f"{[ordered_dimensions[x_dim] for x_dim in x_dims]}"]['wCC'].append(corr_prediction_fit_roi_means_cv)
+                                                    self.ols_result_dict[ols_y_dim][f"{[ordered_dimensions[x_dim] for x_dim in x_dims]}"]['betas'].append(ls2.coef_)
+                                                    
+
+                                                    X_cv = multidim_param_array[analysis][cv_subj][roi][x_dims].T
+                                                    y_cv = multidim_param_array[analysis][cv_subj][roi][y_dim].T
+                                                    
+                                                    if rsq_weights:
+
+                                                        rsq_prediction_cv = ls1.score(X_cv,y_cv,sample_weight = multidim_param_array[analysis][cv_subj][roi][ordered_dimensions.index('RSq Norm_abcd')])
+                                                    else: 
+
+                                                        rsq_prediction_cv = ls1.score(X_cv,y_cv)
+                                                        
+
+                                                    corr_prediction_cv = weightstats.DescrStatsW(np.stack((ls1.predict(X_cv), y_cv)).T, weights=multidim_param_array[analysis][cv_subj][roi][ordered_dimensions.index('RSq Norm_abcd')]).corrcoef[0,1]                                                    
+                                                                                                            
+                                                    
+                                                    print(f"wR2 (fit on full data {subj}, eval on full data {cv_subj}): {rsq_prediction_cv:.4f}")
+                                                    print(f"wCC prediction (fit on full data {subj}, eval on full data {cv_subj}) {corr_prediction_cv:.4f}")
+
+
+
+
+                                                    
+                                            
+                                            pl.figure(f"OLS {ols_y_dim.replace('Norm_abcd','')} betas {roi.replace('custom.','').replace('HCPQ1Q6.','').replace('glasser_','')}",figsize=(9,9))
+                                            pl.bar(np.arange(len(ls2.coef_)), ls2.coef_, label=f"wCC {corr_prediction_fit_roi_means:.3f}")
+                                            pl.xticks(np.arange(len(ls2.coef_)),[ordered_dimensions[x_dim].replace('Norm_abcd','') for x_dim in x_dims],rotation='vertical')
+                                            pl.ylabel(f"{ols_y_dim.replace('Norm_abcd','')} OLS betas")
+                                            pl.legend()
+                                            if save_figures:
+                                                pl.savefig(opj(figure_path,f"{ols_y_dim.replace('Norm_abcd','')}_OLSbetas_{roi.replace('custom.','').replace('HCPQ1Q6.','').replace('glasser_','')}.pdf"),dpi=600, bbox_inches='tight')
+                                    
                                 ##########Multidim regression
                                 if perform_pls and np.sum(alpha[analysis][subj][roi]>rsq_thresh)>10:                                     
                                     for n_components in range(1, 1+X.shape[1]):
@@ -3572,7 +3678,7 @@ class visualize_results(object):
                                             print(f"CVRSq predictions {np.array(cv_rsq_pred).mean(0)}")
                                             print(f"CV corr predictions {np.array(cv_corr_pred).mean(0)}")
                                             
-                                            pls_result_dict[roi][f"{n_components} components"].append(np.mean(cv_rsq_total,axis=0))
+                                            self.pls_result_dict[roi][f"{n_components} components"].append(np.mean(cv_rsq_total,axis=0))
                                 
                             except Exception as e:
                                 import sys
@@ -3582,9 +3688,9 @@ class visualize_results(object):
                                 print(exc_type, fname, exc_tb.tb_lineno) 
                                 pass
                             
-                for key in pls_result_dict:
-                    for key2 in pls_result_dict[key]:
-                        print(f"{key} {key2} CVRSq total {np.mean(pls_result_dict[key][key2]):.3f}")
+                for key in self.pls_result_dict:
+                    for key2 in self.pls_result_dict[key]:
+                        print(f"{key} {key2} CVRSq total {np.mean(self.pls_result_dict[key][key2]):.3f}")
                         
                 #############size response curves
                 if size_response_curves:
