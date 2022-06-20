@@ -2539,7 +2539,7 @@ class visualize_results(object):
                                                 rsq_alpha_plot_max = np.nanmax(rsq_alpha_plots_all_rois)
                                                 rsq_alpha_plot_min = np.nanmin(rsq_alpha_plots_all_rois)   
                                                                                           
-                                                alpha_plot = np.nanmean(rsq_regr_weight[analysis][subj][model][roi])/rsq_alpha_plot_max#(1-rsq_alpha_plot_min)*(np.nanmean(rsq_regr_weight[analysis][subj][model][roi])-rsq_alpha_plot_min)/(rsq_alpha_plot_max-rsq_alpha_plot_min) + rsq_alpha_plot_min
+                                                alpha_plot = (np.nanmean(rsq_regr_weight[analysis][subj][model][roi])-rsq_alpha_plot_min)/(rsq_alpha_plot_max-rsq_alpha_plot_min)#np.nanmean(rsq_regr_weight[analysis][subj][model][roi])/rsq_alpha_plot_max#(1-rsq_alpha_plot_min)*(np.nanmean(rsq_regr_weight[analysis][subj][model][roi])-rsq_alpha_plot_min)/(rsq_alpha_plot_max-rsq_alpha_plot_min) + rsq_alpha_plot_min
                                                 
                                             else:
                                                 alpha_plot = 1
@@ -2551,12 +2551,12 @@ class visualize_results(object):
     
                                             pl.errorbar(curr_x_bins,
                                                 curr_y_bins,
-                                                yerr=curr_yerr,
-                                                xerr=curr_xerr,
-                                            fmt='s', mec='black', label=current_label, color=current_color, alpha=alpha_plot)#, mfc=roi_colors[roi], ecolor=roi_colors[roi])
+                                                yerr=0,#curr_yerr,
+                                                xerr=0,#curr_xerr,
+                                            fmt='s', mec='black', label=current_label, color=current_color, alpha=alpha_plot, ms=16)#, mfc=roi_colors[roi], ecolor=roi_colors[roi])
                                             
                                             if rois_on_plot: 
-                                                pl.text(curr_x_bins[-1], curr_y_bins[-1], current_label, fontsize=14, alpha=alpha_plot, color=current_color,  ha='left', va='bottom')
+                                                pl.text(curr_x_bins[-1], curr_y_bins[-1], current_label, fontsize=24, alpha=alpha_plot, color=current_color,  ha='left', va='bottom')
                                         
                                         else:
                                             
@@ -2576,34 +2576,115 @@ class visualize_results(object):
       
 
                                 if nr_bins == 1:
-                                    #decided to only use weighted correlation on ROI means
-                                    #CC_fulldata = np.corrcoef(np.concatenate(all_rois_x),np.concatenate(all_rois_y))[0,1]
-                                    #CC_roimeans = np.corrcoef(np.concatenate(all_rois_x_means),np.concatenate(all_rois_y_means))[0,1]
                                     
-                                    #CC_fulldata_w = weightstats.DescrStatsW(np.stack((np.concatenate(all_rois_x),np.concatenate(all_rois_y))).T, weights=np.concatenate(all_rois_rsq)).corrcoef[0,1]
-                                    CC_roimeans_w = weightstats.DescrStatsW(np.stack((np.concatenate(all_rois_x_means),np.concatenate(all_rois_y_means))).T, weights=np.array(all_rois_rsq_means)).corrcoef[0,1]
+                                    all_rois_rsq_means = np.array(all_rois_rsq_means)
+                                    all_rois_x_means = np.concatenate(all_rois_x_means)
+                                    all_rois_y_means = np.concatenate(all_rois_y_means)
+                                    all_rois_rsq = np.concatenate(all_rois_rsq)
+                                    all_rois_x = np.concatenate(all_rois_x)
+                                    all_rois_y = np.concatenate(all_rois_y)
+                                    
+                                    normalize_rsq = False
+                                    use_roi_means = False
+                                    
+                                    #an attempt to use a normalized r2 value as weight. correlations seems slightly stronger; pvals unaffected
+                                    if normalize_rsq:                                        
+                                        all_rois_rsq_means = (all_rois_rsq_means - all_rois_rsq_means.min()) / (all_rois_rsq_means.max() - all_rois_rsq_means.min())                                    
+                                        all_rois_rsq = (all_rois_rsq - all_rois_rsq.min()) / (all_rois_rsq.max() - all_rois_rsq.min())
+                                    
+                                    
+                                    if use_roi_means:
+                                        CC_w = weightstats.DescrStatsW(np.stack((all_rois_x_means,all_rois_y_means)).T, weights=all_rois_rsq_means).corrcoef[0,1]
+                                    else:
+                                        CC_w = weightstats.DescrStatsW(np.stack((all_rois_x,all_rois_y)).T, weights=all_rois_rsq).corrcoef[0,1]
+                                                                
                                     
                                     CC_boot = []
-                                    for perm in range(10000):
-                                        perm_x = np.copy(np.concatenate(all_rois_x_means))
-                                        perm_y = np.copy(np.concatenate(all_rois_y_means))
-                                        perm_w = np.copy(np.array(all_rois_rsq_means))                                        
+                                    for perm in range(10000):                                        
+                                        if use_roi_means:
+                                            samp_idx = np.random.randint(0, len(all_rois_x_means), len(all_rois_x_means))
+                                            perm_x = all_rois_x_means[samp_idx]
+                                            perm_y = all_rois_y_means[samp_idx]
+                                            perm_w = all_rois_rsq_means[samp_idx] 
+                                        else:
+                                            samp_idx = np.random.randint(0, len(all_rois_x), int(len(all_rois_x)/upsampling_corr_factor))                                        
+                                            perm_x = all_rois_x[samp_idx]
+                                            perm_y = all_rois_y[samp_idx]
+                                            perm_w = all_rois_rsq[samp_idx]                                            
+                                        
                                         np.random.shuffle(perm_x)
                                         np.random.shuffle(perm_y)
                                         np.random.shuffle(perm_w)
                                         CC_boot.append(weightstats.DescrStatsW(np.stack((perm_x,perm_y)).T, weights=perm_w).corrcoef[0,1])
                                     
-                                    pval_wcc_roimeans = np.sum(np.abs(CC_roimeans_w)<np.abs(np.array(CC_boot)))/len(CC_boot)
-                                    if pval_wcc_roimeans<1e-2:
+                                    pval_wcc = np.sum(np.abs(CC_w)<np.abs(np.array(CC_boot)))/len(CC_boot)
+                                    
+                                    if pval_wcc<1e-2:
                                         pval_string = '*'
-                                        if pval_wcc_roimeans<1e-4:
+                                        if pval_wcc<1e-4:
                                             pval_string = '**'
-                                            if pval_wcc_roimeans<1e-6:
+                                            if pval_wcc<1e-6:
                                                 pval_string = '***'                                                                                        
                                     else:
                                         pval_string = 'n.s.'
                                     
-                                    pl.title(f"wCC on ROI means={CC_roimeans_w:.2f}, {pval_string}")
+                                    pl.title(f"wCC={CC_w:.2f}, {pval_string}")
+                                    pl.hexbin(all_rois_x, all_rois_y, gridsize=(25,25), alpha=0.9)#, bins='log') # mincnt=10,
+
+                                    #regression line
+                                    WLS_comb = LinearRegression()                                   
+                                    
+                                    if use_roi_means:
+                                        
+                                        WLS_comb.fit(all_rois_x_means.reshape(-1, 1), all_rois_y_means, sample_weight=all_rois_rsq_means)                                           
+                                        WLS_comb_prediction = WLS_comb.predict(all_rois_x_means.reshape(-1, 1))                                          
+                                        pl.plot(all_rois_x_means[np.argsort(all_rois_x_means)],
+                                            WLS_comb_prediction[np.argsort(all_rois_x_means)],
+                                            color='k')    
+                                        
+                                    else:      
+                                        
+                                        WLS_comb.fit(all_rois_x.reshape(-1, 1), all_rois_y, sample_weight=all_rois_rsq)                                           
+                                        WLS_comb_prediction = WLS_comb.predict(all_rois_x.reshape(-1, 1))    
+                                        pl.plot(all_rois_x[np.argsort(all_rois_x)],
+                                            WLS_comb_prediction[np.argsort(all_rois_x)],
+                                            color='k')                                         
+
+                                 
+                                    #bootstrap conf intervals
+                                    comb_boot_fits = []
+                                    for bootc in range(200):
+                                        if use_roi_means:
+                                            samp_idx = np.random.randint(0, len(all_rois_x_means), len(all_rois_x_means))
+                                            bootc_x = all_rois_x_means[samp_idx]
+                                            bootc_y = all_rois_y_means[samp_idx]
+                                            bootc_w = all_rois_rsq_means[samp_idx]
+                                        else:                                            
+                                            samp_idx = np.random.randint(0, len(all_rois_x), int(len(all_rois_x)/upsampling_corr_factor))
+                                            bootc_x = all_rois_x[samp_idx]
+                                            bootc_y = all_rois_y[samp_idx]
+                                            bootc_w = all_rois_rsq[samp_idx]    
+                                     
+                                        WLS_comb_boot = LinearRegression()
+                                        WLS_comb_boot.fit(bootc_x.reshape(-1, 1), bootc_y, sample_weight=bootc_w)  
+                                        
+                                        if use_roi_means:
+                                            comb_boot_fits.append(WLS_comb_boot.predict(all_rois_x_means.reshape(-1, 1)))
+                                        else:
+                                            comb_boot_fits.append(WLS_comb_boot.predict(all_rois_x.reshape(-1, 1)))
+                                    
+                                    comb_boot_fits = np.array(comb_boot_fits)
+                                    
+                                    conf_max = np.nanquantile(comb_boot_fits,0.95,axis=0)#WLS_comb_prediction + sem(comb_boot_fits,axis=0)#
+                                    conf_min = np.nanquantile(comb_boot_fits,0.05,axis=0)#WLS_comb_prediction - sem(comb_boot_fits,axis=0)#
+                                    
+                                    if use_roi_means:
+                                        pl.plot(all_rois_x_means[np.argsort(all_rois_x_means)],conf_max[np.argsort(all_rois_x_means)], color='k', ls = '--')
+                                        pl.plot(all_rois_x_means[np.argsort(all_rois_x_means)],conf_min[np.argsort(all_rois_x_means)], color='k', ls = '--')
+                                    else:
+                                        pl.plot(all_rois_x[np.argsort(all_rois_x)],conf_max[np.argsort(all_rois_x)], color='k', ls = '--')
+                                        pl.plot(all_rois_x[np.argsort(all_rois_x)],conf_min[np.argsort(all_rois_x)], color='k', ls = '--')                                    
+
                                 
                                 if 'Eccentricity' in x_parameter or 'Size' in x_parameter:
                                     pl.xlabel(f"{x_parameter} (°)")
@@ -3383,8 +3464,25 @@ class visualize_results(object):
                                             
                                             print(f"wR2 (fit on roi means, eval on roi means): {ls2.score(rois_ols_x_means, rois_ols_y_means, sample_weight = rsq_alpha_plots_all_rois):.4f}")
                                             
+                                            corr_prediction_fit_roi_means_perm = []
+                                            for perm in range(10000):
+                                                ls2_perm = LinearRegression()
+                                                x_perm = np.copy(rois_ols_x_means)
+                                                y_perm = np.copy(rois_ols_y_means)
+                                                w_perm = np.copy(rsq_alpha_plots_all_rois)
+                                                np.random.shuffle(x_perm)
+                                                np.random.shuffle(y_perm)
+                                                np.random.shuffle(w_perm)
+                                                ls2_perm.fit(x_perm, y_perm, sample_weight = w_perm)
+                                                Zs_pred_fit_roi_means_perm = ls2_perm.predict(x_perm)
+ 
+                                                corr_prediction_fit_roi_means_perm.append(weightstats.DescrStatsW(np.stack((Zs_pred_fit_roi_means_perm,y_perm)).T , weights=np.array(w_perm)).corrcoef[0,1])
+                                            
                                             corr_prediction_fit_roi_means = weightstats.DescrStatsW(np.stack((Zs_pred_fit_roi_means,rois_ols_y_means)).T , weights=np.array(rsq_alpha_plots_all_rois)).corrcoef[0,1]
-                                            print(f"wCC prediction (fit on roi means, eval on roi means) {corr_prediction_fit_roi_means:.4f}")    
+                                            
+                                            pval_wcc_roimeans = np.sum(np.abs(corr_prediction_fit_roi_means)<np.abs(np.array(corr_prediction_fit_roi_means_perm)))/len(corr_prediction_fit_roi_means_perm)
+                                            
+                                            print(f"wCC prediction (fit on roi means, eval on roi means) {corr_prediction_fit_roi_means:.4f}, pval={pval_wcc_roimeans:.5f}")    
                                             print(f"Estimated OLS betas (fit on roi means) {ordered_dimensions[y_dim]} {ls2.coef_}\n")
                                             
                                                                                         
@@ -3394,9 +3492,9 @@ class visualize_results(object):
                                             print(f"Estimated OLS betas (fit on full data) {ordered_dimensions[y_dim]} {ls1.coef_}")
                                             
                                             if len(x_dims) == 2:
-                                                fig = pl.figure(f"3D OLS prediction {roi.replace('custom.','').replace('HCPQ1Q6.','').replace('glasser_','')}", figsize=(8,8))
+                                                self.ols_3d_fig = pl.figure(f"3D OLS prediction {roi.replace('custom.','').replace('HCPQ1Q6.','').replace('glasser_','')}", figsize=(12,12))
                                                 
-                                                ax = fig.add_subplot(111, projection='3d', azim=-45, elev=50)
+                                                ax = self.ols_3d_fig.add_subplot(111, projection='3d', azim=-45, elev=50)
                                                 #ax.grid(False)
     
                                                 ax.set_xlabel(f"{ols_x0_dim.replace('Norm_abcd','')}",labelpad=20)
@@ -3417,7 +3515,7 @@ class visualize_results(object):
                                                         rsq_alpha_plot_max = np.nanmax(rsq_alpha_plots_all_rois)
                                                         rsq_alpha_plot_min = np.nanmin(rsq_alpha_plots_all_rois)   
                                                                                                   
-                                                        alpha_plot = ds_ols_roi_mean[rr]["Mean rsq"]/rsq_alpha_plot_max#(ds_ols_roi_mean[rr]["Mean rsq"]-rsq_alpha_plot_min)/(rsq_alpha_plot_max-rsq_alpha_plot_min)
+                                                        alpha_plot = (ds_ols_roi_mean[rr]["Mean rsq"]-rsq_alpha_plot_min)/(rsq_alpha_plot_max-rsq_alpha_plot_min) #ds_ols_roi_mean[rr]["Mean rsq"]/rsq_alpha_plot_max#
                                                         
                                                     else:
                                                         alpha_plot = 1
@@ -3428,14 +3526,14 @@ class visualize_results(object):
                                                     
                                                     if len(x_dims) == 2:
                                                         ax.errorbar(ds_ols_roi_mean[rr][f"{ols_x0_dim} mean"], ds_ols_roi_mean[rr][f"{ols_x1_dim} mean"], ds_ols_roi_mean[rr][f"{ols_y_dim} mean"],
-                                                                    xerr=ds_ols_roi_mean[rr][f"{ols_x0_dim} stdev"]*upsampling_corr_factor**0.5, 
-                                                                    yerr=ds_ols_roi_mean[rr][f"{ols_x1_dim} stdev"]*upsampling_corr_factor**0.5, 
-                                                                    zerr=ds_ols_roi_mean[rr][f"{ols_y_dim} stdev"]*upsampling_corr_factor**0.5,
-                                                                    color=cmap_rois[rr_num], fmt='s', mec='black', alpha=alpha_plot)
+                                                                    xerr=0,#ds_ols_roi_mean[rr][f"{ols_x0_dim} stdev"]*upsampling_corr_factor**0.5, 
+                                                                    yerr=0,#ds_ols_roi_mean[rr][f"{ols_x1_dim} stdev"]*upsampling_corr_factor**0.5, 
+                                                                    zerr=0,#ds_ols_roi_mean[rr][f"{ols_y_dim} stdev"]*upsampling_corr_factor**0.5,
+                                                                    color=cmap_rois[rr_num], fmt='s', mec='black', alpha=alpha_plot, ms=16)
                                                         
                                                         ax.text(ds_ols_roi_mean[rr][f"{ols_x0_dim} mean"], ds_ols_roi_mean[rr][f"{ols_x1_dim} mean"], ds_ols_roi_mean[rr][f"{ols_y_dim} mean"],
                                                                 rr.replace('custom.','').replace('HCPQ1Q6.','') .replace('glasser_','') , 
-                                                                fontsize=16, color=cmap_rois[rr_num],  ha='left', va='bottom',alpha=alpha_plot)
+                                                                fontsize=24, color=cmap_rois[rr_num],  ha='left', va='bottom', alpha=alpha_plot)
                                             
                                             if len(x_dims) == 2:
                                                 x0_min = np.min([ds_ols_roi_mean[rr][f"{ols_x0_dim} mean"] for rr in ds_ols_roi_mean])
