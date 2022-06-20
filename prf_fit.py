@@ -71,8 +71,6 @@ models_to_fit = analysis_info["models_to_fit"]
 n_batches = analysis_info["n_batches"]
 fit_hrf = analysis_info["fit_hrf"]
 fix_bold_baseline = analysis_info["fix_bold_baseline"]
-if fix_bold_baseline:
-    norm_bold_baseline = analysis_info["norm_bold_baseline"]
     
 dog_grid = analysis_info["dog_grid"]
 css_grid = analysis_info["css_grid"]
@@ -108,7 +106,7 @@ baseline_volumes_begin_end = analysis_info["baseline_volumes_begin_end"]
 min_percent_var = analysis_info["min_percent_var"]
 
 param_bounds = analysis_info["param_bounds"]
-#note pos_prfs_only here only applies to gauss
+
 pos_prfs_only = analysis_info["pos_prfs_only"]
 normalize_RFs = analysis_info["normalize_RFs"]
 
@@ -416,6 +414,11 @@ ss = prf_stim.screen_size_degrees
 # model parameter bounds
 gauss_bounds, css_bounds, dog_bounds, norm_bounds = None, None, None, None
 
+gauss_grid_bounds = [(0,1000)] #only prf amplitudes between 0 and 1000
+css_grid_bounds = [(0,1000)] #only prf amplitudes between 0 and 1000
+dog_grid_bounds = [(0,1000),(0,1000)] #only prf amplitudes between 0 and 1000, only surround amplitudes between 0 and 1000
+norm_grid_bounds = [(0,1000),(0,1000)] #only prf amplitudes between 0 and 1000, only neural baseline values between 0 and 1000
+
 if param_bounds:
     gauss_bounds = [(-1.5*max_ecc_size, 1.5*max_ecc_size),  # x
                     (-1.5*max_ecc_size, 1.5*max_ecc_size),  # y
@@ -424,8 +427,11 @@ if param_bounds:
                     (0, 1000)]  # bold baseline
     
     if not pos_prfs_only:
+        gauss_grid_bounds[0] = (-1000,1000)
         gauss_bounds[3] = (-1000,1000)
-    
+        css_grid_bounds[0] = (-1000,1000)
+        css_bounds[3] = (-1000,1000)
+        
     css_bounds = [(-1.5*max_ecc_size, 1.5*max_ecc_size),  # x
                     (-1.5*max_ecc_size, 1.5*max_ecc_size),  # y
                     (eps, 1.5*ss),  # prf size
@@ -502,7 +508,8 @@ elif norm_model_variant == "ab":
 
 
 if param_bounds and fix_bold_baseline:
-    norm_bounds[4] = (norm_bold_baseline,norm_bold_baseline)
+    fixed_grid_baseline = 0
+    norm_bounds[4] = (0,0)
     gauss_bounds[4] = (0,0)
     css_bounds[4] = (0,0)
     dog_bounds[4] = (0,0)
@@ -613,7 +620,8 @@ if "gauss_gridparams_path" not in analysis_info and "gauss_iterparams_path" not 
                 size_grid=sizes,
                 verbose=verbose,
                 n_batches=n_batches,
-                pos_prfs_only=pos_prfs_only)
+                fixed_grid_baseline=fixed_grid_baseline,
+                grid_bounds=gauss_grid_bounds)
         print("Gaussian gridfit completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+
           ". voxels/vertices above "+str(rsq_threshold)+": "+str(np.sum(gf.gridsearch_params[:, -1]>rsq_threshold))+" out of "+
           str(gf.data.shape[0]))
@@ -763,7 +771,8 @@ if "CSS" in models_to_fit:
             gf_css.grid_fit(exponent_grid=css_exponent_grid,
                     verbose=verbose,
                     n_batches=n_batches,
-                    pos_prfs_only=pos_prfs_only)
+                    fixed_grid_baseline=fixed_grid_baseline,
+                    grid_bounds=css_grid_bounds)
             print("CSS gridfit completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+
               ". voxels/vertices above "+str(rsq_threshold)+": "+str(np.sum(gf_css.gridsearch_params[:, -1]>rsq_threshold))+" out of "+
               str(gf_css.data.shape[0]))
@@ -911,7 +920,8 @@ if "DoG" in models_to_fit:
                             surround_size_grid=dog_surround_size_grid,
                             verbose=verbose,
                             n_batches=n_batches,
-                            pos_prfs_only=pos_prfs_only)
+                            fixed_grid_baseline=fixed_grid_baseline,
+                            grid_bounds=dog_grid_bounds)
             print("DoG gridfit completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+
               ". voxels/vertices above "+str(rsq_threshold)+": "+str(np.sum(gf_dog.gridsearch_params[:, -1]>rsq_threshold))+" out of "+
               str(gf_dog.data.shape[0]))
@@ -1067,7 +1077,8 @@ if "norm" in models_to_fit:
                          verbose=verbose,
                          n_batches=n_batches,
                          rsq_threshold=rsq_threshold,
-                         pos_prfs_only=True)
+                         fixed_grid_baseline=fixed_grid_baseline,
+                         grid_bounds=norm_grid_bounds)
         
             print("Norm gridfit completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Mean rsq>"+str(rsq_threshold)+": "+str(np.mean(gf_norm.gridsearch_params[gf_norm.gridsearch_rsq_mask, -1])))
         
