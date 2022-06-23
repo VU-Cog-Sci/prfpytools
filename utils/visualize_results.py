@@ -2629,7 +2629,7 @@ class visualize_results(object):
                                         pval_string = 'n.s.'
                                     
                                     pl.title(f"wCC={CC_w:.2f}, {pval_string}")
-                                    pl.hexbin(all_rois_x, all_rois_y, gridsize=(25,25), alpha=0.9)#, bins='log') # mincnt=10,
+                                    pl.hexbin(all_rois_x, all_rois_y, all_rois_rsq, gridsize=(25,25), alpha=0.9, bins='log') # mincnt=10,
 
                                     #regression line
                                     WLS_comb = LinearRegression()                                   
@@ -3257,8 +3257,31 @@ class visualize_results(object):
                                     
                                     
                                         ds_pca_pycortex = dict()
-                                        ds_pca_roi_mean = dd(lambda:dict())                      
+                                        ds_pca_roi_mean = dd(lambda:dict())  
 
+                                        pca_comp_corr_dims = list(set([dim for dim, dim_name in enumerate(ordered_dimensions) if 'Norm_abcd' in dim_name and 'RSq' not in dim_name]))
+                                       
+
+                                        for pca_comp_corr_dim in pca_comp_corr_dims:
+                                            corr_dim_name = ordered_dimensions[pca_comp_corr_dim]
+                                            
+                                            for rr in [rr for rr in rois if rr != 'Brain' and rr != 'combined' and np.sum(alpha[analysis][subj][rr]>rsq_thresh)>10]:
+                                                
+                                                
+                                                data = multidim_param_array[analysis][subj][rr][pca_comp_corr_dim]
+                                                
+                                                weights = alpha[analysis][subj][rr][alpha[analysis][subj][rr]>rsq_thresh]
+                                                
+                                                if not rsq_weights:
+                                                    weights = np.ones_like(weights)
+
+                                                roi_wstats = weightstats.DescrStatsW(data,
+                                                                                    weights=weights)
+
+                                                ds_pca_roi_mean[rr][f"Corr Dim {corr_dim_name}"] = roi_wstats.mean
+                                                ds_pca_roi_mean[rr][f"Corr Dim {corr_dim_name} stdev"] = roi_wstats.std_mean
+                                                
+                                            
                                                                                         
                                         for c in range(ncomp):
                                             
@@ -3269,26 +3292,54 @@ class visualize_results(object):
                                             else:
                                                 zz[alpha[analysis][subj][roi]>rsq_thresh] = pca.fit_transform(full_dataset)[:,c]
                                                 
-                                            if c in vis_pca_comps_axes:
                                                 
-                                                for rr in [rr for rr in rois if rr != 'Brain' and rr != 'combined' and np.sum(alpha[analysis][subj][rr]>rsq_thresh)>10]:
-                                                    
-                                                    data = zz[alpha[analysis][subj][rr]>rsq_thresh]
-                                                    
-                                                    weights = alpha[analysis][subj][rr][alpha[analysis][subj][rr]>rsq_thresh]
-                                                    
-                                                    if not rsq_weights:
-                                                        weights = np.ones_like(weights)
+                                            for rr in [rr for rr in rois if rr != 'Brain' and rr != 'combined' and np.sum(alpha[analysis][subj][rr]>rsq_thresh)>10]:
+                                                
+                                                data = zz[alpha[analysis][subj][rr]>rsq_thresh]
+                                                
+                                                weights = alpha[analysis][subj][rr][alpha[analysis][subj][rr]>rsq_thresh]
+                                                
+                                                if not rsq_weights:
+                                                    weights = np.ones_like(weights)
 
 
-                                                    roi_wstats = weightstats.DescrStatsW(data,
-                                                                                        weights=weights)
+                                                roi_wstats = weightstats.DescrStatsW(data,
+                                                                                    weights=weights)
 
-                                                    ds_pca_roi_mean[rr][f"Component {c}"] = roi_wstats.mean
-                                                    ds_pca_roi_mean[rr][f"Component {c} stdev"] = roi_wstats.std_mean
+                                                ds_pca_roi_mean[rr][f"Component {c}"] = roi_wstats.mean
+                                                ds_pca_roi_mean[rr][f"Component {c} stdev"] = roi_wstats.std_mean
+                                                
+                                                ds_pca_roi_mean[rr]["Mean rsq"] = weights.mean()
+                                                
+                                            pca_allrois_means = np.array([ds_pca_roi_mean[rr][f"Component {c}"] for rr in ds_pca_roi_mean])
+                                            pca_allrois_rsq_means = np.array([ds_pca_roi_mean[rr]["Mean rsq"] for rr in ds_pca_roi_mean])
                                                     
-                                                    ds_pca_roi_mean[rr]["Mean rsq"] = weights.mean()
-                                                    
+
+     
+                                            
+                                            for pca_comp_corr_dim in pca_comp_corr_dims:
+                                                corr_dim = multidim_param_array[analysis][subj][roi][pca_comp_corr_dim]
+                                                corr_dim_name = ordered_dimensions[pca_comp_corr_dim]
+                                                
+                                                pca_corr_dim_allrois_means = np.array([ds_pca_roi_mean[rr][f"Corr Dim {corr_dim_name}"] for rr in ds_pca_roi_mean])
+                                                
+                                                
+                                                
+                                                wCC_pca_params = weightstats.DescrStatsW(np.stack((zz[alpha[analysis][subj][roi]>rsq_thresh],corr_dim)).T, weights=alpha[analysis][subj][roi][alpha[analysis][subj][roi]>rsq_thresh]).corrcoef[0,1]
+
+                                                wCC_pca_params_roi_means = weightstats.DescrStatsW(np.stack((pca_allrois_means,pca_corr_dim_allrois_means)).T, weights=pca_allrois_rsq_means).corrcoef[0,1]
+                                                
+                                                
+                                                #print(f"wCC (full data) PCA comp {c} VS {corr_dim_name}: {wCC_pca_params:.4f}")
+                                                print(f"wCC (roi means) PCA comp {c} VS {corr_dim_name}: {wCC_pca_params_roi_means:.4f}")
+                         
+
+                                                                                        
+
+                                            
+
+
+
                                                     
                                             
                                             if vis_pca_pycortex:
@@ -3328,7 +3379,7 @@ class visualize_results(object):
                                                     rsq_alpha_plot_max = np.nanmax(rsq_alpha_plots_all_rois)
                                                     rsq_alpha_plot_min = np.nanmin(rsq_alpha_plots_all_rois)   
                                                                                               
-                                                    alpha_plot = ds_pca_roi_mean[rr]["Mean rsq"]/rsq_alpha_plot_max#(ds_pca_roi_mean[rr]["Mean rsq"]-rsq_alpha_plot_min)/(rsq_alpha_plot_max-rsq_alpha_plot_min)
+                                                    alpha_plot = (ds_pca_roi_mean[rr]["Mean rsq"]-rsq_alpha_plot_min)/(rsq_alpha_plot_max-rsq_alpha_plot_min) #ds_pca_roi_mean[rr]["Mean rsq"]/rsq_alpha_plot_max#
                                                     
                                                 else:
                                                     alpha_plot = 1
