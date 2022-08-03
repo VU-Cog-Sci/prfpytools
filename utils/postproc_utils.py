@@ -1,6 +1,6 @@
 import os
 import numpy as np
-import scipy as sp
+from scipy import sparse
 import matplotlib.pyplot as pl
 from matplotlib import cm, colors
 from tqdm import tqdm
@@ -607,6 +607,7 @@ def Vertex2D_fix(data1, data2, subject, cmap, vmin, vmax, vmin2, vmax2):
     return cortex.VertexRGB(*display_data, subject)    
 
 
+
 def simple_colorbar(vmin, vmax, cmap_name, ori, param_name):
     if ori == 'horizontal':
         fig, ax = pl.subplots(figsize=(8, 1))
@@ -672,3 +673,33 @@ def simple_colorbar(vmin, vmax, cmap_name, ori, param_name):
     
     return fig
 
+
+def reduced_graph_ft(param, param_indices, eigenvectors_path, eigenvectors_indices_path, pycortex_subj):
+
+    pyc_eigenvectors = np.load(eigenvectors_path)
+    
+    nr_vertices = cortex.db.get_surfinfo(pycortex_subj).data.shape
+
+    eigvecs_reduced = np.zeros((param.shape[0],pyc_eigenvectors.shape[1]))
+    
+    for eigvs in range(pyc_eigenvectors.shape[1]):
+        zz = np.zeros(nr_vertices)
+        zz[np.load(eigenvectors_indices_path)] = np.copy(pyc_eigenvectors[:,eigvs])
+        eigvecs_reduced[:,eigvs] = np.copy(zz[param_indices])
+        
+    ft = np.dot(eigvecs_reduced.T,param)
+    
+    return eigvecs_reduced, ft 
+
+
+def graph_randomization(data_max, data_min, eigvecs_reduced, ft):
+        
+    random_signs = np.sign(np.random.rand(len(ft))-0.5)
+    perm_reduced = np.dot(eigvecs_reduced,random_signs*ft)
+    
+    return (data_max-data_min)*(perm_reduced - perm_reduced.min()) / (perm_reduced.max() - perm_reduced.min()) + data_min
+    
+    
+    
+    
+    
