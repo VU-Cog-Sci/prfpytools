@@ -573,7 +573,7 @@ def colorbar(mappable):
 
 
 
-def Vertex2D_fix(data1, data2, subject, cmap, vmin, vmax, vmin2, vmax2):
+def Vertex2D_fix(data1, data2, subject, cmap, vmin, vmax, vmin2, vmax2, roi_borders=None):
     #this provides a nice workaround for pycortex opacity issues, at the cost of interactivity    
     # Get curvature
     curv = cortex.db.get_surfinfo(subject)
@@ -602,6 +602,9 @@ def Vertex2D_fix(data1, data2, subject, cmap, vmin, vmax, vmin2, vmax2):
         
     # Alpha mask
     display_data =  curv_rgb * (1-alpha) + vx_rgb * alpha
+    
+    if roi_borders is not None:
+        display_data[:,roi_borders.astype('bool')] = 0
     
     # Create vertex RGB object out of R, G, B channels
     return cortex.VertexRGB(*display_data, subject)    

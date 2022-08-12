@@ -123,6 +123,7 @@ class visualize_results(object):
         
     def define_rois_and_flatmaps(self, fs_dir, output_rois_path, import_flatmaps, output_rois, hcp_atlas_path = None):
         self.idx_rois = dd(dict)
+        self.idx_rois_borders = dd(dict)
         self.fs_dir = fs_dir
         self.get_spaces()
         self.get_subjects(self.main_dict)
@@ -187,7 +188,7 @@ class visualize_results(object):
                         print(e)
                         pass
 
-                #parse glasser ROIs if they have been created
+                #parse glasser ROIs if they have been created (keep hemispheres separate)
                 # for roi in [el for el in os.listdir(opj(self.fs_dir, subj, 'label')) if 'glasser' in el]:
                 #     roi = roi.replace('.label','')#.replace('lh.','').replace('rh.','')
                 #     try:
@@ -280,6 +281,100 @@ class visualize_results(object):
 
 
         return
+    
+    # def compute_roi_borders(self, subject_ids = ['fsaverage'], rois_prefix='glasser'):
+        
+    #     self.idx_rois_borders = dd(dict)
+        
+    #     def comp_border(face):
+
+    #         return np.isin(face,roi).sum()
+
+        
+    #     for subj in subject_ids:
+    #         assert subj in self.idx_rois, "subject not found"            
+            
+    #         left, right = getattr(cortex.db,subj).surfaces.inflated.get()
+
+    #         faces = np.concatenate((left[1],len(left[0])+right[1]))
+            
+    #         border_faces = np.zeros(faces.shape[0]).astype('bool')
+    #         previous_roi_faces = np.zeros(faces.shape[0]).astype('bool')
+            
+    #         zz = np.zeros(len(left[0])+len(right[0]))
+            
+       
+            
+    #         for i,roi in enumerate([self.idx_rois[subj][r] for r in self.idx_rois[subj] if rois_prefix in r]):
+                
+    #             current_faces = ~(border_faces+previous_roi_faces)
+                
+    #             print(current_faces.shape)
+                
+    #             res = np.array(Parallel(n_jobs=7, verbose=True)(delayed(comp_border)(face) for face in faces[current_faces]))
+                
+    #             print(set(res))
+                
+    #             border_faces[current_faces] += ((res == 1) + (res == 2))
+                
+    #             print(border_faces.sum())
+                
+    #             previous_roi_faces[current_faces] += (res == 3)
+                
+    #             print(previous_roi_faces.sum())
+                
+    #             #border_faces += current_faces
+                
+                
+    #             #print(np.sum(border_faces))
+                
+    #         zz[np.flatten(faces[border_faces])] = 1
+                
+                
+                
+
+             
+    #         self.idx_rois_border[subj][rois_prefix] = np.copy(zz)
+            
+    #         return
+                    
+                
+    def compute_roi_borders(self, subject_ids = ['fsaverage'], rois_prefix='glasser'):
+        
+        
+        
+        def comp_border(face):
+
+            return np.any(np.isin([np.isin(face,roi).sum() for roi in rois],[1,2]))
+
+        
+        for subj in subject_ids:
+            assert subj in self.idx_rois, "subject not found"            
+            
+            left, right = getattr(cortex.db,subj).surfaces.inflated.get()
+
+            faces = np.concatenate((left[1],len(left[0])+right[1]))
+            
+            
+            
+            
+            zz = np.zeros(len(left[0])+len(right[0]))
+            
+            rois = [self.idx_rois[subj][r] for r in self.idx_rois[subj] if rois_prefix in r]
+       
+            
+            res = np.array(Parallel(n_jobs=6, verbose=True)(delayed(comp_border)(face) for face in faces))
+                
+            zz[np.ravel(faces[res])] = 1
+                
+         
+
+             
+            self.idx_rois_borders[subj][rois_prefix] = np.copy(zz)
+            
+            return
+                        
+            
 
     def set_alpha(self, space_names='all', only_models=None, ecc_min=0, ecc_max=5, threshold_li=True, excluded_rois=[]):
         
@@ -965,7 +1060,7 @@ class visualize_results(object):
                             #print(p_r['Polar Angle'][model])
                             ds_polar[f"{model} polar angle HSV2"] = Vertex2D_fix(p_r['Polar Angle'][model], alpha[analysis][subj][model], subject=pycortex_subj, 
                                                               vmin=-3.1415, vmax=3.1415,
-                                                              vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap='hsvx2')
+                                                              vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap='hsvx2', roi_borders=self.idx_rois_borders['fsaverage']['glasser'])
                             
                             fig = simple_colorbar(vmin=-3.1415, vmax=3.1415,
                                             cmap_name='hsvx2', ori='polar', param_name='Polar Angle (°)')                                     
@@ -2639,7 +2734,7 @@ class visualize_results(object):
                                     perm_yw = False
                                     #plot hexbins has been moved above to manage roi datapoints color
                                     
-                                    n_perm = 100000
+                                    n_perm = 1000000
                                     
                                     #np.save('/Users/marcoaqil/full_quantrois.npy', all_rois_alpha)
                                     #np.save(f'/Users/marcoaqil/{x_parameter}_alpha.npy', all_rois_alpha)
@@ -2684,10 +2779,10 @@ class visualize_results(object):
                                     
                                     for perm in range(n_perm):                                        
                                         if use_roi_means:
-                                            samp_idx = np.random.randint(0, len(all_rois_x_means), len(all_rois_x_means))
-                                            perm_x = np.copy(all_rois_x_means)[samp_idx]
-                                            perm_y = np.copy(all_rois_y_means)[samp_idx]
-                                            perm_w = np.copy(all_rois_rsq_means)[samp_idx] 
+                                            #samp_idx = np.random.randint(0, len(all_rois_x_means), len(all_rois_x_means))
+                                            perm_x = np.copy(all_rois_x_means)#[samp_idx]
+                                            perm_y = np.copy(all_rois_y_means)#[samp_idx]
+                                            perm_w = np.copy(all_rois_rsq_means)#[samp_idx] 
                                             
                                             np.random.shuffle(perm_x)
                                             if perm_yw:
@@ -2904,6 +2999,7 @@ class visualize_results(object):
         pl.rcParams.update({'figure.max_open_warning': 0})
         pl.rcParams['axes.spines.right'] = False
         pl.rcParams['axes.spines.top'] = False
+        
         
         cmap_values = list(np.linspace(0.9, 0.0, len([r for r in rois if r not in ['Brain', 'all_custom', 'combined']])))
         
@@ -3489,6 +3585,7 @@ class visualize_results(object):
                                             pca_roi_means_weights = np.array([[ds_pca_roi_mean[rr][f"Mean PCA weights {pca_roi_means_dim_name}"] for rr in ds_pca_roi_mean] for pca_roi_means_dim_name in xy_dims]).T
                                             
                                             
+                                            pca_roi_means_array = zscore(pca_roi_means_array, axis=0)
                                             
         
                                             if rsq_weights:
@@ -3504,7 +3601,7 @@ class visualize_results(object):
                                            
                                             for j in range(ncomp_bar_plots):                                           
                                                 if j == 0:
-                                                    axes_rm[j].set_yticks(np.arange(full_dataset.shape[1]))
+                                                    axes_rm[j].set_yticks(np.arange(full_dataset.shape[1])/2)
                                                     axes_rm[j].set_yticklabels([ordered_dimensions[x_dim].replace('Norm_abcd','') for x_dim in x_dims]+[ordered_dimensions[y_dim].replace('Norm_abcd','') for y_dim in y_dims])
                                                 else:
                                                     axes_rm[j].set_yticks([])
@@ -3682,7 +3779,18 @@ class visualize_results(object):
                                             ax.set_xlabel(f"PCA Component {vis_pca_comps_axes[0]+1}",labelpad=50)
                                             ax.set_ylabel(f"PCA Component {vis_pca_comps_axes[1]+1}",labelpad=50)                                        
                                             ax.xaxis.set_tick_params(pad=20)                                        
-                                            ax.yaxis.set_tick_params(pad=20)                                                
+                                            ax.yaxis.set_tick_params(pad=20)       
+                                            
+                                            # make the panes 
+                                            ax.xaxis.set_pane_color((0.5, 0.5, 0.5, 0.1))
+                                            ax.yaxis.set_pane_color((0.5, 0.5, 0.5, 0.1))
+                                            ax.zaxis.set_pane_color((0.5, 0.5, 0.5, 0.1))
+                                            # make the grid lines 
+                                            ax.xaxis._axinfo["grid"]['color'] =  (0.5, 0.5, 0.5, 0.2)
+                                            ax.yaxis._axinfo["grid"]['color'] =  (0.5, 0.5, 0.5, 0.2)
+                                            ax.zaxis._axinfo["grid"]['color'] =  (0.5, 0.5, 0.5, 0.2)                                           
+                                                                                        
+                                            
                                             
                                         else:
                                             ax = fig.add_subplot(111)
@@ -3856,17 +3964,17 @@ class visualize_results(object):
                                             for ddd in range(len(x_dims)):
                                                 
                                                 corr_prediction_fit_roi_means_perm = []
-                                                for perm in range(10000):
+                                                for perm in range(1000000):
                                                     # testing whether adding parameters significantly increases wCC (nocv here)
                                                     # the idea is asking how likely it is to get the same wCC improvement when adding a randomized version of the parameter, instead of the true one
                                                     ls2_perm = LinearRegression()
-                                                    samp_idx = np.random.randint(0, len(rois_ols_x_means), len(rois_ols_x_means))
+                                                    #samp_idx = np.random.randint(0, len(rois_ols_x_means), len(rois_ols_x_means))
                                                     x_perm = np.copy(rois_ols_x_means)#[samp_idx])
                                                     y_perm = np.copy(rois_ols_y_means)#[samp_idx])
                                                     w_perm = np.copy(rsq_alpha_plots_all_rois)#[samp_idx])
                                                     
-                                                    x_perm[:,ddd] = np.copy(x_perm[samp_idx,ddd])
-                                                    #np.random.shuffle(x_perm[:,ddd])
+                                                    #x_perm[:,ddd] = np.copy(x_perm[samp_idx,ddd])
+                                                    np.random.shuffle(x_perm[:,ddd])
                                                     #np.random.shuffle(y_perm)
                                                     #np.random.shuffle(w_perm)
                                                     ls2_perm.fit(x_perm, y_perm, sample_weight = w_perm)
@@ -3876,8 +3984,8 @@ class visualize_results(object):
                                             
                                             
                                                 pval_wcc_roimeans = np.sum(np.abs(corr_prediction_fit_roi_means)<np.abs(np.array(corr_prediction_fit_roi_means_perm)))/len(corr_prediction_fit_roi_means_perm)
-                                                
-                                                print(f"{ordered_dimensions[x_dims[ddd]]} pval={pval_wcc_roimeans:.5f}")                                            
+                                                self.ols_result_dict[ols_y_dim][f"{[ordered_dimensions[x_dim] for x_dim in x_dims]} {ordered_dimensions[x_dims[ddd]]}"]['pval'].append(pval_wcc_roimeans)
+                                                print(f"{ordered_dimensions[x_dims[ddd]]} pval={pval_wcc_roimeans:.7f}")                                            
 
                                             
                                                                                         
@@ -3898,6 +4006,15 @@ class visualize_results(object):
                                                 ax.xaxis.set_tick_params(pad=10)
                                                 ax.zaxis.set_tick_params(pad=10)
                                                 ax.yaxis.set_tick_params(pad=10)
+                                                
+                                                # make the panes 
+                                                ax.xaxis.set_pane_color((0.5, 0.5, 0.5, 0.05))
+                                                ax.yaxis.set_pane_color((0.5, 0.5, 0.5, 0.05))
+                                                ax.zaxis.set_pane_color((0.5, 0.5, 0.5, 0.05))
+                                                # make the grid lines 
+                                                ax.xaxis._axinfo["grid"]['color'] =  (0.5, 0.5, 0.5, 0.15)
+                                                ax.yaxis._axinfo["grid"]['color'] =  (0.5, 0.5, 0.5, 0.15)
+                                                ax.zaxis._axinfo["grid"]['color'] =  (0.5, 0.5, 0.5, 0.15)                                           
                                                 
                                             
                                             
@@ -3924,11 +4041,12 @@ class visualize_results(object):
                                                                     xerr=0,#ds_ols_roi_mean[rr][f"{ols_x0_dim} stdev"]*upsampling_corr_factor**0.5, 
                                                                     yerr=0,#ds_ols_roi_mean[rr][f"{ols_x1_dim} stdev"]*upsampling_corr_factor**0.5, 
                                                                     zerr=0,#ds_ols_roi_mean[rr][f"{ols_y_dim} stdev"]*upsampling_corr_factor**0.5,
-                                                                    color=cmap_rois[rr_num], fmt='s', mec='black', alpha=alpha_plot, ms=16)
+                                                                    color=cmap_rois[rr_num], fmt='s', mec='black', alpha=alpha_plot, ms=16, mew=2)
                                                         
-                                                        ax.text(ds_ols_roi_mean[rr][f"{ols_x0_dim} mean"], ds_ols_roi_mean[rr][f"{ols_x1_dim} mean"], ds_ols_roi_mean[rr][f"{ols_y_dim} mean"],
+                                                        roi_name_txt = ax.text(ds_ols_roi_mean[rr][f"{ols_x0_dim} mean"], ds_ols_roi_mean[rr][f"{ols_x1_dim} mean"], ds_ols_roi_mean[rr][f"{ols_y_dim} mean"],
                                                                 rr.replace('custom.','').replace('HCPQ1Q6.','') .replace('glasser_','') , 
-                                                                fontsize=24, color=cmap_rois[rr_num],  ha='left', va='bottom', alpha=alpha_plot)
+                                                                fontsize=25, color=cmap_rois[rr_num],  ha='left', va='bottom', alpha=alpha_plot)
+                                                        roi_name_txt.set_path_effects([peff.withStroke(linewidth=1, foreground='k')])
                                             
                                             if len(x_dims) == 2:
                                                 x0_min = np.min([ds_ols_roi_mean[rr][f"{ols_x0_dim} mean"] for rr in ds_ols_roi_mean])
@@ -3944,23 +4062,23 @@ class visualize_results(object):
     
                                                 
                                                 if 'Norm Param. D' in ols_y_dim:
-                                                    ax.set_zlim(25,75)
-                                                if '5-HT1B' in ols_x0_dim:
-                                                    ax.set_xlim(13,32)
-                                                    grid_points_x0 = np.linspace(13,32,50)
+                                                    ax.set_zlim(23,72)
+                                                # if '5-HT1B' in ols_x0_dim:
+                                                #     ax.set_xlim(13,32)
+                                                #     grid_points_x0 = np.linspace(13,32,50)
                                                     
-                                                if '5-HT2A' in ols_x1_dim:
-                                                    ax.set_ylim(39,66)
-                                                    grid_points_x1 = np.linspace(39,66,50)
+                                                # if '5-HT2A' in ols_x1_dim:
+                                                #     ax.set_ylim(39,66)
+                                                #     grid_points_x1 = np.linspace(39,66,50)
     
                                                 if 'Norm Param. B' in ols_y_dim:
-                                                    ax.set_zlim(10,150)
-                                                if '5-HT1A' in ols_x0_dim:
-                                                    ax.set_xlim(7,43)
-                                                    grid_points_x0 = np.linspace(7,43,50)
-                                                if 'GABA_A' in ols_x1_dim:
-                                                    ax.set_ylim(720,1080)  
-                                                    grid_points_x1 = np.linspace(720,1080,50)
+                                                    ax.set_zlim(-5,135)
+                                                # if '5-HT1A' in ols_x0_dim:
+                                                #     ax.set_xlim(7,43)
+                                                #     grid_points_x0 = np.linspace(7,43,50)
+                                                # if 'GABA_A' in ols_x1_dim:
+                                                #     ax.set_ylim(720,1080)  
+                                                #     grid_points_x1 = np.linspace(720,1080,50)
                                                 
                                                 
                                                 xx0, xx1 = np.meshgrid(grid_points_x0,
@@ -3972,7 +4090,12 @@ class visualize_results(object):
                                                 
                                                 
                                                 #ax.set_title(f"$R^2$={rsq_on_roi_means:.2f}")
-                                                ax.scatter(xx0.flatten(), xx1.flatten(), Z_pred,  s=4,  alpha=0.2, zorder=0, c=Z_pred, cmap='plasma')#, label=f"R2 (full data) {rsq_prediction:.2f}")
+                                                if 'Param. D' in ols_y_dim:
+                                                    pred_cmap = 'plasma_r'
+                                                elif 'Param. B' in ols_y_dim:
+                                                    pred_cmap = 'viridis_r'
+                                                    
+                                                ax.scatter(xx0.flatten(), xx1.flatten(), Z_pred,  s=4,  alpha=0.2, zorder=0, c=Z_pred, cmap=pred_cmap)#, vmin=np.nanquantile(Z_pred,0.1), vmax=np.nanquantile(Z_pred,0.95))#, label=f"R2 (full data) {rsq_prediction:.2f}")
                                                 #pl.legend()
                                                 
                                                 
@@ -4076,39 +4199,38 @@ class visualize_results(object):
                                                     print(f"wCC prediction (fit on {subj} roi means, eval on {cv_subj} roi means) {corr_prediction_fit_roi_means_cv:.4f}\n")    
                                                     
                                                     
-                                                    for ddd in range(len(x_dims)):
+                                                    # for ddd in range(len(x_dims)):
                                                         
-                                                        corr_prediction_fit_roi_means_perm_cv = []
-                                                        for perm in range(10000):
-                                                            # testing whether adding parameters significantly increases wCC (nocv here)
-                                                            # the idea is asking how likely it is to get the same wCC improvement when adding a randomized version of the parameter, instead of the true one
-                                                            ls2_perm = LinearRegression()
-                                                            samp_idx = np.random.randint(0, len(rois_ols_x_means), len(rois_ols_x_means))
-                                                            x_perm = np.copy(rois_ols_x_means)#[samp_idx])
-                                                            y_perm = np.copy(rois_ols_y_means)#[samp_idx])
-                                                            w_perm = np.copy(rsq_alpha_plots_all_rois)#[samp_idx])
+                                                    #     corr_prediction_fit_roi_means_perm_cv = []
+                                                    #     for perm in range(10000):
+                                                    #         # testing whether adding parameters significantly increases wCC (nocv here)
+                                                    #         # the idea is asking how likely it is to get the same wCC improvement when adding a randomized version of the parameter, instead of the true one
+                                                    #         ls2_perm = LinearRegression()
+                                                    #         #samp_idx = np.random.randint(0, len(rois_ols_x_means), len(rois_ols_x_means))
+                                                    #         x_perm = np.copy(rois_ols_x_means)#[samp_idx])
+                                                    #         y_perm = np.copy(rois_ols_y_means)#[samp_idx])
+                                                    #         w_perm = np.copy(rsq_alpha_plots_all_rois)#[samp_idx])
 
-                                                            x_perm[:,ddd] = np.copy(x_perm[samp_idx,ddd])
+                                                    #         np.random.shuffle(x_perm[:,ddd])#np.copy(x_perm[samp_idx,ddd])
                                                             
-                                                            x_perm_cv = np.copy(rois_ols_x_means_cv)#[samp_idx])
-                                                            samp_idx_cv = np.random.randint(0, len(rois_ols_x_means_cv), len(rois_ols_x_means_cv))
-                                                            x_perm_cv[:,ddd] = np.copy(x_perm_cv[samp_idx_cv,ddd])
-                                                            #y_perm_cv = np.copy(rois_ols_y_means_cv)#[samp_idx])
-                                                            #w_perm_cv = np.copy(rsq_alpha_plots_all_rois)#[samp_idx])                                                            
                                                             
-                                                            #np.random.shuffle(x_perm[:,ddd])
-                                                            #np.random.shuffle(y_perm)
-                                                            #np.random.shuffle(w_perm)
-                                                            ls2_perm.fit(x_perm, y_perm, sample_weight = w_perm)
-                                                            Zs_pred_fit_roi_means_perm = ls2_perm.predict(x_perm_cv)
+                                                    #         #samp_idx_cv = np.random.randint(0, len(rois_ols_x_means_cv), len(rois_ols_x_means_cv))
+
+                                                    #         x_perm_cv = np.copy(rois_ols_x_means_cv)#[samp_idx_cv])
+                                                    #         y_perm_cv = np.copy(rois_ols_y_means_cv)#[samp_idx_cv])
+                                                    #         w_perm_cv = np.copy(rsq_alpha_plots_all_rois_cv)#[samp_idx_cv])                                                                 
+                                                    #         #np.random.shuffle(x_perm_cv[:,ddd])
+
+                                                    #         ls2_perm.fit(x_perm, y_perm, sample_weight = w_perm)
+                                                    #         Zs_pred_fit_roi_means_perm = ls2_perm.predict(x_perm_cv)
          
-                                                            corr_prediction_fit_roi_means_perm_cv.append(weightstats.DescrStatsW(np.stack((Zs_pred_fit_roi_means_perm,rois_ols_y_means_cv)).T , weights=rsq_alpha_plots_all_rois_cv).corrcoef[0,1])
+                                                    #         corr_prediction_fit_roi_means_perm_cv.append(weightstats.DescrStatsW(np.stack((Zs_pred_fit_roi_means_perm,y_perm_cv)).T , weights=w_perm_cv).corrcoef[0,1])
                                                     
                                                     
-                                                        pval_wcc_roimeans_cv = np.sum(np.abs(corr_prediction_fit_roi_means_cv)<np.abs(np.array(corr_prediction_fit_roi_means_perm_cv)))/len(corr_prediction_fit_roi_means_perm_cv)
+                                                    #     pval_wcc_roimeans_cv = np.sum(np.abs(corr_prediction_fit_roi_means_cv)<np.abs(np.array(corr_prediction_fit_roi_means_perm_cv)))/len(corr_prediction_fit_roi_means_perm_cv)
                                                         
-                                                        print(f"{ordered_dimensions[x_dims[ddd]]} CV roimeans pval={pval_wcc_roimeans_cv:.5f}")     
-                                                        self.ols_result_dict[ols_y_dim][f"{[ordered_dimensions[x_dim] for x_dim in x_dims]} {ordered_dimensions[x_dims[ddd]]}"]['pval'].append(pval_wcc_roimeans_cv)
+                                                    #     print(f"{ordered_dimensions[x_dims[ddd]]} CV roimeans pval={pval_wcc_roimeans_cv:.5f}")     
+                                                    #     self.ols_result_dict[ols_y_dim][f"{[ordered_dimensions[x_dim] for x_dim in x_dims]} {ordered_dimensions[x_dims[ddd]]}"]['pval_cv'].append(pval_wcc_roimeans_cv)
                                                     
                                                     
 
