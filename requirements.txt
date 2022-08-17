@@ -12,3 +12,5 @@ scikit-learn
 statsmodels
 cmasher
 ipython
+prfpy
+pycortex
