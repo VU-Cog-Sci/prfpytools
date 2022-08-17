@@ -604,7 +604,7 @@ def Vertex2D_fix(data1, data2, subject, cmap, vmin, vmax, vmin2, vmax2, roi_bord
     display_data =  curv_rgb * (1-alpha) + vx_rgb * alpha
     
     if roi_borders is not None:
-        display_data[:,roi_borders.astype('bool')] = 0
+        display_data[:,roi_borders.astype('bool')] = 0#255-display_data[:,roi_borders.astype('bool')]#0#255
     
     # Create vertex RGB object out of R, G, B channels
     return cortex.VertexRGB(*display_data, subject)    

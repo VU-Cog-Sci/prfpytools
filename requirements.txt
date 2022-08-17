@@ -1,0 +1,13 @@
+numpy
+scipy
+h5py
+matplotlib
+tqdm
+pyyaml
+cifti
+nibabel
+nilearn
+joblib
+scikit-learn
+statsmodels
+cmasher
