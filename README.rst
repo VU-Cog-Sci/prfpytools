@@ -1,10 +1,10 @@
-pRFpy_tools
+pRFpytools
 ========
-pRFpy_tools is a toolbox and helper package for prfpy.
+pRFpytools is a toolbox and helper package for prfpy.
 
 License
 =======
-``prfpy_tools`` is licensed under the terms of the GPL-v3 license. See the file
+``prfpytools`` is licensed under the terms of the GPL-v3 license. See the file
 "LICENSE" for information on the history of this software, terms & conditions
 for usage, and a DISCLAIMER OF ALL WARRANTIES.
 
