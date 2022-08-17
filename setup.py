@@ -25,16 +25,16 @@ with open('requirements.txt', 'r') as f:
 
 
 # Setup function declaration
-setup(name="prfpy_tools",
+setup(name="prfpytools",
       version='dev0',
       author="Marco Aqil",
       author_email='marco.aqil@gmail.com',
-      description=("prfpy_tools: a toolbox and helper package for prfpy"),
+      description=("prfpytools: a toolbox and helper package for prfpy"),
       long_description=long_description,
-      url="https://github.com/VU-Cog-Sci/prfpy_tools",
+      url="https://github.com/VU-Cog-Sci/prfpytools",
       project_urls={
-          'Documentation': "https://github.com/VU-Cog-Sci/prfpy_tools",
-          'Source Code': "https://github.com/VU-Cog-Sci/prfpy_tools",
+          'Documentation': "https://github.com/VU-Cog-Sci/prfpytools",
+          'Source Code': "https://github.com/VU-Cog-Sci/prfpytools",
           },
       license='BSD-3',
       platforms=['Windows', 'Mac OS-X', 'Linux', 'Unix'],
