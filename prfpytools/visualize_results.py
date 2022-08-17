@@ -21,10 +21,10 @@ from collections import defaultdict as dd
 from copy import deepcopy
 import itertools
 from pathlib import Path
-from utils.postproc_utils import model_wrapper, create_model_rf_wrapper, colorbar, norm_1d_sr_function, norm_2d_sr_function, Vertex2D_fix, simple_colorbar
-from utils.postproc_utils import reduced_graph_ft, graph_randomization
+from prfpytools.postproc_utils import model_wrapper, create_model_rf_wrapper, colorbar, norm_1d_sr_function, norm_2d_sr_function, Vertex2D_fix, simple_colorbar
+from prfpytools.postproc_utils import reduced_graph_ft, graph_randomization
 import cmasher as cmr
-from utils.preproc_utils import roi_mask, inverse_roi_mask, create_full_stim
+from prfpytools.preproc_utils import roi_mask, inverse_roi_mask, create_full_stim
 #import seaborn as sns
 from skimage import filters
 

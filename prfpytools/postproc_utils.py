@@ -12,7 +12,7 @@ import matplotlib.image as mpimg
 from matplotlib.colors import Normalize
 from copy import deepcopy
 from prfpy.model import Iso2DGaussianModel, Norm_Iso2DGaussianModel, DoG_Iso2DGaussianModel, CSS_Iso2DGaussianModel
-from utils.preproc_utils import create_full_stim
+from prfpytools.preproc_utils import create_full_stim
 from prfpy.rf import gauss2D_iso_cart
 from prfpy.stimulus import PRFStimulus2D
 
