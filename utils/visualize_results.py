@@ -282,66 +282,10 @@ class visualize_results(object):
 
         return
     
-    # def compute_roi_borders(self, subject_ids = ['fsaverage'], rois_prefix='glasser'):
-        
-    #     self.idx_rois_borders = dd(dict)
-        
-    #     def comp_border(face):
-
-    #         return np.isin(face,roi).sum()
-
-        
-    #     for subj in subject_ids:
-    #         assert subj in self.idx_rois, "subject not found"            
-            
-    #         left, right = getattr(cortex.db,subj).surfaces.inflated.get()
-
-    #         faces = np.concatenate((left[1],len(left[0])+right[1]))
-            
-    #         border_faces = np.zeros(faces.shape[0]).astype('bool')
-    #         previous_roi_faces = np.zeros(faces.shape[0]).astype('bool')
-            
-    #         zz = np.zeros(len(left[0])+len(right[0]))
-            
-       
-            
-    #         for i,roi in enumerate([self.idx_rois[subj][r] for r in self.idx_rois[subj] if rois_prefix in r]):
-                
-    #             current_faces = ~(border_faces+previous_roi_faces)
-                
-    #             print(current_faces.shape)
-                
-    #             res = np.array(Parallel(n_jobs=7, verbose=True)(delayed(comp_border)(face) for face in faces[current_faces]))
-                
-    #             print(set(res))
-                
-    #             border_faces[current_faces] += ((res == 1) + (res == 2))
-                
-    #             print(border_faces.sum())
-                
-    #             previous_roi_faces[current_faces] += (res == 3)
-                
-    #             print(previous_roi_faces.sum())
-                
-    #             #border_faces += current_faces
-                
-                
-    #             #print(np.sum(border_faces))
-                
-    #         zz[np.flatten(faces[border_faces])] = 1
-                
-                
-                
-
-             
-    #         self.idx_rois_border[subj][rois_prefix] = np.copy(zz)
-            
-    #         return
                     
                 
-    def compute_roi_borders(self, subject_ids = ['fsaverage'], rois_prefix='glasser'):
-        
-        
+    def compute_roi_borders(self, subject_ids = ['fsaverage'], rois_prefix='glasser', previous_borders_path=None):
+               
         
         def comp_border(face):
 
@@ -349,28 +293,28 @@ class visualize_results(object):
 
         
         for subj in subject_ids:
-            assert subj in self.idx_rois, "subject not found"            
+            assert subj in self.idx_rois, "subject not found"    
             
-            left, right = getattr(cortex.db,subj).surfaces.inflated.get()
-
-            faces = np.concatenate((left[1],len(left[0])+right[1]))
+            if previous_borders_path is None:
             
-            
-            
-            
-            zz = np.zeros(len(left[0])+len(right[0]))
-            
-            rois = [self.idx_rois[subj][r] for r in self.idx_rois[subj] if rois_prefix in r]
-       
-            
-            res = np.array(Parallel(n_jobs=6, verbose=True)(delayed(comp_border)(face) for face in faces))
+                left, right = getattr(cortex.db,subj).surfaces.inflated.get()
+    
+                faces = np.concatenate((left[1],len(left[0])+right[1]))
                 
-            zz[np.ravel(faces[res])] = 1
+            
+                zz = np.zeros(len(left[0])+len(right[0]))
                 
-         
-
-             
-            self.idx_rois_borders[subj][rois_prefix] = np.copy(zz)
+                rois = [self.idx_rois[subj][r] for r in self.idx_rois[subj] if rois_prefix in r]
+           
+                
+                res = np.array(Parallel(n_jobs=6, verbose=True)(delayed(comp_border)(face) for face in faces))
+                    
+                zz[np.ravel(faces[res])] = 1
+                            
+                 
+                self.idx_rois_borders[subj][rois_prefix] = np.copy(zz)
+            else:
+                self.idx_rois_borders[subj][rois_prefix] = np.load(previous_borders_path)
             
             return
                         
@@ -461,7 +405,7 @@ class visualize_results(object):
     def pycortex_plots(self, rois, rsq_thresh,
                        space_names = 'fsnative', analysis_names = 'all', subject_ids='all',
                        timecourse_folder = None, screenshot_paths = [], pycortex_cmap = 'nipy_spectral',
-                       rsq_max_opacity = 0.5, pycortex_image_path = None):        
+                       rsq_max_opacity = 0.5, pycortex_image_path = None, roi_borders = None):        
         pl.rcParams.update({'font.size': 16})
         pl.rcParams.update({'pdf.fonttype':42})        
         self.click=0
@@ -783,9 +727,8 @@ class visualize_results(object):
                         mask = np.ones_like(p_r['RSq'][list(models)[0]])
 
          
-                    # if rois != 'all':
-                    #     for key in p_r['Alpha']:
-                    #         p_r['Alpha'][key] = roi_mask(np.concatenate(tuple([self.idx_rois[subj][r] for r in rois])), p_r['Alpha'][key])
+                    if roi_borders is not None:
+                        roi_borders = self.idx_rois_borders[pycortex_subj][roi_borders]
                     
                     curr_models = self.only_models
                     if len(self.only_models)>1:
@@ -864,9 +807,9 @@ class visualize_results(object):
                         
                         
                         
-                        mean_ts_vert = Vertex2D_fix(tc_stats['Mean'], stats_mask, subject=pycortex_subj, cmap=pycortex_cmap)
-                        var_ts_vert = Vertex2D_fix(tc_stats['Variance'], stats_mask, subject=pycortex_subj, cmap=pycortex_cmap)
-                        tsnr_vert = Vertex2D_fix(tc_stats['TSNR'], stats_mask, subject=pycortex_subj, cmap=pycortex_cmap)
+                        mean_ts_vert = Vertex2D_fix(tc_stats['Mean'], stats_mask, subject=pycortex_subj, cmap=pycortex_cmap, roi_borders=roi_borders)
+                        var_ts_vert = Vertex2D_fix(tc_stats['Variance'], stats_mask, subject=pycortex_subj, cmap=pycortex_cmap, roi_borders=roi_borders)
+                        tsnr_vert = Vertex2D_fix(tc_stats['TSNR'], stats_mask, subject=pycortex_subj, cmap=pycortex_cmap, roi_borders=roi_borders)
         
                         data_stats ={'mean':mean_ts_vert, 'var':var_ts_vert, 'tsnr':tsnr_vert}
         
@@ -887,35 +830,35 @@ class visualize_results(object):
                             roi_data = np.zeros_like(mask)
                             roi_data[self.idx_rois[subj][roi]] = 1
                             custom_rois_data[self.idx_rois[subj][roi]] = i+1
-                            ds_rois[roi] = Vertex2D_fix(roi_data, roi_data.astype('bool'), subject=pycortex_subj, cmap=pycortex_cmap, vmin=0, vmax=roi_data.max(), vmin2=0, vmax2=1)
+                            ds_rois[roi] = Vertex2D_fix(roi_data, roi_data.astype('bool'), subject=pycortex_subj, cmap=pycortex_cmap, vmin=0, vmax=roi_data.max(), vmin2=0, vmax2=1, roi_borders=roi_borders)
                             
                         for i, roi in enumerate([r for r in self.idx_rois[subj] if 'custom' not in r and 'visual' not in r and 'HCP' not in r and 'glasser' not in r]):        
                             roi_data = np.zeros_like(mask)
                             roi_data[self.idx_rois[subj][roi]] = 1
                             data[self.idx_rois[subj][roi]] = i+1                           
-                            ds_rois[roi] = Vertex2D_fix(roi_data, roi_data.astype('bool'), subject=pycortex_subj, cmap=pycortex_cmap, vmin=0, vmax=roi_data.max(), vmin2=0, vmax2=1)
+                            ds_rois[roi] = Vertex2D_fix(roi_data, roi_data.astype('bool'), subject=pycortex_subj, cmap=pycortex_cmap, vmin=0, vmax=roi_data.max(), vmin2=0, vmax2=1, roi_borders=roi_borders)
                             
                         for i, roi in enumerate([r for r in self.idx_rois[subj] if 'HCPQ1Q6.' in r]):        
                             roi_data = np.zeros_like(mask)
                             roi_data[self.idx_rois[subj][roi]] = 1
                             hcp_rois_data[self.idx_rois[subj][roi]] = i+1                              
-                            ds_rois[roi] = Vertex2D_fix(roi_data, roi_data.astype('bool'), subject=pycortex_subj, cmap=pycortex_cmap, vmin=0, vmax=roi_data.max(), vmin2=0, vmax2=1)
+                            ds_rois[roi] = Vertex2D_fix(roi_data, roi_data.astype('bool'), subject=pycortex_subj, cmap=pycortex_cmap, vmin=0, vmax=roi_data.max(), vmin2=0, vmax2=1, roi_borders=roi_borders)
 
                         for i, roi in enumerate([r for r in self.idx_rois[subj] if 'glasser' in r]):        
                             roi_data = np.zeros_like(mask)
                             roi_data[self.idx_rois[subj][roi]] = 1
                             glasser_rois_data[self.idx_rois[subj][roi]] = i+1                                                                  
-                            ds_rois[roi] = Vertex2D_fix(roi_data, roi_data.astype('bool'), subject=pycortex_subj, cmap=pycortex_cmap, vmin=0, vmax=roi_data.max(), vmin2=0, vmax2=1)
+                            ds_rois[roi] = Vertex2D_fix(roi_data, roi_data.astype('bool'), subject=pycortex_subj, cmap=pycortex_cmap, vmin=0, vmax=roi_data.max(), vmin2=0, vmax2=1, roi_borders=roi_borders)
         
 
                         if data.sum()>0:
-                            ds_rois['Wang2015Atlas'] = Vertex2D_fix(data, data.astype('bool'), subject=pycortex_subj, cmap=pycortex_cmap, vmin=0, vmax=data.max(), vmin2=0, vmax2=1)
+                            ds_rois['Wang2015Atlas'] = Vertex2D_fix(data, data.astype('bool'), subject=pycortex_subj, cmap=pycortex_cmap, vmin=0, vmax=data.max(), vmin2=0, vmax2=1, roi_borders=roi_borders)
                         if custom_rois_data.sum()>0:
-                            ds_rois['Custom ROIs'] = Vertex2D_fix(custom_rois_data, custom_rois_data.astype('bool'), subject=pycortex_subj, cmap=pycortex_cmap, vmin=0, vmax=custom_rois_data.max(), vmin2=0, vmax2=1) 
+                            ds_rois['Custom ROIs'] = Vertex2D_fix(custom_rois_data, custom_rois_data.astype('bool'), subject=pycortex_subj, cmap=pycortex_cmap, vmin=0, vmax=custom_rois_data.max(), vmin2=0, vmax2=1, roi_borders=roi_borders)
                         if hcp_rois_data.sum()>0:
-                            ds_rois['HCP ROIs'] = Vertex2D_fix(hcp_rois_data, hcp_rois_data.astype('bool'), subject=pycortex_subj, cmap=pycortex_cmap, vmin=0, vmax=hcp_rois_data.max(), vmin2=0, vmax2=1)
+                            ds_rois['HCP ROIs'] = Vertex2D_fix(hcp_rois_data, hcp_rois_data.astype('bool'), subject=pycortex_subj, cmap=pycortex_cmap, vmin=0, vmax=hcp_rois_data.max(), vmin2=0, vmax2=1, roi_borders=roi_borders)
                         if glasser_rois_data.sum()>0:
-                            ds_rois['Glasser ROIs'] = Vertex2D_fix(glasser_rois_data, glasser_rois_data.astype('bool'), subject=pycortex_subj, cmap=pycortex_cmap, vmin=0, vmax=glasser_rois_data.max(), vmin2=0, vmax2=1) 
+                            ds_rois['Glasser ROIs'] = Vertex2D_fix(glasser_rois_data, glasser_rois_data.astype('bool'), subject=pycortex_subj, cmap=pycortex_cmap, vmin=0, vmax=glasser_rois_data.max(), vmin2=0, vmax2=1, roi_borders=roi_borders) 
                                                 
                         self.js_handle_dict[space][analysis][subj]['rois'] = cortex.webgl.show(ds_rois, pickerfun=clicker_function,  overlays_visible=[], labels_visible=[]) 
         
@@ -932,7 +875,7 @@ class visualize_results(object):
                             best_model = np.argmax([p_r['RSq'][model] for model in self.only_models],axis=0)
 
                             ds_rsq['Best model'] = Vertex2D_fix(best_model, alpha[analysis][subj]['all'], subject=pycortex_subj,
-                                                                      vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap='BROYG_2D')
+                                                                      vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap='BROYG_2D', roi_borders=roi_borders)
 
 
                         for model in self.only_models:
@@ -942,7 +885,7 @@ class visualize_results(object):
                                                             np.ones_like(alpha[analysis][subj][model]), subject=pycortex_subj, 
                                                             vmin=0,#np.nanquantile(p_r['RSq'][model][alpha[analysis][subj][model]>rsq_thresh],0.1), 
                                                             vmax=0.15,#np.nanquantile(p_r['RSq'][model][alpha[analysis][subj][model]>rsq_thresh],0.9),
-                                                            vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap='inferno')
+                                                            vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap='inferno', roi_borders=roi_borders)
                             
                             fig = simple_colorbar(vmin=0,#np.nanquantile(p_r['RSq'][model][alpha[analysis][subj][model]>rsq_thresh],0.1), 
                                             vmax=0.15,#np.nanquantile(p_r['RSq'][model][alpha[analysis][subj][model]>rsq_thresh],0.9),
@@ -959,7 +902,7 @@ class visualize_results(object):
                                                                np.ones_like(alpha[analysis][subj][model]), subject=pycortex_subj, 
                                                             vmin=-1.25,#np.nanquantile(p_r['Noise Ceiling'][nc_type][alpha[analysis][subj][model]>rsq_thresh],0.1), 
                                                             vmax=-0.75,#np.nanquantile(p_r['Noise Ceiling'][nc_type][alpha[analysis][subj][model]>rsq_thresh],0.9),
-                                                            vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap=pycortex_cmap)   
+                                                            vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap=pycortex_cmap, roi_borders=roi_borders)   
                                 
                                 fig = simple_colorbar(vmin=-1.25,#np.nanquantile(p_r['RSq'][model][alpha[analysis][subj][model]>rsq_thresh],0.1), 
                                                 vmax=-0.75,#np.nanquantile(p_r['RSq'][model][alpha[analysis][subj][model]>rsq_thresh],0.9),
@@ -977,7 +920,7 @@ class visualize_results(object):
                                                                np.ones_like(alpha[analysis][subj][model]), subject=pycortex_subj, 
                                                             vmin=0,#np.nanquantile(p_r['Noise Ceiling'][nc_type][alpha[analysis][subj][model]>rsq_thresh],0.1), 
                                                             vmax=100,#np.nanquantile(p_r['Noise Ceiling'][nc_type][alpha[analysis][subj][model]>rsq_thresh],0.9),
-                                                            vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap=pycortex_cmap)   
+                                                            vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap=pycortex_cmap, roi_borders=roi_borders)   
                                 
                                 fig = simple_colorbar(vmin=0,#np.nanquantile(p_r['RSq'][model][alpha[analysis][subj][model]>rsq_thresh],0.1), 
                                                 vmax=100,#np.nanquantile(p_r['RSq'][model][alpha[analysis][subj][model]>rsq_thresh],0.9),
@@ -988,30 +931,30 @@ class visualize_results(object):
                                     
                         if 'CSS' in models and p_r['RSq']['CSS'].sum()>0:
                             ds_rsq['CSS - Gauss'] = Vertex2D_fix(p_r['RSq']['CSS']-p_r['RSq']['Gauss'], alpha[analysis][subj]['all'], subject=pycortex_subj,
-                                                                      vmin=-0.1, vmax=0.1, vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap=pycortex_cmap)   
+                                                                      vmin=-0.1, vmax=0.1, vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap=pycortex_cmap, roi_borders=roi_borders)  
                             
                         if 'DoG' in models and p_r['RSq']['DoG'].sum()>0:
                             ds_rsq['DoG - Gauss'] = Vertex2D_fix(p_r['RSq']['DoG']-p_r['RSq']['Gauss'], alpha[analysis][subj]['all'], subject=pycortex_subj,
-                                                                  vmin=-0.1, vmax=0.1, vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap=pycortex_cmap)
+                                                                  vmin=-0.1, vmax=0.1, vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap=pycortex_cmap, roi_borders=roi_borders)
                         
                         if 'Norm_abcd' in self.only_models and 'Gauss' in self.only_models:
 
                             ds_rsq['Norm_abcd - Gauss'] = Vertex2D_fix(p_r['RSq']['Norm_abcd']-p_r['RSq']['Gauss'], alpha[analysis][subj]['all'], subject=pycortex_subj,
-                                                                      vmin=-0.1, vmax=0.1, vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap=pycortex_cmap)
+                                                                      vmin=-0.1, vmax=0.1, vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap=pycortex_cmap, roi_borders=roi_borders)
 
                             if 'CSS' in self.only_models and 'DoG' in self.only_models:
                             
                                 ds_rsq['Norm_abcd - DoG'] = Vertex2D_fix(p_r['RSq']['Norm_abcd']-p_r['RSq']['DoG'], alpha[analysis][subj]['all'], subject=pycortex_subj,
-                                                                      vmin=-0.1, vmax=0.1, vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap=pycortex_cmap)
+                                                                      vmin=-0.1, vmax=0.1, vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap=pycortex_cmap, roi_borders=roi_borders)
 
                                 ds_rsq['Norm_abcd - CSS'] = Vertex2D_fix(p_r['RSq']['Norm_abcd']-p_r['RSq']['CSS'], alpha[analysis][subj]['all'], subject=pycortex_subj, 
-                                                                      vmin=-0.1, vmax=0.1, vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap=pycortex_cmap)
+                                                                      vmin=-0.1, vmax=0.1, vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap=pycortex_cmap, roi_borders=roi_borders)
  
 
                         for model in [model for model in self.only_models if 'Norm' in model and 'Norm_abcd' != model]:
 
                             ds_rsq[f'{model} - Norm_abcd'] = Vertex2D_fix(p_r['RSq'][model]-p_r['RSq']['Norm_abcd'], alpha[analysis][subj]['all'], subject=pycortex_subj,
-                                                                      vmin=-0.1, vmax=0.1, vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap=pycortex_cmap)
+                                                                      vmin=-0.1, vmax=0.1, vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap=pycortex_cmap, roi_borders=roi_borders)
                             
                             
                         if 'Processed Results' in self.main_dict['T1w'][analysis][subj] and self.compare_volume_surface:
@@ -1028,7 +971,7 @@ class visualize_results(object):
                             ds_rsq_comp['Norm_abcd CV rsq (volume fit)'] = cortex.Volume2D(volume_rsq.T, volume_rsq.T, subj, 'func_space_transform',
                                                                       vmin=rsq_thresh, vmax=0.6, vmin2=0.05, vmax2=rsq_thresh, cmap=pycortex_cmap)
                             ds_rsq_comp['Norm_abcd CV rsq (surface fit)'] = Vertex2D_fix(p_r['RSq']['Norm_abcd'], p_r['RSq']['Norm_abcd'], subject=pycortex_subj,
-                                                                      vmin=rsq_thresh, vmax=0.6, vmin2=0.05, vmax2=rsq_thresh, cmap=pycortex_cmap)
+                                                                      vmin=rsq_thresh, vmax=0.6, vmin2=0.05, vmax2=rsq_thresh, cmap=pycortex_cmap, roi_borders=roi_borders)
                             self.js_handle_dict[space][analysis][subj]['rsq_comp'] = cortex.webgl.show(ds_rsq_comp, pickerfun=clicker_function,  overlays_visible=[], labels_visible=[]) 
                         
                         
@@ -1042,7 +985,7 @@ class visualize_results(object):
                             ds_ecc[f"{model} Eccentricity"] = Vertex2D_fix(p_r['Eccentricity'][model], alpha[analysis][subj][model], subject=pycortex_subj, 
                                                             vmin=self.ecc_min,#np.nanquantile(p_r['Eccentricity'][model][alpha[analysis][subj][model]>rsq_thresh],0.1), 
                                                             vmax=0.8*self.ecc_max,#np.nanquantile(p_r['Eccentricity'][model][alpha[analysis][subj][model]>rsq_thresh],0.9), 
-                                                            vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap=pycortex_cmap) #np.nanquantile(alpha[analysis][subj][model][alpha[analysis][subj][model]>rsq_thresh],0.9
+                                                            vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap=pycortex_cmap, roi_borders=roi_borders) #np.nanquantile(alpha[analysis][subj][model][alpha[analysis][subj][model]>rsq_thresh],0.9
         
                             fig = simple_colorbar(vmin=self.ecc_min,#np.nanquantile(p_r['Eccentricity'][model][alpha[analysis][subj][model]>rsq_thresh],0.1), 
                                             vmax=0.8*self.ecc_max,#np.nanquantile(p_r['Eccentricity'][model][alpha[analysis][subj][model]>rsq_thresh],0.9),
@@ -1060,7 +1003,7 @@ class visualize_results(object):
                             #print(p_r['Polar Angle'][model])
                             ds_polar[f"{model} polar angle HSV2"] = Vertex2D_fix(p_r['Polar Angle'][model], alpha[analysis][subj][model], subject=pycortex_subj, 
                                                               vmin=-3.1415, vmax=3.1415,
-                                                              vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap='hsvx2', roi_borders=self.idx_rois_borders['fsaverage']['glasser'])
+                                                              vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap='hsvx2', roi_borders=roi_borders)
                             
                             fig = simple_colorbar(vmin=-3.1415, vmax=3.1415,
                                             cmap_name='hsvx2', ori='polar', param_name='Polar Angle (°)')                                     
@@ -1070,7 +1013,7 @@ class visualize_results(object):
 
                             ds_polar[f"{model} polar angle HSV1"] = Vertex2D_fix(p_r['Polar Angle'][model], alpha[analysis][subj][model], subject=pycortex_subj, 
                                                                         vmin=-3.1415, vmax=3.1415,
-                                                               vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap='hsv')
+                                                               vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap='hsv', roi_borders=roi_borders)
                             
                             fig = simple_colorbar(vmin=-3.1415, vmax=3.1415,
                                             cmap_name='hsv', ori='polar', param_name='Polar Angle (°)')                                     
@@ -1091,7 +1034,7 @@ class visualize_results(object):
                             ds_polar_comp['Norm_abcd CV polar (volume fit)'] = cortex.Volume2D(volume_polar.T, volume_rsq.T, subj, 'func_space_transform',
                                                                       vmin2=0.05, vmax2=rsq_thresh, cmap='hsvx2')
                             ds_polar_comp['Norm_abcd CV polar (surface fit)'] = Vertex2D_fix(p_r['Polar Angle']['Norm_abcd'], p_r['RSq']['Norm_abcd'], subject=pycortex_subj,
-                                                                      vmin2=0.05, vmax2=rsq_thresh, cmap='hsvx2')
+                                                                      vmin2=0.05, vmax2=rsq_thresh, cmap='hsvx2', roi_borders=roi_borders)
                             self.js_handle_dict[space][analysis][subj]['polar_comp'] = cortex.webgl.show(ds_polar_comp, pickerfun=clicker_function,  overlays_visible=[], labels_visible=[]) 
 
                         
@@ -1105,13 +1048,13 @@ class visualize_results(object):
                             ds_size[f"{model} fwhmax"] = Vertex2D_fix(p_r['Size (fwhmax)'][model], alpha[analysis][subj][model], subject=pycortex_subj, 
                                                              vmin=np.nanquantile(p_r['Size (fwhmax)'][model][alpha[analysis][subj][model]>rsq_thresh],0.01), 
                                                              vmax=np.nanquantile(p_r['Size (fwhmax)'][model][alpha[analysis][subj][model]>rsq_thresh],0.99), 
-                                                             vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap=pycortex_cmap)
+                                                             vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap=pycortex_cmap, roi_borders=roi_borders)
                             
                                 
                             ds_size[f"{model} sigma_1"] = Vertex2D_fix(p_r['Size (sigma_1)'][model], alpha[analysis][subj][model], subject=pycortex_subj, 
                                                              vmin=1.1,#np.nanquantile(p_r['Size (sigma_1)'][model][alpha[analysis][subj][model]>rsq_thresh],0.01), 
                                                              vmax=4.4,#np.nanquantile(p_r['Size (sigma_1)'][model][alpha[analysis][subj][model]>rsq_thresh],0.99), 
-                                                             vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap=pycortex_cmap)
+                                                             vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap=pycortex_cmap, roi_borders=roi_borders)
                             
                             fig = simple_colorbar(vmin=1.1,#np.nanquantile(p_r['Size (sigma_1)'][model][alpha[analysis][subj][model]>rsq_thresh],0.025), 
                                             vmax=4.4,#np.nanquantile(p_r['Size (sigma_1)'][model][alpha[analysis][subj][model]>rsq_thresh],0.9),
@@ -1129,7 +1072,7 @@ class visualize_results(object):
                         for model in self.only_models:
                             ds_amp[f"{model} Amplitude"] = Vertex2D_fix(p_r['Amplitude'][model], alpha[analysis][subj][model], subject=pycortex_subj, 
                                                             vmin=np.nanquantile(p_r['Amplitude'][model][alpha[analysis][subj][model]>rsq_thresh],0.1), 
-                                                            vmax=np.nanquantile(p_r['Amplitude'][model][alpha[analysis][subj][model]>rsq_thresh],0.9), vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap=pycortex_cmap)
+                                                            vmax=np.nanquantile(p_r['Amplitude'][model][alpha[analysis][subj][model]>rsq_thresh],0.9), vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap=pycortex_cmap, roi_borders=roi_borders)
 
                             fig = simple_colorbar(vmin=np.nanquantile(p_r['Amplitude'][model][alpha[analysis][subj][model]>rsq_thresh],0.1), 
                                             vmax=np.nanquantile(p_r['Amplitude'][model][alpha[analysis][subj][model]>rsq_thresh],0.9),
@@ -1141,7 +1084,7 @@ class visualize_results(object):
                             if model == 'DoG' or 'Norm' in model:
                                 ds_amp[f"{model} Surround Amplitude"] = Vertex2D_fix(p_r['Surround Amplitude'][model], alpha[analysis][subj][model], subject=pycortex_subj, 
                                                             vmin=np.nanquantile(p_r['Surround Amplitude'][model][alpha[analysis][subj][model]>rsq_thresh],0.1), 
-                                                            vmax=np.nanquantile(p_r['Surround Amplitude'][model][alpha[analysis][subj][model]>rsq_thresh],0.9), vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap=pycortex_cmap)        
+                                                            vmax=np.nanquantile(p_r['Surround Amplitude'][model][alpha[analysis][subj][model]>rsq_thresh],0.9), vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap=pycortex_cmap, roi_borders=roi_borders)       
         
                                 fig = simple_colorbar(vmin=np.nanquantile(p_r['Surround Amplitude'][model][alpha[analysis][subj][model]>rsq_thresh],0.1), 
                                                 vmax=np.nanquantile(p_r['Surround Amplitude'][model][alpha[analysis][subj][model]>rsq_thresh],0.9),
@@ -1158,7 +1101,7 @@ class visualize_results(object):
                         ds_css_exp = dict()
                         
                         ds_css_exp['CSS Exponent'] = Vertex2D_fix(p_r['CSS Exponent']['CSS'], alpha[analysis][subj]['CSS'], subject=pycortex_subj, 
-                                                                     vmin=0, vmax=1, vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap=pycortex_cmap)
+                                                                     vmin=0, vmax=1, vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap=pycortex_cmap, roi_borders=roi_borders)
         
                         self.js_handle_dict[space][analysis][subj]['css_exp'] = cortex.webgl.show(ds_css_exp, pickerfun=clicker_function,  overlays_visible=[], labels_visible=[]) 
                         
@@ -1172,11 +1115,11 @@ class visualize_results(object):
                                 ds_surround_size[f"{model} fwatmin"] = Vertex2D_fix(p_r['Surround Size (fwatmin)'][model], alpha[analysis][subj][model], subject=pycortex_subj, 
                                                             vmin=np.nanquantile(p_r['Surround Size (fwatmin)'][model][alpha[analysis][subj][model]>rsq_thresh],0.1), 
                                                             vmax=np.nanquantile(p_r['Surround Size (fwatmin)'][model][alpha[analysis][subj][model]>rsq_thresh],0.9),
-                                                            vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap=pycortex_cmap)                    
+                                                            vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap=pycortex_cmap, roi_borders=roi_borders)                    
                                 ds_surround_size[f"{model} sigma_2"] = Vertex2D_fix(p_r['Size (sigma_2)'][model], alpha[analysis][subj][model], subject=pycortex_subj, 
                                                             vmin=np.nanquantile(p_r['Size (sigma_2)'][model][alpha[analysis][subj][model]>rsq_thresh],0.1), 
                                                             vmax=np.nanquantile(p_r['Size (sigma_2)'][model][alpha[analysis][subj][model]>rsq_thresh],0.9),
-                                                            vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap=pycortex_cmap)    
+                                                            vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap=pycortex_cmap, roi_borders=roi_borders)   
 
                                 fig = simple_colorbar(vmin=np.nanquantile(p_r['Size (sigma_2)'][model][alpha[analysis][subj][model]>rsq_thresh],0.1), 
                                                 vmax=np.nanquantile(p_r['Size (sigma_2)'][model][alpha[analysis][subj][model]>rsq_thresh],0.9),
@@ -1195,14 +1138,14 @@ class visualize_results(object):
                         for model in self.only_models:
                             if model == 'DoG':
                                 ds_suppression_index[f'{model} SI (full)'] = Vertex2D_fix(p_r['Suppression Index (full)'][model], alpha[analysis][subj][model], subject=pycortex_subj, 
-                                                                     vmin=0, vmax=10, vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap=pycortex_cmap)
+                                                                     vmin=0, vmax=10, vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap=pycortex_cmap, roi_borders=roi_borders)
                                 ds_suppression_index[f'{model} SI (aperture)'] = Vertex2D_fix(p_r['Suppression Index'][model], alpha[analysis][subj][model], subject=pycortex_subj, 
-                                                                     vmin=0, vmax=1.5, vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap=pycortex_cmap)                                    
+                                                                     vmin=0, vmax=1.5, vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap=pycortex_cmap, roi_borders=roi_borders)                                    
                             elif 'Norm' in model:
                                 ds_suppression_index[f'{model} NI (full)'] = Vertex2D_fix(p_r['Suppression Index (full)'][model], alpha[analysis][subj][model], subject=pycortex_subj, 
-                                                                     vmin=1, vmax=20, vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap=pycortex_cmap)
+                                                                     vmin=1, vmax=20, vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap=pycortex_cmap, roi_borders=roi_borders)
                                 ds_suppression_index[f'{model} NI (aperture)'] = Vertex2D_fix(p_r['Suppression Index'][model], alpha[analysis][subj][model], subject=pycortex_subj, 
-                                                                     vmin=0, vmax=1.5, vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap=pycortex_cmap)                      
+                                                                     vmin=0, vmax=1.5, vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap=pycortex_cmap, roi_borders=roi_borders)                     
         
                         self.js_handle_dict[space][analysis][subj]['suppression_index'] = cortex.webgl.show(ds_suppression_index, pickerfun=clicker_function,  overlays_visible=[], labels_visible=[])    
 
@@ -1212,7 +1155,7 @@ class visualize_results(object):
                             if model in p_r['Size ratio (sigma_2/sigma_1)']:
                                 ds_size_ratio[f'{model} size ratio'] = Vertex2D_fix(p_r['Size ratio (sigma_2/sigma_1)'][model], alpha[analysis][subj][model], subject=pycortex_subj, 
                                                             vmin=np.nanquantile(p_r['Size ratio (sigma_2/sigma_1)'][model][alpha[analysis][subj][model]>rsq_thresh],0.1), 
-                                                            vmax=np.nanquantile(p_r['Size ratio (sigma_2/sigma_1)'][model][alpha[analysis][subj][model]>rsq_thresh],0.9), vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap=pycortex_cmap)                                                      
+                                                            vmax=np.nanquantile(p_r['Size ratio (sigma_2/sigma_1)'][model][alpha[analysis][subj][model]>rsq_thresh],0.9), vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap=pycortex_cmap, roi_borders=roi_borders)                                                      
 
                                 fig = simple_colorbar(vmin=np.nanquantile(p_r['Size ratio (sigma_2/sigma_1)'][model][alpha[analysis][subj][model]>rsq_thresh],0.1), 
                                                 vmax=np.nanquantile(p_r['Size ratio (sigma_2/sigma_1)'][model][alpha[analysis][subj][model]>rsq_thresh],0.9),
@@ -1235,7 +1178,7 @@ class visualize_results(object):
                                 ds_receptors[receptor] = Vertex2D_fix(p_r['Receptor Maps'][receptor], alpha[analysis][subj][rec_mod_alpha], subject=pycortex_subj, 
                                                                          vmin=np.nanquantile(p_r['Receptor Maps'][receptor][alpha[analysis][subj][rec_mod_alpha]>rsq_thresh],0.1),
                                                                          vmax=np.nanquantile(p_r['Receptor Maps'][receptor][alpha[analysis][subj][rec_mod_alpha]>rsq_thresh],0.9), 
-                                                                         vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap=pycortex_cmap)    
+                                                                         vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap=pycortex_cmap, roi_borders=roi_borders)   
 
                                 fig = simple_colorbar(vmin=np.nanquantile(p_r['Receptor Maps'][receptor][alpha[analysis][subj][rec_mod_alpha]>rsq_thresh],0.1),
                                                 vmax=np.nanquantile(p_r['Receptor Maps'][receptor][alpha[analysis][subj][rec_mod_alpha]>rsq_thresh],0.9), 
@@ -1258,7 +1201,7 @@ class visualize_results(object):
                             ds_norm_baselines[f'{model} Param. B'] = Vertex2D_fix(p_r['Norm Param. B'][model], alpha[analysis][subj][model], subject=pycortex_subj, 
                                                                          vmin=0,#np.nanquantile(p_r['Norm Param. B'][model][alpha[analysis][subj][model]>rsq_thresh],0.01), 
                                                                          vmax=100,#np.nanquantile(p_r['Norm Param. B'][model][alpha[analysis][subj][model]>rsq_thresh],0.99), 
-                                                                         vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap=pycortex_cmap)     
+                                                                         vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap=pycortex_cmap, roi_borders=roi_borders)     
                             
                             fig = simple_colorbar(vmin=0,#np.nanquantile(p_r['Norm Param. B'][model][alpha[analysis][subj][model]>rsq_thresh],0.01), 
                                             vmax=100,#np.nanquantile(p_r['Norm Param. B'][model][alpha[analysis][subj][model]>rsq_thresh],0.99),
@@ -1272,7 +1215,7 @@ class visualize_results(object):
                             ds_norm_baselines[f'{model} Param. D'] = Vertex2D_fix(p_r['Norm Param. D'][model], alpha[analysis][subj][model], subject=pycortex_subj, 
                                                                          vmin=1,#np.nanquantile(p_r['Norm Param. D'][model][alpha[analysis][subj][model]>rsq_thresh],0.01), 
                                                                          vmax=100,#np.nanquantile(p_r['Norm Param. D'][model][alpha[analysis][subj][model]>rsq_thresh],0.99),
-                                                                         vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap=pycortex_cmap)
+                                                                         vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap=pycortex_cmap, roi_borders=roi_borders)
                             
                             fig = simple_colorbar(vmin=1,#np.nanquantile(p_r['Norm Param. D'][model][alpha[analysis][subj][model]>rsq_thresh],0.01), 
                                             vmax=100,#np.nanquantile(p_r['Norm Param. D'][model][alpha[analysis][subj][model]>rsq_thresh],0.99),
@@ -1284,7 +1227,7 @@ class visualize_results(object):
                             if 'Ratio (B/D)' in p_r:
                                 ds_norm_baselines[f'{model} Ratio (B/D)'] = Vertex2D_fix(p_r['Ratio (B/D)'][model], alpha[analysis][subj][model], subject=pycortex_subj, 
                                                                           vmin=np.nanquantile(p_r['Ratio (B/D)'][model][alpha[analysis][subj][model]>rsq_thresh],0.1), 
-                                                                          vmax=np.nanquantile(p_r['Ratio (B/D)'][model][alpha[analysis][subj][model]>rsq_thresh],0.9), vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap=pycortex_cmap)
+                                                                          vmax=np.nanquantile(p_r['Ratio (B/D)'][model][alpha[analysis][subj][model]>rsq_thresh],0.9), vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap=pycortex_cmap, roi_borders=roi_borders)
 
                                 fig = simple_colorbar(vmin=np.nanquantile(p_r['Ratio (B/D)'][model][alpha[analysis][subj][model]>rsq_thresh],0.1), 
                                                 vmax=np.nanquantile(p_r['Ratio (B/D)'][model][alpha[analysis][subj][model]>rsq_thresh],0.9),
@@ -1331,7 +1274,7 @@ class visualize_results(object):
                                         ds_correlations[f'{x_param_topl} {x_param_lowl} VS {y_param_topl} {y_param_lowl}'] = Vertex2D_fix(corr_per_roi_data, alpha_per_roi, subject=pycortex_subj, 
                                                                           vmin=np.nanquantile(corr_per_roi_data[all_rois_alpha>rsq_thresh],0.1), vmin2=rsq_thresh, vmax2=rsq_max_opacity,
                                                                           vmax=np.nanquantile(corr_per_roi_data[all_rois_alpha>rsq_thresh],0.9), #alpha=(np.clip(alpha_per_roi, rsq_thresh, 0.6)-rsq_thresh)/(0.6-rsq_thresh),
-                                                                          cmap=pycortex_cmap)                    
+                                                                          cmap=pycortex_cmap, roi_borders=roi_borders)                   
 
 
                         self.js_handle_dict[space][analysis][subj]['correlations_per_roi'] = cortex.webgl.show(ds_correlations, pickerfun=clicker_function,  overlays_visible=[], labels_visible=[])     
@@ -1365,7 +1308,7 @@ class visualize_results(object):
                                                                   vmin=0,#np.nanquantile(mean_per_roi_data[all_rois_alpha>rsq_thresh],0.1), 
                                                                   vmin2=rsq_thresh, vmax2=rsq_max_opacity,
                                                                   vmax=100,#np.nanquantile(mean_per_roi_data[all_rois_alpha>rsq_thresh],0.9), #alpha=(np.clip(alpha_per_roi, rsq_thresh, 0.6)-rsq_thresh)/(0.6-rsq_thresh),
-                                                                  cmap=pycortex_cmap)                    
+                                                                  cmap=pycortex_cmap, roi_borders=roi_borders)                  
 
 
                         self.js_handle_dict[space][analysis][subj]['means_per_roi'] = cortex.webgl.show(ds_means, pickerfun=clicker_function,  overlays_visible=[], labels_visible=[]) 
@@ -2732,7 +2675,7 @@ class visualize_results(object):
                                     use_roi_means = True
                                     use_full_data = False
                                     perm_yw = False
-                                    #plot hexbins has been moved above to manage roi datapoints color
+                                    #NOTE: plot hexbins has been moved above to manage roi datapoints color
                                     
                                     n_perm = 1000000
                                     
@@ -3960,32 +3903,32 @@ class visualize_results(object):
                                             print(f"Estimated OLS betas (fit on roi means) {ordered_dimensions[y_dim]} {ls2.coef_}\n")
                                             
                                             
-
-                                            for ddd in range(len(x_dims)):
-                                                
-                                                corr_prediction_fit_roi_means_perm = []
-                                                for perm in range(1000000):
-                                                    # testing whether adding parameters significantly increases wCC (nocv here)
-                                                    # the idea is asking how likely it is to get the same wCC improvement when adding a randomized version of the parameter, instead of the true one
-                                                    ls2_perm = LinearRegression()
-                                                    #samp_idx = np.random.randint(0, len(rois_ols_x_means), len(rois_ols_x_means))
-                                                    x_perm = np.copy(rois_ols_x_means)#[samp_idx])
-                                                    y_perm = np.copy(rois_ols_y_means)#[samp_idx])
-                                                    w_perm = np.copy(rsq_alpha_plots_all_rois)#[samp_idx])
+                                            if not cv_regression:
+                                                for ddd in range(len(x_dims)):
                                                     
-                                                    #x_perm[:,ddd] = np.copy(x_perm[samp_idx,ddd])
-                                                    np.random.shuffle(x_perm[:,ddd])
-                                                    #np.random.shuffle(y_perm)
-                                                    #np.random.shuffle(w_perm)
-                                                    ls2_perm.fit(x_perm, y_perm, sample_weight = w_perm)
-                                                    Zs_pred_fit_roi_means_perm = ls2_perm.predict(x_perm)
- 
-                                                    corr_prediction_fit_roi_means_perm.append(weightstats.DescrStatsW(np.stack((Zs_pred_fit_roi_means_perm,y_perm)).T , weights=np.array(w_perm)).corrcoef[0,1])
-                                            
-                                            
-                                                pval_wcc_roimeans = np.sum(np.abs(corr_prediction_fit_roi_means)<np.abs(np.array(corr_prediction_fit_roi_means_perm)))/len(corr_prediction_fit_roi_means_perm)
-                                                self.ols_result_dict[ols_y_dim][f"{[ordered_dimensions[x_dim] for x_dim in x_dims]} {ordered_dimensions[x_dims[ddd]]}"]['pval'].append(pval_wcc_roimeans)
-                                                print(f"{ordered_dimensions[x_dims[ddd]]} pval={pval_wcc_roimeans:.7f}")                                            
+                                                    corr_prediction_fit_roi_means_perm = []
+                                                    for perm in range(1000000):
+                                                        # testing whether adding parameters significantly increases wCC (nocv here)
+                                                        # the idea is asking how likely it is to get the same wCC improvement when adding a randomized version of the parameter, instead of the true one
+                                                        ls2_perm = LinearRegression()
+                                                        #samp_idx = np.random.randint(0, len(rois_ols_x_means), len(rois_ols_x_means))
+                                                        x_perm = np.copy(rois_ols_x_means)#[samp_idx])
+                                                        y_perm = np.copy(rois_ols_y_means)#[samp_idx])
+                                                        w_perm = np.copy(rsq_alpha_plots_all_rois)#[samp_idx])
+                                                        
+                                                        #x_perm[:,ddd] = np.copy(x_perm[samp_idx,ddd])
+                                                        np.random.shuffle(x_perm[:,ddd])
+                                                        #np.random.shuffle(y_perm)
+                                                        #np.random.shuffle(w_perm)
+                                                        ls2_perm.fit(x_perm, y_perm, sample_weight = w_perm)
+                                                        Zs_pred_fit_roi_means_perm = ls2_perm.predict(x_perm)
+     
+                                                        corr_prediction_fit_roi_means_perm.append(weightstats.DescrStatsW(np.stack((Zs_pred_fit_roi_means_perm,y_perm)).T , weights=np.array(w_perm)).corrcoef[0,1])
+                                                
+                                                
+                                                    pval_wcc_roimeans = np.sum(np.abs(corr_prediction_fit_roi_means)<np.abs(np.array(corr_prediction_fit_roi_means_perm)))/len(corr_prediction_fit_roi_means_perm)
+                                                    self.ols_result_dict[ols_y_dim][f"{[ordered_dimensions[x_dim] for x_dim in x_dims]} {ordered_dimensions[x_dims[ddd]]}"]['pval'].append(pval_wcc_roimeans)
+                                                    print(f"{ordered_dimensions[x_dims[ddd]]} pval={pval_wcc_roimeans:.7f}")                                            
 
                                             
                                                                                         
