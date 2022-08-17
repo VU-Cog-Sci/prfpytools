@@ -11,3 +11,4 @@ joblib
 scikit-learn
 statsmodels
 cmasher
+ipython
