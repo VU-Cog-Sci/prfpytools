@@ -511,7 +511,7 @@ class visualize_results(object):
                     tc_err[task] = sem(tc_runs, axis=0)
                     
                     #tc[task] *= (100/tc[task].mean(-1))[...,np.newaxis]
-                    #tc[task] += (tc[task].mean(-1)-np.median(tc[task][...,self.prf_stims[task].late_iso_dict[task]], axis=-1))[...,np.newaxis]
+                    #tc[task] += np.median(tc[task][...,self.prf_stims[task].late_iso_dict[task]], axis=-1)[...,np.newaxis]
                     
                     #fit and test timecourses separately
                     if an_info['crossvalidate']:
@@ -569,8 +569,13 @@ class visualize_results(object):
                         internal_idx = np.sum(subj_res['mask'][:index])
                     
                     params = np.copy(subj_res['Results'][model][internal_idx,:-1])
+                    
 
                     preds[model] = self.prf_models[model].return_prediction(*list(params))[0] - an_info['norm_bold_baseline']
+                    
+                    
+                    #mdff = (preds[model]-tc_full).mean()
+                    #tc_full += mdff
                     
                     np.set_printoptions(suppress=True, precision=4)
                     vertex_info+=f"{model} params: {params} \n"
@@ -605,7 +610,7 @@ class visualize_results(object):
                 pl.ion()
     
                 if self.click==0:
-                    self.f, self.axes = pl.subplots(2,2,figsize=(10, 30),frameon=True, gridspec_kw={'width_ratios': [8, 2], 'height_ratios': [1,1]})
+                    self.f, self.axes = pl.subplots(2,2,figsize=(18, 15),frameon=True, gridspec_kw={'width_ratios': [8, 2], 'height_ratios': [1,1]})
                     self.f.set_tight_layout(True)
                 else:
                     self.cbar.remove()
@@ -624,24 +629,24 @@ class visualize_results(object):
                     
                     print(np.std([tc_full_test,tc_full_fit],axis=0))
                     
-                    self.axes[0,0].errorbar(tseconds, tc_full, yerr=tc_err, label='Data',  fmt = 's:k', markersize=1,  linewidth=0.3, zorder=1) 
                     
-                    self.axes[0,0].plot(tseconds, tc_full_test, label='Data (test)', linestyle = ':', marker='^', markersize=1, color=cmap(4), linewidth=0.75, alpha=0.5) 
-                    self.axes[0,0].plot(tseconds, tc_full_fit, label='Data (fit)', linestyle = ':', marker='v', markersize=1, color=cmap(5), linewidth=0.75, alpha=0.5) 
+                    self.axes[0,0].plot(tseconds, tc_full_test, label='Data (test)', linestyle = ':', marker='^', markersize=3, color=cmap(4), linewidth=0.5, alpha=0.5) 
+                    self.axes[0,0].plot(tseconds, tc_full_fit, label='Data (fit)', linestyle = ':', marker='v', markersize=3, color=cmap(5), linewidth=0.5, alpha=0.5) 
+                
                 else:
-                    self.axes[0,0].errorbar(tseconds, tc_full, yerr=tc_err, label='Data',  fmt = 's:k', markersize=1,  linewidth=0.3, zorder=1) 
+                    self.axes[0,0].errorbar(tseconds, tc_full, yerr=0, label='Data',  fmt = 'sk', markersize=3,  linewidth=0.5, zorder=1) 
                     
     
                 
                 for model in self.only_models: 
                     if 'Norm' in model:
-                        self.axes[0,0].plot(tseconds, preds[model], linewidth=0.75, color=cmap(3), label=f"Norm ({subj_res['Processed Results']['RSq'][model][index]:.2f})", zorder=2)
+                        self.axes[0,0].plot(tseconds, preds[model], linewidth=2, color=cmap(3), label=f"Norm ({subj_res['Processed Results']['RSq'][model][index]:.2f})", zorder=2)
                     elif model == 'DoG':
-                        self.axes[0,0].plot(tseconds, preds[model], linewidth=0.75, color=cmap(2), label=f"DoG ({subj_res['Processed Results']['RSq'][model][index]:.2f})", zorder=3)
+                        self.axes[0,0].plot(tseconds, preds[model], linewidth=2, color=cmap(2), label=f"DoG ({subj_res['Processed Results']['RSq'][model][index]:.2f})", zorder=3)
                     elif model == 'CSS':
-                        self.axes[0,0].plot(tseconds, preds[model], linewidth=0.75, color=cmap(1), label=f"CSS ({subj_res['Processed Results']['RSq'][model][index]:.2f})", zorder=4)
+                        self.axes[0,0].plot(tseconds, preds[model], linewidth=2, color=cmap(1), label=f"CSS ({subj_res['Processed Results']['RSq'][model][index]:.2f})", zorder=4)
                     elif model == 'Gauss':
-                        self.axes[0,0].plot(tseconds, preds[model], linewidth=0.75, color=cmap(0), label=f"Gauss ({subj_res['Processed Results']['RSq'][model][index]:.2f})", zorder=5)
+                        self.axes[0,0].plot(tseconds, preds[model], linewidth=2, color=cmap(0), label=f"Gauss ({subj_res['Processed Results']['RSq'][model][index]:.2f})", zorder=5)
                         
                 
                 
@@ -730,7 +735,7 @@ class visualize_results(object):
                     if roi_borders is not None:
                         roi_borders = self.idx_rois_borders[pycortex_subj][roi_borders]
                     
-                    curr_models = self.only_models
+                    curr_models = deepcopy(self.only_models)
                     if len(self.only_models)>1:
                         curr_models.append('all')
                     
@@ -825,6 +830,12 @@ class visualize_results(object):
                         custom_rois_data = np.zeros_like(mask).astype('int')
                         hcp_rois_data = np.zeros_like(mask).astype('int')
                         glasser_rois_data = np.zeros_like(mask).astype('int')
+                        
+                        
+                        myvx = np.zeros_like(mask).astype('int')
+                        myvx[87020] = 1
+                        myvx[45156] = 1
+                        ds_rois['my vx'] = Vertex2D_fix(myvx, myvx.astype('bool'), subject=pycortex_subj, cmap=pycortex_cmap, vmin=0, vmax=data.max(), vmin2=0, vmax2=1, roi_borders=roi_borders)
         
                         for i, roi in enumerate([r for r in self.idx_rois[subj] if 'custom' in r and 'Pole' not in r]):        
                             roi_data = np.zeros_like(mask)
@@ -874,8 +885,8 @@ class visualize_results(object):
                         if len(self.only_models)>1:
                             best_model = np.argmax([p_r['RSq'][model] for model in self.only_models],axis=0)
 
-                            ds_rsq['Best model'] = Vertex2D_fix(best_model, alpha[analysis][subj]['all'], subject=pycortex_subj,
-                                                                      vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap='BROYG_2D', roi_borders=roi_borders)
+                            ds_rsq['Best model'] = Vertex2D_fix(best_model, alpha[analysis][subj]['all'], subject=pycortex_subj, vmin=0, vmax=len(self.only_models),
+                                                                      vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap='BROYG', roi_borders=roi_borders)
 
 
                         for model in self.only_models:

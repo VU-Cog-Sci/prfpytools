@@ -579,10 +579,14 @@ def Vertex2D_fix(data1, data2, subject, cmap, vmin, vmax, vmin2, vmax2, roi_bord
     curv = cortex.db.get_surfinfo(subject)
     # Adjust curvature contrast / color. Alternately, you could work
     # with curv.data, maybe threshold it, and apply a color map. 
-    curv.data = 0.1+curv.data * .75#np.sign(curv.data) * .25
-    #curv.vmin = -1
-    #curv.vmax = 1
-    #curv.cmap = 'gray'  
+    
+    #standard
+    #curv.data = curv.data * .75 +0.1
+    #alternative
+    #curv.data = np.sign(curv.data) * .25
+    #HCP adjustment
+    curv.data = curv.data * -2.5# 1.25 +0.1
+
     
     curv = cortex.Vertex(curv.data, subject, vmin=-1,vmax=1,cmap='gray')
     
