@@ -1,4 +1,5 @@
 numpy
+dill
 scipy
 h5py
 matplotlib
