@@ -581,11 +581,11 @@ def Vertex2D_fix(data1, data2, subject, cmap, vmin, vmax, vmin2, vmax2, roi_bord
     # with curv.data, maybe threshold it, and apply a color map. 
     
     #standard
-    #curv.data = curv.data * .75 +0.1
+    curv.data = curv.data * .75 +0.1
     #alternative
     #curv.data = np.sign(curv.data) * .25
     #HCP adjustment
-    curv.data = curv.data * -2.5# 1.25 +0.1
+    #curv.data = curv.data * -2.5# 1.25 +0.1
 
     
     curv = cortex.Vertex(curv.data, subject, vmin=-1,vmax=1,cmap='gray')
@@ -603,9 +603,15 @@ def Vertex2D_fix(data1, data2, subject, cmap, vmin, vmax, vmin2, vmax2, roi_bord
     # Pick an arbitrary region to mask out
     # (in your case you could use np.isnan on your data in similar fashion)
     alpha = np.clip(norm2(data2), 0, 1)
-        
+
     # Alpha mask
-    display_data =  curv_rgb * (1-alpha) + vx_rgb * alpha
+    display_data = (curv_rgb * (1-alpha)) + vx_rgb * alpha
+
+    display_data /= 255
+
+
+    print(display_data.min())
+    print(display_data.max())
     
     if roi_borders is not None:
         display_data[:,roi_borders.astype('bool')] = 0#255-display_data[:,roi_borders.astype('bool')]#0#255
