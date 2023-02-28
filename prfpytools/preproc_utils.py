@@ -180,7 +180,7 @@ def prepare_data(subj,
             tc_task = []
             if fitting_space == 'fsaverage' or fitting_space == 'fsnative':
                 if pybest:
-                    tc_paths = sorted(Path(opj(data_path,'pybest',subj,'unzscored')).glob(opj('**',subj+'_ses-*_task-'+task_name+'_run-*_space-'+fitting_space+'_hemi-'+hemi+'*.func.gii')))
+                    tc_paths = sorted(Path(opj(data_path,'pybest',subj,'unzscored')).glob(subj+'_ses-*_task-'+task_name+'_run-*_space-'+fitting_space+'_hemi-'+hemi+'*.func.gii'))
                 else:                   
                     tc_paths = sorted(Path(opj(data_path,'fmriprep',subj)).glob(opj('**',subj+'_ses-*_task-'+task_name+'_run-*_space-'+fitting_space+'_hemi-'+hemi+'*bold.npy')))
             elif fitting_space == 'HCP': 
