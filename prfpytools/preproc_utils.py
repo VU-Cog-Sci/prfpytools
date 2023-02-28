@@ -76,7 +76,6 @@ def create_dm_from_screenshots(screenshot_path,
 def create_full_stim(screenshot_paths,
                 n_pix,
                 discard_volumes,
-                baseline_volumes_begin_end,
                 dm_edges_clipping,
                 screen_size_cm,
                 screen_distance_cm,
@@ -165,7 +164,8 @@ def prepare_data(subj,
                  crossvalidate,
                  fit_runs,
                  fit_task,
-                 save_noise_ceiling):
+                 save_noise_ceiling,
+                 pybest = False):
 
     if fitting_space == 'fsaverage' or fitting_space == 'fsnative':
         hemis = ['L', 'R']
@@ -179,7 +179,10 @@ def prepare_data(subj,
         for task_name in prf_stim.task_names:
             tc_task = []
             if fitting_space == 'fsaverage' or fitting_space == 'fsnative':
-                tc_paths = sorted(Path(opj(data_path,'fmriprep',subj)).glob(opj('**',subj+'_ses-*_task-'+task_name+'_run-*_space-'+fitting_space+'_hemi-'+hemi+'*.func.gii')))
+                if pybest:
+                    tc_paths = sorted(Path(opj(data_path,'pybest',subj,'unzscored')).glob(opj('**',subj+'_ses-*_task-'+task_name+'_run-*_space-'+fitting_space+'_hemi-'+hemi+'*.func.gii')))
+                else:                   
+                    tc_paths = sorted(Path(opj(data_path,'fmriprep',subj)).glob(opj('**',subj+'_ses-*_task-'+task_name+'_run-*_space-'+fitting_space+'_hemi-'+hemi+'*bold.npy')))
             elif fitting_space == 'HCP': 
                 tc_paths = sorted(Path(opj(data_path,subj)).glob(opj('**',f"tfMRI_RET{task_name}*_7T_*_Atlas_1.6mm_MSMAll_hp2000_clean.dtseries.nii")))
             
@@ -195,11 +198,16 @@ def prepare_data(subj,
             
                 
             for tc_path in [tc_paths[run] for run in fit_runs]:
-                tc_run = nb.load(str(tc_path))
+                
                 if fitting_space == 'fsaverage' or fitting_space == 'fsnative':
-                    tc_run_data = np.array([arr.data for arr in tc_run.darrays]).T[...,discard_volumes:]
+                    if pybest:
+                        tc_run_data = np.load(str(tc_path)).T[...,discard_volumes:]
+                    else:
+                        tc_run = nb.load(str(tc_path))
+                        tc_run_data = np.array([arr.data for arr in tc_run.darrays]).T[...,discard_volumes:]
                 elif fitting_space == 'HCP':
                     #cortex only HCP data
+                    tc_run = nb.load(str(tc_path))
                     tc_run_data = np.array(tc_run.get_data()).T[:118584,discard_volumes:]
                         
                 #no need to pass further args, only filtering 1 condition
