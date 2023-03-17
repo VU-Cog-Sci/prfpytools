@@ -14,8 +14,9 @@ from datetime import datetime
 import time
 
 subj = sys.argv[1]
-analysis_settings = sys.argv[2]
-chunk_nr = int(sys.argv[3])
+session = sys.argv[2]
+analysis_settings = sys.argv[3]
+chunk_nr = int(sys.argv[4])
 
 with open(analysis_settings) as f:
     analysis_info = yaml.safe_load(f)
@@ -47,6 +48,12 @@ task_names = analysis_info["task_names"]
 data_path = analysis_info["data_path"]
 fitting_space = analysis_info["fitting_space"]
 save_raw_timecourse = analysis_info["save_raw_timecourse"]
+
+
+analysis_info["subj"] = subj
+analysis_info["session"] = session
+
+pybest = analysis_info["pybest"]
 
 filter_predictions = analysis_info["filter_predictions"]
 filter_type = analysis_info["filter_type"]
@@ -164,7 +171,7 @@ data_path = opj(data_path,'prfpy')
 if not os.path.isdir(data_path):
     os.mkdir(data_path)
 
-save_path = opj(data_path, subj+"_analysis_settings")
+save_path = opj(data_path, f"{subj}_{session}_analysis_settings")
 
 
 if os.path.exists(save_path+".yml"):
@@ -286,7 +293,9 @@ if chunk_nr == 0 and len(save_runs)>0:
                                 crossvalidate=False,
                                 fit_runs=[run],
                                 fit_task=None,
-                                save_noise_ceiling=False)
+                                save_noise_ceiling=False,
+                                session=session,
+                                pybest=pybest)
 
             order = run_tc_dict['order']
             mask = run_tc_dict['mask']
@@ -294,8 +303,8 @@ if chunk_nr == 0 and len(save_runs)>0:
             tc_ordered = np.zeros_like(run_tc_dict['tc'])
             tc_ordered[order] = np.copy(run_tc_dict['tc'])
             
-            np.save(opj(data_path.replace('scratch-shared','home'),f"{subj}_timecourse_space-{fitting_space}_task-{task}_run-{run}"), tc_ordered)
-            np.save(opj(data_path.replace('scratch-shared','home'),f"{subj}_mask_space-{fitting_space}_task-{task}_run-{run}"), mask)
+            np.save(opj(data_path.replace('scratch-shared','home'),f"{subj}_{session}_timecourse_space-{fitting_space}_task-{task}_run-{run}"), tc_ordered)
+            np.save(opj(data_path.replace('scratch-shared','home'),f"{subj}_{session}_mask_space-{fitting_space}_task-{task}_run-{run}"), mask)
             
             
             
@@ -316,25 +325,25 @@ if "timecourse_data_path" in analysis_info:
             raise IOError
 
 
-        save_path = opj(data_path, subj+"_timecourse-test_space-"+fitting_space)
+        save_path = opj(data_path, f"{subj}_{session}_timecourse-test_space-{fitting_space}" )
         np.save(save_path, tc_full_iso_nonzerovar_dict['tc_test'])
 
-    save_path = opj(data_path, subj+"_order_space-"+fitting_space)
+    save_path = opj(data_path,f"{subj}_{session}_order_space-{fitting_space}")
     np.save(save_path, tc_full_iso_nonzerovar_dict['order'])
 
-    save_path = opj(data_path, subj+"_mask_space-"+fitting_space)
+    save_path = opj(data_path, f"{subj}_{session}_mask_space-{fitting_space}")
     np.save(save_path, tc_full_iso_nonzerovar_dict['mask'])
 
-    save_path = opj(data_path, subj+"_timecourse_space-"+fitting_space)
+    save_path = opj(data_path, f"{subj}_{session}_timecourse_space-{fitting_space}")
     np.save(save_path, tc_full_iso_nonzerovar_dict['tc'])
 
 
-elif os.path.exists(opj(data_path, subj+"_timecourse_space-"+fitting_space+".npy")):
-    print("Using time series from: "+opj(data_path, subj+"_timecourse_space-"+fitting_space+".npy"))
+elif os.path.exists(opj(data_path, f"{subj}_{session}_timecourse_space-{fitting_space}.npy")):
+    print("Using time series from: "+opj(data_path, f"{subj}_{session}_timecourse_space-{fitting_space}.npy"))
     tc_full_iso_nonzerovar_dict = {}
-    tc_full_iso_nonzerovar_dict['tc'] = np.load(opj(data_path, subj+"_timecourse_space-"+fitting_space+".npy"))
+    tc_full_iso_nonzerovar_dict['tc'] = np.load(opj(data_path, f"{subj}_{session}_timecourse_space-{fitting_space}.npy"))
     if crossvalidate:
-        tc_full_iso_nonzerovar_dict['tc_test'] = np.load(opj(data_path, subj+"_timecourse-test_space-"+fitting_space+".npy"))
+        tc_full_iso_nonzerovar_dict['tc_test'] = np.load(opj(data_path, f"{subj}_{session}_timecourse-test_space-{fitting_space}.npy"))
 
 else:
     if chunk_nr == 0:
@@ -360,32 +369,34 @@ else:
                                                    crossvalidate,
                                                    fit_runs,
                                                    fit_task,
-                                                   save_noise_ceiling)
+                                                   save_noise_ceiling,
+                                                   session,
+                                                   pybest)
 
         if crossvalidate:
-            save_path = opj(data_path, subj+"_timecourse-test_space-"+fitting_space)
+            save_path = opj(data_path, f"{subj}_{session}_timecourse-test_space-{fitting_space}")
             np.save(save_path, tc_full_iso_nonzerovar_dict['tc_test'])
 
-        save_path = opj(data_path, subj+"_order_space-"+fitting_space)
+        save_path = opj(data_path, f"{subj}_{session}_order_space-{fitting_space}")
         np.save(save_path, tc_full_iso_nonzerovar_dict['order'])
 
-        save_path = opj(data_path, subj+"_mask_space-"+fitting_space)
+        save_path = opj(data_path, f"{subj}_{session}_mask_space-{fitting_space}")
         np.save(save_path, tc_full_iso_nonzerovar_dict['mask'])
 
-        save_path = opj(data_path, subj+"_timecourse_space-"+fitting_space)
+        save_path = opj(data_path, f"{subj}_{session}_timecourse_space-{fitting_space}")
         np.save(save_path, tc_full_iso_nonzerovar_dict['tc'])
 
     else:
 
-        while not os.path.exists(opj(data_path, subj+"_timecourse_space-"+fitting_space+".npy")):
+        while not os.path.exists(opj(data_path, f"{subj}_{session}_timecourse_space-{fitting_space}.npy")):
             time.sleep(30)
         else:
-            print("Using time series from: "+opj(data_path, subj+"_timecourse_space-"+fitting_space+".npy"))
+            print("Using time series from: "+opj(data_path, f"{subj}_{session}_timecourse_space-{fitting_space}.npy"))
             tc_full_iso_nonzerovar_dict = {}
-            tc_full_iso_nonzerovar_dict['tc'] = np.load(opj(data_path, subj+"_timecourse_space-"+fitting_space+".npy"))
+            tc_full_iso_nonzerovar_dict['tc'] = np.load(opj(data_path, f"{subj}_{session}_timecourse_space-{fitting_space}.npy"))
             if crossvalidate:
-                print("Using test-time series from: "+opj(data_path, subj+"_timecourse-test_space-"+fitting_space+".npy"))
-                tc_full_iso_nonzerovar_dict['tc_test'] = np.load(opj(data_path, subj+"_timecourse-test_space-"+fitting_space+".npy"))
+                print("Using test-time series from: "+opj(data_path, f"{subj}_{session}_timecourse-test_space-{fitting_space}.npy"))
+                tc_full_iso_nonzerovar_dict['tc_test'] = np.load(opj(data_path, f"{subj}_{session}_timecourse-test_space-{fitting_space}.npy"))
 
 
 tc_full_iso_nonzerovar_dict['tc'] = np.array_split(tc_full_iso_nonzerovar_dict['tc'], n_chunks)[chunk_nr]
@@ -473,9 +484,9 @@ if norm_model_variant == "abcd":
     
 
 elif norm_model_variant == "abc":
-    surround_amplitude_grid=np.array([0.05,0.2,0.4,0.7,1,3], dtype='float32')
+    surround_amplitude_grid=np.array([0,0.05,0.1,0.5,1,5,10,20,50,100,200,500], dtype='float32')
     surround_size_grid=np.array([3,5,8,12,18], dtype='float32')
-    neural_baseline_grid=np.array([0,1,10,100], dtype='float32')
+    neural_baseline_grid=np.array([0,0.05,0.1,0.5,1,5,10,20,50,100], dtype='float32')
     surround_baseline_grid=np.array([1], dtype='float32')
 
     norm_bounds[8] = (1, 1)  # fix surround baseline
@@ -525,17 +536,17 @@ if param_bounds and fit_hrf:
     
 if param_bounds and not fit_hrf and single_hrf and refit_mode == 'iterate':
     #ugly AF. using max() just because it should all be zeros aside from the median values
-    gauss_hrf = np.load(opj(data_path, subj+"_iterparams-gauss_space-"+fitting_space+str(chunk_nr)+".npy"))[:,-3].max()
+    gauss_hrf = np.load(opj(data_path, f"{subj}_{session}_iterparams-gauss_space-{fitting_space}{chunk_nr}.npy"))[:,-3].max()
     gauss_bounds += [(gauss_hrf,gauss_hrf),(0,0)]
 
     if "CSS" in models_to_fit:
-        css_hrf = np.load(opj(data_path, subj+"_iterparams-css_space-"+fitting_space+str(chunk_nr)+".npy"))[:,-3].max()
+        css_hrf = np.load(opj(data_path, f"{subj}_{session}_iterparams-css_space-{fitting_space}{chunk_nr}.npy"))[:,-3].max()
         css_bounds += [(css_hrf,css_hrf),(0,0)]
     if "DoG" in models_to_fit:
-        dog_hrf = np.load(opj(data_path, subj+"_iterparams-dog_space-"+fitting_space+str(chunk_nr)+".npy"))[:,-3].max()
+        dog_hrf = np.load(opj(data_path, f"{subj}_{session}_iterparams-dog_space-{fitting_space}{chunk_nr}.npy"))[:,-3].max()
         dog_bounds += [(dog_hrf,dog_hrf),(0,0)]
     if "norm" in models_to_fit:
-        norm_hrf = np.load(opj(data_path, subj+"_iterparams-norm_space-"+fitting_space+str(chunk_nr)+".npy"))[:,-3].max()  
+        norm_hrf = np.load(opj(data_path, f"{subj}_{session}_iterparams-norm_space-{fitting_space}{chunk_nr}.npy"))[:,-3].max()  
         norm_bounds += [(norm_hrf,norm_hrf),(0,0)]    
     
 #this ensures that all models use the same optimizer, even if only some
@@ -610,9 +621,9 @@ gf = Iso2DGaussianFitter(
 
 # gaussian grid fit
 if "gauss_gridparams_path" not in analysis_info and "gauss_iterparams_path" not in analysis_info:
-    save_path = opj(data_path, subj+"_gridparams-gauss_space-"+fitting_space+str(chunk_nr))
+    save_path = opj(data_path, f"{subj}_{session}_gridparams-gauss_space-{fitting_space}{chunk_nr}")
 
-    if not os.path.exists(save_path+".npy") or refit_mode == "overwrite":
+    if not os.path.exists(f"{save_path}.npy") or refit_mode == "overwrite":
 
         print("Starting Gaussian grid fit at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S'))
         gf.grid_fit(ecc_grid=eccs,
@@ -629,8 +640,8 @@ if "gauss_gridparams_path" not in analysis_info and "gauss_iterparams_path" not 
 
         np.save(save_path, gf.gridsearch_params)
 
-    elif os.path.exists(save_path+".npy") and refit_mode in ["iterate", "skip"]:
-        gf.gridsearch_params = np.load(save_path+".npy")
+    elif os.path.exists(f"{save_path}.npy") and refit_mode in ["iterate", "skip"]:
+        gf.gridsearch_params = np.load(f"{save_path}.npy")
 
 elif "gauss_gridparams_path" in analysis_info:
     gf.gridsearch_params = np.array_split(np.load(analysis_info["gauss_gridparams_path"]), n_chunks)[chunk_nr]
@@ -638,7 +649,7 @@ elif "gauss_gridparams_path" in analysis_info:
 
 
 # gaussian iterative fit
-save_path = opj(data_path, subj+"_iterparams-gauss_space-"+fitting_space+str(chunk_nr))
+save_path = opj(data_path, f"{subj}_{session}_iterparams-gauss_space-{fitting_space}{chunk_nr}")
 if "gauss_iterparams_path" in analysis_info:
     gf.iterative_search_params = np.array_split(np.load(analysis_info["gauss_iterparams_path"]), n_chunks)[chunk_nr]
 
@@ -674,7 +685,7 @@ if "gauss_iterparams_path" in analysis_info:
 
 else:
 
-    if not os.path.exists(save_path+".npy") or refit_mode == "overwrite":
+    if not os.path.exists(f"{save_path}.npy") or refit_mode == "overwrite":
 
         print("Starting Gaussian iterfit at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S'))
 
@@ -702,9 +713,9 @@ else:
 
             
         np.save(save_path, gf.iterative_search_params)
-    elif os.path.exists(save_path+".npy") and refit_mode == "iterate":
+    elif os.path.exists(f"{save_path}.npy") and refit_mode == "iterate":
 
-        if previous_analysis_refit_mode != "iterate" or (datetime.fromtimestamp(os.stat(save_path+".npy").st_mtime)) < datetime(\
+        if previous_analysis_refit_mode != "iterate" or (datetime.fromtimestamp(os.stat(f"{save_path}.npy").st_mtime)) < datetime(\
                                                         int(previous_analysis_time.split('-')[0]),
                                                         int(previous_analysis_time.split('-')[1]),
                                                         int(previous_analysis_time.split('-')[2]),
@@ -715,7 +726,7 @@ else:
             print("Starting Gaussian iterfit at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S'))
     
             gf.iterative_fit(rsq_threshold=rsq_threshold, verbose=verbose,
-                             starting_params=np.load(save_path+".npy"),
+                             starting_params=np.load(f"{save_path}.npy"),
                              bounds=gauss_bounds,
                              constraints=constraints_gauss,
                              xtol=xtol,
@@ -740,10 +751,10 @@ else:
     
             np.save(save_path, gf.iterative_search_params)
         else:
-            gf.iterative_search_params = np.load(save_path+".npy")
+            gf.iterative_search_params = np.load(f"{save_path}.npy")
 
-    elif os.path.exists(save_path+".npy") and refit_mode == "skip":
-        gf.iterative_search_params = np.load(save_path+".npy")
+    elif os.path.exists(f"{save_path}.npy") and refit_mode == "skip":
+        gf.iterative_search_params = np.load(f"{save_path}.npy")
 
 
 
@@ -763,9 +774,9 @@ if "CSS" in models_to_fit:
 
     # CSS grid fit
     if "css_gridparams_path" not in analysis_info and "css_iterparams_path" not in analysis_info and css_grid:
-        save_path = opj(data_path, subj+"_gridparams-css_space-"+fitting_space+str(chunk_nr))
+        save_path = opj(data_path, f"{subj}_{session}_gridparams-css_space-{fitting_space}{chunk_nr}")
     
-        if not os.path.exists(save_path+".npy") or refit_mode == "overwrite":
+        if not os.path.exists(f"{save_path}.npy") or refit_mode == "overwrite":
     
             print("Starting CSS grid fit at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S'))
             gf_css.grid_fit(exponent_grid=css_exponent_grid,
@@ -780,14 +791,14 @@ if "CSS" in models_to_fit:
     
             np.save(save_path, gf_css.gridsearch_params)
     
-        elif os.path.exists(save_path+".npy") and refit_mode in ["iterate", "skip"]:
-            gf_css.gridsearch_params = np.load(save_path+".npy")
+        elif os.path.exists(f"{save_path}.npy") and refit_mode in ["iterate", "skip"]:
+            gf_css.gridsearch_params = np.load(f"{save_path}.npy")
     
     elif "css_gridparams_path" in analysis_info:
         gf_css.gridsearch_params = np.array_split(np.load(analysis_info["css_gridparams_path"]), n_chunks)[chunk_nr]
     
     
-    save_path = opj(data_path, subj+"_iterparams-css_space-"+fitting_space+str(chunk_nr))
+    save_path = opj(data_path, f"{subj}_{session}_iterparams-css_space-{fitting_space}{chunk_nr}")
 
     if "css_iterparams_path" in analysis_info:
         gf_css.iterative_search_params = np.array_split(np.load(analysis_info["css_iterparams_path"]), n_chunks)[chunk_nr]
@@ -824,7 +835,7 @@ if "CSS" in models_to_fit:
     else:
 
 
-        if not os.path.exists(save_path+".npy") or refit_mode == "overwrite":
+        if not os.path.exists(f"{save_path}.npy") or refit_mode == "overwrite":
 
             print("Starting CSS iterfit at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S'))
     
@@ -851,9 +862,9 @@ if "CSS" in models_to_fit:
     
             np.save(save_path, gf_css.iterative_search_params)
     
-        elif os.path.exists(save_path+".npy") and refit_mode == "iterate":
+        elif os.path.exists(f"{save_path}.npy") and refit_mode == "iterate":
     
-            if previous_analysis_refit_mode != "iterate" or (datetime.fromtimestamp(os.stat(save_path+".npy").st_mtime)) < datetime(\
+            if previous_analysis_refit_mode != "iterate" or (datetime.fromtimestamp(os.stat(f"{save_path}.npy").st_mtime)) < datetime(\
                                                         int(previous_analysis_time.split('-')[0]),
                                                         int(previous_analysis_time.split('-')[1]),
                                                         int(previous_analysis_time.split('-')[2]),
@@ -863,7 +874,7 @@ if "CSS" in models_to_fit:
                 print("Starting CSS iterfit at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S'))
         
                 gf_css.iterative_fit(rsq_threshold=rsq_threshold, verbose=verbose,
-                                     starting_params=np.load(save_path+".npy"),
+                                     starting_params=np.load(f"{save_path}.npy"),
                                      bounds=css_bounds,
                                      constraints=constraints_css,
                              xtol=xtol,
@@ -889,8 +900,8 @@ if "CSS" in models_to_fit:
     
 
     
-        elif os.path.exists(save_path+".npy") and refit_mode == "skip":
-            gf_css.iterative_search_params = np.load(save_path+".npy")
+        elif os.path.exists(f"{save_path}.npy") and refit_mode == "skip":
+            gf_css.iterative_search_params = np.load(f"{save_path}.npy")
 
 
 
@@ -911,9 +922,9 @@ if "DoG" in models_to_fit:
 
     # DoG grid fit
     if "dog_gridparams_path" not in analysis_info and "dog_iterparams_path" not in analysis_info and dog_grid:
-        save_path = opj(data_path, subj+"_gridparams-dog_space-"+fitting_space+str(chunk_nr))
+        save_path = opj(data_path, f"{subj}_{session}_gridparams-dog_space-{fitting_space}{chunk_nr}")
     
-        if not os.path.exists(save_path+".npy") or refit_mode == "overwrite":
+        if not os.path.exists(f"{save_path}.npy") or refit_mode == "overwrite":
     
             print("Starting DoG grid fit at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S'))
             gf_dog.grid_fit(surround_amplitude_grid=dog_surround_amplitude_grid,
@@ -929,14 +940,14 @@ if "DoG" in models_to_fit:
     
             np.save(save_path, gf_dog.gridsearch_params)
     
-        elif os.path.exists(save_path+".npy") and refit_mode in ["iterate", "skip"]:
-            gf_dog.gridsearch_params = np.load(save_path+".npy")
+        elif os.path.exists(f"{save_path}.npy") and refit_mode in ["iterate", "skip"]:
+            gf_dog.gridsearch_params = np.load(f"{save_path}.npy")
     
     elif "dog_gridparams_path" in analysis_info:
         gf_dog.gridsearch_params = np.array_split(np.load(analysis_info["dog_gridparams_path"]), n_chunks)[chunk_nr]
     
    
-    save_path = opj(data_path, subj+"_iterparams-dog_space-"+fitting_space+str(chunk_nr))
+    save_path = opj(data_path, f"{subj}_{session}_iterparams-dog_space-{fitting_space}{chunk_nr}")
 
     if "dog_iterparams_path" in analysis_info:
         gf_dog.iterative_search_params = np.array_split(np.load(analysis_info["dog_iterparams_path"]), n_chunks)[chunk_nr]
@@ -972,7 +983,7 @@ if "DoG" in models_to_fit:
 
     else:
 
-        if not os.path.exists(save_path+".npy") or refit_mode == "overwrite":
+        if not os.path.exists(f"{save_path}.npy") or refit_mode == "overwrite":
             print("Starting DoG iterfit at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S'))
     
             gf_dog.iterative_fit(rsq_threshold=rsq_threshold, verbose=verbose,
@@ -1001,9 +1012,9 @@ if "DoG" in models_to_fit:
     
     
     
-        elif os.path.exists(save_path+".npy") and refit_mode == "iterate":
+        elif os.path.exists(f"{save_path}.npy") and refit_mode == "iterate":
     
-            if previous_analysis_refit_mode != "iterate" or (datetime.fromtimestamp(os.stat(save_path+".npy").st_mtime)) < datetime(\
+            if previous_analysis_refit_mode != "iterate" or (datetime.fromtimestamp(os.stat(f"{save_path}.npy").st_mtime)) < datetime(\
                                                         int(previous_analysis_time.split('-')[0]),
                                                         int(previous_analysis_time.split('-')[1]),
                                                         int(previous_analysis_time.split('-')[2]),
@@ -1013,7 +1024,7 @@ if "DoG" in models_to_fit:
                 print("Starting DoG iterfit at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S'))
         
                 gf_dog.iterative_fit(rsq_threshold=rsq_threshold, verbose=verbose,
-                                     starting_params=np.load(save_path+".npy"),
+                                     starting_params=np.load(f"{save_path}.npy"),
                                      bounds=dog_bounds,
                                      constraints=constraints_dog,
                                      xtol=xtol,
@@ -1039,8 +1050,8 @@ if "DoG" in models_to_fit:
     
 
     
-        elif os.path.exists(save_path+".npy") and refit_mode == "skip":
-            gf_dog.iterative_search_params = np.load(save_path+".npy")
+        elif os.path.exists(f"{save_path}.npy") and refit_mode == "skip":
+            gf_dog.iterative_search_params = np.load(f"{save_path}.npy")
 
 
 
@@ -1064,9 +1075,9 @@ if "norm" in models_to_fit:
     #normalization grid stage
     if "norm_gridparams_path" not in analysis_info and "norm_iterparams_path" not in analysis_info:
 
-        save_path = opj(data_path, subj+"_gridparams-norm_space-"+fitting_space+str(chunk_nr))
+        save_path = opj(data_path, f"{subj}_{session}_gridparams-norm_space-{fitting_space}{chunk_nr}")
 
-        if not os.path.exists(save_path+".npy") or refit_mode == "overwrite":
+        if not os.path.exists(f"{save_path}.npy") or refit_mode == "overwrite":
 
 
             print("Starting norm grid fit at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S'))
@@ -1083,14 +1094,14 @@ if "norm" in models_to_fit:
             print("Norm gridfit completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Mean rsq>"+str(rsq_threshold)+": "+str(np.mean(gf_norm.gridsearch_params[gf_norm.gridsearch_rsq_mask, -1])))
         
             np.save(save_path, gf_norm.gridsearch_params)
-        elif os.path.exists(save_path+".npy") and refit_mode in ["iterate","skip"]:
-            gf_norm.gridsearch_params = np.load(save_path+".npy")
+        elif os.path.exists(f"{save_path}.npy") and refit_mode in ["iterate","skip"]:
+            gf_norm.gridsearch_params = np.load(f"{save_path}.npy")
 
     else:
         gf_norm.gridsearch_params = np.array_split(np.load(analysis_info["norm_gridparams_path"]), n_chunks)[chunk_nr]
 
 
-    save_path = opj(data_path, subj+"_iterparams-norm_space-"+fitting_space+str(chunk_nr))
+    save_path = opj(data_path, f"{subj}_{session}_iterparams-norm_space-{fitting_space}{chunk_nr}")
 
     if "norm_iterparams_path" in analysis_info:
         gf_norm.iterative_search_params = np.array_split(np.load(analysis_info["norm_iterparams_path"]), n_chunks)[chunk_nr]
@@ -1124,7 +1135,7 @@ if "norm" in models_to_fit:
 
 
     else:
-        if not os.path.exists(save_path+".npy") or refit_mode == "overwrite":
+        if not os.path.exists(f"{save_path}.npy") or refit_mode == "overwrite":
     
             print("Starting norm iterfit at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S'))
     
@@ -1152,9 +1163,9 @@ if "norm" in models_to_fit:
             np.save(save_path, gf_norm.iterative_search_params)
     
     
-        elif os.path.exists(save_path+".npy") and refit_mode == "iterate":
+        elif os.path.exists(f"{save_path}.npy") and refit_mode == "iterate":
     
-            if previous_analysis_refit_mode != "iterate" or (datetime.fromtimestamp(os.stat(save_path+".npy").st_mtime)) < datetime(\
+            if previous_analysis_refit_mode != "iterate" or (datetime.fromtimestamp(os.stat(f"{save_path}.npy").st_mtime)) < datetime(\
                                                         int(previous_analysis_time.split('-')[0]),
                                                         int(previous_analysis_time.split('-')[1]),
                                                         int(previous_analysis_time.split('-')[2]),
@@ -1165,7 +1176,7 @@ if "norm" in models_to_fit:
                 print("Starting norm iterfit at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S'))
         
                 gf_norm.iterative_fit(rsq_threshold=rsq_threshold, verbose=verbose,
-                                      starting_params=np.load(save_path+".npy"),
+                                      starting_params=np.load(f"{save_path}.npy"),
                                               bounds=norm_bounds,
                                               constraints=constraints_norm,
                                               xtol=xtol,
@@ -1191,5 +1202,5 @@ if "norm" in models_to_fit:
     
 
     
-        elif os.path.exists(save_path+".npy") and refit_mode == "skip":
-            gf_norm.iterative_search_params = np.load(save_path+".npy")
+        elif os.path.exists(f"{save_path}.npy") and refit_mode == "skip":
+            gf_norm.iterative_search_params = np.load(f"{save_path}.npy")

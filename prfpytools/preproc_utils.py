@@ -165,6 +165,8 @@ def prepare_data(subj,
                  fit_runs,
                  fit_task,
                  save_noise_ceiling,
+
+                 session = 'ses-*',
                  pybest = False):
 
     if fitting_space == 'fsaverage' or fitting_space == 'fsnative':
@@ -180,13 +182,13 @@ def prepare_data(subj,
             tc_task = []
             if fitting_space == 'fsaverage' or fitting_space == 'fsnative':
                 if pybest:
-                    tc_paths = sorted(Path(opj(data_path,'pybest',subj,'unzscored')).glob(subj+'_ses-*_task-'+task_name+'_run-*_space-'+fitting_space+'_hemi-'+hemi+'*.func.gii'))
+                    tc_paths = sorted(Path(opj(data_path,'pybest',subj,'unzscored')).glob(f"{subj}_{session}_task-{task_name}*run-*_space-{fitting_space}_hemi-{hemi}*bold.npy"))
                 else:                   
-                    tc_paths = sorted(Path(opj(data_path,'fmriprep',subj)).glob(opj('**',subj+'_ses-*_task-'+task_name+'_run-*_space-'+fitting_space+'_hemi-'+hemi+'*bold.npy')))
+                    tc_paths = sorted(Path(opj(data_path,'fmriprep',subj)).glob(opj('**',f"{subj}_{session}_task-{task_name}*run-*_space-{fitting_space}_hemi-{hemi}*.func.gii")))
             elif fitting_space == 'HCP': 
                 tc_paths = sorted(Path(opj(data_path,subj)).glob(opj('**',f"tfMRI_RET{task_name}*_7T_*_Atlas_1.6mm_MSMAll_hp2000_clean.dtseries.nii")))
             
-            print("For task "+task_name+", hemisphere "+hemi+" of subject "+subj+", a total of "+str(len(tc_paths))+" runs were found.")
+            print(f"For task {task_name}, session {session}, hemisphere {hemi}, of subject {subj}, a total of {len(tc_paths)} runs were found.")
             
             if fit_runs is not None and (len(fit_runs)>len(tc_paths) or np.any(np.array(fit_runs)>=len(tc_paths))):
                 print(f"{fit_runs} fit_runs requested but only {len(tc_paths)} runs were found.")
@@ -227,17 +229,13 @@ def prepare_data(subj,
                              filter_type=filter_type,
                              filter_params=filter_params))                        
 
-                #when scanning sub-001 i mistakenly set the length of the 4F scan to 147, while it should have been 145
-                #therefore, there are two extra images at the end to discard in that time series.
-                #from sub-002 onwards, this was corrected.
-                if subj == 'sub-001' and task_name=='4F':
-                    tc_task[-1] = tc_task[-1][...,:-2]
-
             
             tc_dict[hemi][task_name]['timecourse'] = np.mean(tc_task, axis=0)
             tc_dict[hemi][task_name]['baseline'] = np.median(tc_dict[hemi][task_name]['timecourse'][...,prf_stim.late_iso_dict[task_name]],
                                                axis=-1)
-   
+            
+
+        #this part needs updating
         if crossvalidate:
             for task_name in test_prf_stim.task_names:                          
                 tc_task = []

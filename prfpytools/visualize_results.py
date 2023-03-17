@@ -4048,6 +4048,9 @@ class visualize_results(object):
                                                     pred_cmap = 'plasma_r'
                                                 elif 'Param. B' in ols_y_dim:
                                                     pred_cmap = 'viridis_r'
+                                                else:
+                                                    pred_cmap = 'plasma_r'
+
                                                     
                                                 ax.scatter(xx0.flatten(), xx1.flatten(), Z_pred,  s=4,  alpha=0.2, zorder=0, c=Z_pred, cmap=pred_cmap)#, vmin=np.nanquantile(Z_pred,0.1), vmax=np.nanquantile(Z_pred,0.95))#, label=f"R2 (full data) {rsq_prediction:.2f}")
                                                 #pl.legend()
