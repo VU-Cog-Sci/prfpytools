@@ -109,7 +109,6 @@ xtol = analysis_info["xtol"]
 ftol = analysis_info["ftol"]
 
 dm_edges_clipping = analysis_info["dm_edges_clipping"]
-baseline_volumes_begin_end = analysis_info["baseline_volumes_begin_end"]
 min_percent_var = analysis_info["min_percent_var"]
 
 param_bounds = analysis_info["param_bounds"]
@@ -225,7 +224,6 @@ if crossvalidate and fit_task is not None:
     prf_stim = create_full_stim(screenshot_paths,
                 n_pix,
                 discard_volumes,
-                baseline_volumes_begin_end,
                 dm_edges_clipping,
                 screen_size_cm,
                 screen_distance_cm,
@@ -236,7 +234,6 @@ if crossvalidate and fit_task is not None:
     test_prf_stim = create_full_stim(screenshot_paths,
                 n_pix,
                 discard_volumes,
-                baseline_volumes_begin_end,
                 dm_edges_clipping,
                 screen_size_cm,
                 screen_distance_cm,
@@ -247,7 +244,6 @@ else:
     prf_stim = create_full_stim(screenshot_paths,
                 n_pix,
                 discard_volumes,
-                baseline_volumes_begin_end,
                 dm_edges_clipping,
                 screen_size_cm,
                 screen_distance_cm,
@@ -262,7 +258,6 @@ if chunk_nr == 0 and len(save_runs)>0:
         prf_stim_single_task = create_full_stim([screenshot_paths[i]],
             n_pix,
             discard_volumes,
-            baseline_volumes_begin_end,
             dm_edges_clipping,
             screen_size_cm,
             screen_distance_cm,
