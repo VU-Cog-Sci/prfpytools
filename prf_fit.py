@@ -30,7 +30,7 @@ if "mkl_num_threads" in analysis_info:
 import numpy as np
 from scipy.optimize import LinearConstraint, NonlinearConstraint
 
-from utils.preproc_utils import create_full_stim, prepare_data
+from prfpytools.preproc_utils import create_full_stim, prepare_data
 
 from prfpy.model import Iso2DGaussianModel, Norm_Iso2DGaussianModel, DoG_Iso2DGaussianModel, CSS_Iso2DGaussianModel
 from prfpy.fit import Iso2DGaussianFitter, Norm_Iso2DGaussianFitter, DoG_Iso2DGaussianFitter, CSS_Iso2DGaussianFitter
