@@ -22,7 +22,7 @@ subjects = sys.argv[2]
 
 
 for subj in subjects.split(','):
-    analysis_settings_files = sorted(Path(results_path.glob(f"{subj}_{session}_*_analysis_settings.yml")))
+    analysis_settings_files = sorted(Path(results_path).glob(f"{subj}_*_analysis_settings.yml"))
 
     for analysis_settings in analysis_settings_files:
 
@@ -56,7 +56,6 @@ for subj in subjects.split(','):
         save_noise_ceiling = analysis_info["save_noise_ceiling"]
         
         dm_edges_clipping = analysis_info["dm_edges_clipping"]
-        baseline_volumes_begin_end = analysis_info["baseline_volumes_begin_end"]
         min_percent_var = analysis_info["min_percent_var"]
         
         n_chunks = analysis_info["n_chunks"]
@@ -197,7 +196,7 @@ for subj in subjects.split(','):
                 np.save(tc_test_path.replace(tc_test_path.split(os.path.sep)[1], replacer).replace('.npy',analysis_time+'.npy'), tc_test_ordered)
         
         
-                
+        analysis_settings=str(analysis_settings)
         cp(analysis_settings, analysis_settings.replace(analysis_settings.split(os.path.sep)[1], replacer).replace('.yml',analysis_time+'.yml'))
         print(f"harvest subj {subj}_{session} completed")
 
