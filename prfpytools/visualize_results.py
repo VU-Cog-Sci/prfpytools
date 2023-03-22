@@ -128,27 +128,28 @@ class visualize_results(object):
         self.get_spaces()
         self.get_subjects(self.main_dict)
         for subj in self.subjects:
-            if os.path.exists(opj(self.fs_dir, subj)):
+            pycortex_subj = subj.split('_')[0]
+            if os.path.exists(opj(self.fs_dir, pycortex_subj)):
             
-                if subj not in cortex.db.subjects:
+                if pycortex_subj not in cortex.db.subjects:
                     print("importing subject from freesurfer")
                     print(f"note: this command often files when executed on mac OS via jupyter notebook.\
                           Rather, source freesurfer and execute it in ipython: \
-                              cortex.freesurfer.import_subj({subj}, freesurfer_subject_dir={self.fs_dir}, \
+                              cortex.freesurfer.import_subj({pycortex_subj}, freesurfer_subject_dir={self.fs_dir}, \
                           whitematter_surf='smoothwm')")
-                    cortex.freesurfer.import_subj(subj, freesurfer_subject_dir=self.fs_dir, 
+                    cortex.freesurfer.import_subj(pycortex_subj, freesurfer_subject_dir=self.fs_dir, 
                           whitematter_surf='smoothwm')
                 if import_flatmaps:
                     try:
                         print('importing flatmaps from freesurfer')
-                        cortex.freesurfer.import_flat(subject=subj, patch='full', hemis=['lh', 'rh'], 
+                        cortex.freesurfer.import_flat(subject=pycortex_subj, patch='full', hemis=['lh', 'rh'], 
                                                   freesurfer_subject_dir=self.fs_dir, clean=True)
                     except Exception as e:
                         print(e)
                         pass
                             
-                if os.path.exists(opj(self.fs_dir, subj, 'label', 'lh.wang2015atlas.V1d.label')):
-                    src_subject=subj
+                if os.path.exists(opj(self.fs_dir, pycortex_subj, 'label', 'lh.wang2015atlas.V1d.label')):
+                    src_subject=pycortex_subj
                 else:
                     src_subject='fsaverage'
                         
@@ -158,7 +159,7 @@ class visualize_results(object):
                     "IPS5", "SPL1", "FEF"]
                 for roi in wang_rois:
                     try:
-                        self.idx_rois[subj][roi], _ = cortex.freesurfer.get_label(subj,
+                        self.idx_rois[subj][roi], _ = cortex.freesurfer.get_label(pycortex_subj,
                                                               label='wang2015atlas.'+roi,
                                                               fs_dir=self.fs_dir,
                                                               src_subject=src_subject,
@@ -176,10 +177,10 @@ class visualize_results(object):
                 self.idx_rois[subj]['V3AB'] = np.concatenate((self.idx_rois[subj]['V3A'],self.idx_rois[subj]['V3B']))
                 self.idx_rois[subj]['IPS'] = np.concatenate(tuple([self.idx_rois[subj][rroi] for rroi in self.idx_rois[subj].keys() if 'IPS' in rroi]))            
                 #parse custom ROIs if they have been created
-                for roi in [el for el in os.listdir(opj(self.fs_dir, subj, 'label')) if 'custom' in el]:
+                for roi in [el for el in os.listdir(opj(self.fs_dir, pycortex_subj, 'label')) if 'custom' in el]:
                     roi = roi.replace('lh.','').replace('rh.','').replace('.label','')
                     try:
-                        self.idx_rois[subj][roi], _ = cortex.freesurfer.get_label(subj,
+                        self.idx_rois[subj][roi], _ = cortex.freesurfer.get_label(pycortex_subj,
                                                               label=roi,
                                                               fs_dir=self.fs_dir,
                                                               src_subject=subj,
@@ -209,11 +210,11 @@ class visualize_results(object):
                 #         pass
 
                 #parse glasser ROIs if they have been created
-                for roi in [el for el in os.listdir(opj(self.fs_dir, subj, 'label')) if 'glasser' in el]:
+                for roi in [el for el in os.listdir(opj(self.fs_dir, pycortex_subj, 'label')) if 'glasser' in el]:
                     roi = roi.replace('.label','').replace('lh.','').replace('rh.','')
                     try:
                         
-                        self.idx_rois[subj][roi], _ = cortex.freesurfer.get_label(subj,
+                        self.idx_rois[subj][roi], _ = cortex.freesurfer.get_label(pycortex_subj,
                                                               label=roi,
                                                               fs_dir=self.fs_dir,
                                                               src_subject=subj,
@@ -224,10 +225,10 @@ class visualize_results(object):
 
 
                 #parse exclusion ROIs if they have been created
-                for roi in [el for el in os.listdir(opj(self.fs_dir, subj, 'label')) if 'excl' in el]:
+                for roi in [el for el in os.listdir(opj(self.fs_dir, pycortex_subj, 'label')) if 'excl' in el]:
                     roi = roi.replace('lh.','').replace('rh.','').replace('.label','')
                     try:
-                        self.idx_rois[subj][roi], _ = cortex.freesurfer.get_label(subj,
+                        self.idx_rois[subj][roi], _ = cortex.freesurfer.get_label(pycortex_subj,
                                                               label=roi,
                                                               fs_dir=self.fs_dir,
                                                               src_subject=subj,
@@ -258,9 +259,9 @@ class visualize_results(object):
                     if 'custom' in roi_name:
                         #need a correctly flattened brain to do this
                         try:
-                            roi_data = np.zeros(cortex.db.get_surfinfo(subj).data.shape).astype('bool')
+                            roi_data = np.zeros(cortex.db.get_surfinfo(pycortex_subj).data.shape).astype('bool')
                             roi_data[roi_idx] = 1
-                            roi_vertices=cortex.Vertex(roi_data, subj)
+                            roi_vertices=cortex.Vertex(roi_data, pycortex_subj)
                             cortex.add_roi(roi_vertices, name=roi_name, open_inkscape=False, add_path=True)
                         except Exception as e:
                             print(e)
@@ -293,11 +294,13 @@ class visualize_results(object):
 
         
         for subj in subject_ids:
-            assert subj in self.idx_rois, "subject not found"    
+            assert subj in self.idx_rois, "subject not found"
+
+            pycortex_subj = subj.split('_')[0]
             
             if previous_borders_path is None:
             
-                left, right = getattr(cortex.db,subj).surfaces.inflated.get()
+                left, right = getattr(cortex.db,pycortex_subj).surfaces.inflated.get()
     
                 faces = np.concatenate((left[1],len(left[0])+right[1]))
                 
@@ -320,10 +323,11 @@ class visualize_results(object):
                         
             
 
-    def set_alpha(self, space_names='all', only_models=None, ecc_min=0, ecc_max=5, threshold_li=True, excluded_rois=[]):
+    def set_alpha(self, space_names='all', only_models=None, ecc_min=0, ecc_max=5, threshold_li=True, excluded_rois=[], tc_min=dict()):
         
         self.only_models=only_models
-        self.tc_min = dict()
+        self.tc_min = tc_min
+
         if space_names == 'all':
             spaces = [item for item in self.main_dict.items()]
         else:
@@ -345,14 +349,8 @@ class visualize_results(object):
                             tc_stats['Mean'] = np.ones_like(p_r['RSq'][only_models[0]])
                        
                         #######Raw bold timecourse vein threshold
-                        if subj == 'sub-006':
-                            self.tc_min[subj] = 45000
-                        elif subj == 'sub-007':
-                            self.tc_min[subj] = 40000
-                        elif subj == 'sub-001':
-                            self.tc_min[subj] = 35000
-                        else:
-                            self.tc_min[subj] = 0
+                        if subj not in self.tc_min:
+                            self.tc_min[subj] = -np.inf
                             
                         ######limits for eccentricity
                         self.ecc_min=ecc_min
@@ -460,7 +458,6 @@ class visualize_results(object):
                     self.prf_stim = create_full_stim(screenshot_paths=screenshot_paths,
                                 n_pix=an_info['n_pix'],
                                 discard_volumes=an_info['discard_volumes'],
-                                baseline_volumes_begin_end=an_info['baseline_volumes_begin_end'],
                                 dm_edges_clipping=an_info['dm_edges_clipping'],
                                 screen_size_cm=an_info['screen_size_cm'],
                                 screen_distance_cm=an_info['screen_distance_cm'],
@@ -484,7 +481,6 @@ class visualize_results(object):
                         self.prf_stims[task] = create_full_stim(screenshot_paths=[screenshot_paths[i]],
                                 n_pix=an_info['n_pix'],
                                 discard_volumes=an_info['discard_volumes'],
-                                baseline_volumes_begin_end=an_info['baseline_volumes_begin_end'],
                                 dm_edges_clipping=an_info['dm_edges_clipping'],
                                 screen_size_cm=an_info['screen_size_cm'],
                                 screen_distance_cm=an_info['screen_distance_cm'],
@@ -534,12 +530,12 @@ class visualize_results(object):
                         
     
                     
-                tc_full = np.concatenate(tuple([tc[task] for task in tc]), axis=0) - an_info['norm_bold_baseline']
+                tc_full = np.concatenate(tuple([tc[task] for task in tc]), axis=0)
                 tc_err = np.concatenate(tuple([tc_err[task] for task in tc_err]), axis=0)
                 
                 if an_info['crossvalidate'] and 'fit_task' not in an_info:
-                    tc_full_test = np.concatenate(tuple([tc_test[task] for task in tc_test]), axis=0) - an_info['norm_bold_baseline']
-                    tc_full_fit = np.concatenate(tuple([tc_fit[task] for task in tc_fit]), axis=0) - an_info['norm_bold_baseline']    
+                    tc_full_test = np.concatenate(tuple([tc_test[task] for task in tc_test]), axis=0)
+                    tc_full_fit = np.concatenate(tuple([tc_fit[task] for task in tc_fit]), axis=0)   
                     #timecourse reliability stats
                     vertex_info+="CV timecourse reliability stats\n"
                     vertex_info+=f"fit-test timecourses pearson R {pearsonr(tc_full_test,tc_full_fit)[0]:.4f}\n"
@@ -571,7 +567,7 @@ class visualize_results(object):
                     params = np.copy(subj_res['Results'][model][internal_idx,:-1])
                     
 
-                    preds[model] = self.prf_models[model].return_prediction(*list(params))[0] - an_info['norm_bold_baseline']
+                    preds[model] = self.prf_models[model].return_prediction(*list(params))[0]
                     
                     
                     #mdff = (preds[model]-tc_full).mean()
@@ -711,11 +707,11 @@ class visualize_results(object):
                     subjects = [item for item in analysis_res.items() if item[0] in subject_ids] 
                 for subj, subj_res in subjects:
                     
-                    pycortex_subj = subj
+                    pycortex_subj = subj.split('_')[0]
                     
-                    if subj not in cortex.db.subjects and os.path.exists(opj(self.fs_dir,subj)):
+                    if pycortex_subj not in cortex.db.subjects and os.path.exists(opj(self.fs_dir,pycortex_subj)):
                         print("subject not present in pycortex database. attempting to import...")
-                        cortex.freesurfer.import_subj(subj, freesurfer_subject_dir=self.fs_dir, 
+                        cortex.freesurfer.import_subj(pycortex_subj, freesurfer_subject_dir=self.fs_dir, 
                               whitematter_surf='smoothwm')
                     elif (subj.isdecimal() or '999999' in subj) and space == 'HCP':
                         pycortex_subj = '999999'
@@ -1207,30 +1203,28 @@ class visualize_results(object):
                         
                         for model in [model for model in self.only_models if 'Norm' in model]:
                             
-                            pycortex_cmap = 'viridis_r'
 
                             ds_norm_baselines[f'{model} Param. B'] = Vertex2D_fix(p_r['Norm Param. B'][model], alpha[analysis][subj][model], subject=pycortex_subj, 
                                                                          vmin=0,#np.nanquantile(p_r['Norm Param. B'][model][alpha[analysis][subj][model]>rsq_thresh],0.01), 
-                                                                         vmax=100,#np.nanquantile(p_r['Norm Param. B'][model][alpha[analysis][subj][model]>rsq_thresh],0.99), 
-                                                                         vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap=pycortex_cmap, roi_borders=roi_borders)     
+                                                                         vmax=50,#np.nanquantile(p_r['Norm Param. B'][model][alpha[analysis][subj][model]>rsq_thresh],0.99), 
+                                                                         vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap='viridis_r', roi_borders=roi_borders)     
                             
                             fig = simple_colorbar(vmin=0,#np.nanquantile(p_r['Norm Param. B'][model][alpha[analysis][subj][model]>rsq_thresh],0.01), 
-                                            vmax=100,#np.nanquantile(p_r['Norm Param. B'][model][alpha[analysis][subj][model]>rsq_thresh],0.99),
-                                            cmap_name=pycortex_cmap, ori='horizontal', param_name='Norm Param. B')
+                                            vmax=50,#np.nanquantile(p_r['Norm Param. B'][model][alpha[analysis][subj][model]>rsq_thresh],0.99),
+                                            cmap_name='viridis_r', ori='horizontal', param_name='Norm Param. B')
                             
                             if self.pycortex_image_path is not None:
                                 fig.savefig(f"{self.pycortex_image_path}/{model}_paramB_cbar.pdf", dpi=600, bbox_inches='tight', transparent=True)  
                             
-                            pycortex_cmap = 'inferno_r'
                                 
                             ds_norm_baselines[f'{model} Param. D'] = Vertex2D_fix(p_r['Norm Param. D'][model], alpha[analysis][subj][model], subject=pycortex_subj, 
                                                                          vmin=1,#np.nanquantile(p_r['Norm Param. D'][model][alpha[analysis][subj][model]>rsq_thresh],0.01), 
-                                                                         vmax=100,#np.nanquantile(p_r['Norm Param. D'][model][alpha[analysis][subj][model]>rsq_thresh],0.99),
-                                                                         vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap=pycortex_cmap, roi_borders=roi_borders)
+                                                                         vmax=50,#np.nanquantile(p_r['Norm Param. D'][model][alpha[analysis][subj][model]>rsq_thresh],0.99),
+                                                                         vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap='inferno_r', roi_borders=roi_borders)
                             
                             fig = simple_colorbar(vmin=1,#np.nanquantile(p_r['Norm Param. D'][model][alpha[analysis][subj][model]>rsq_thresh],0.01), 
-                                            vmax=100,#np.nanquantile(p_r['Norm Param. D'][model][alpha[analysis][subj][model]>rsq_thresh],0.99),
-                                            cmap_name=pycortex_cmap, ori='horizontal', param_name='Norm Param. D')
+                                            vmax=50,#np.nanquantile(p_r['Norm Param. D'][model][alpha[analysis][subj][model]>rsq_thresh],0.99),
+                                            cmap_name='inferno_r', ori='horizontal', param_name='Norm Param. D')
                             
                             if self.pycortex_image_path is not None:
                                 fig.savefig(f"{self.pycortex_image_path}/{model}_paramD_cbar.pdf", dpi=600, bbox_inches='tight', transparent=True)                              
@@ -1695,7 +1689,7 @@ class visualize_results(object):
                                     elif 'fsaverage' in subj:
                                         pycortex_subj = 'fsaverage'                                        
                                     else:
-                                        pycortex_subj = subj
+                                        pycortex_subj = subj.split('_')[0]
                                         
                                     aseg = nb.load(opj(cortex.database.default_filestore,pycortex_subj,'anatomicals','aseg.nii.gz'))
                                     anat_vox_vol = aseg.header.get_zooms()[0]*aseg.header.get_zooms()[1]*aseg.header.get_zooms()[2]

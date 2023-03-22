@@ -286,7 +286,7 @@ class results(object):
             reduced_an_name = an.replace(f"{subj}_",'')
 
             if ses_str != '':
-                reduced_an_name = reduced_an_name.replace(ses_str,'')
+                reduced_an_name = reduced_an_name.replace(ses+'_','')
 
 
             mask = an_res['mask']
