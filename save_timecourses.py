@@ -16,10 +16,11 @@ import yaml
 #             if len(sj)==6 and sj.isdecimal() and sj not in ['999999','111312', '951457']\
 #                 and len([pr for pr in os.listdir('/home/marcoaq/PRFMapping/PRFMapping-HCP/prfpy') if sj in pr])<6]
 
-subj_list = [sj for sj in os.listdir('/home/marcoaq/PRFMapping/PRFMapping-HCP') if len(sj)==6 and sj.isdecimal()]
+#subj_list = [sj for sj in os.listdir('/home/marcoaq/PRFMapping/PRFMapping-HCP') if len(sj)==6 and sj.isdecimal()]
+#subj_list.sort()
+#subj_list = subj_list[10:30]
 
-subj_list.sort()
-subj_list = subj_list[10:30]
+subj_list = ['sub-001', 'sub-002']
 
 analysis_settings = '/home/marcoaq/savetimecourse_analysis_settings.yml'
 chunk_nr = 0
@@ -115,7 +116,6 @@ xtol = analysis_info["xtol"]
 ftol = analysis_info["ftol"]
 
 dm_edges_clipping = analysis_info["dm_edges_clipping"]
-baseline_volumes_begin_end = analysis_info["baseline_volumes_begin_end"]
 min_percent_var = analysis_info["min_percent_var"]
 
 param_bounds = analysis_info["param_bounds"]
@@ -142,7 +142,6 @@ if crossvalidate and fit_task is not None:
     prf_stim = create_full_stim(screenshot_paths,
                 n_pix,
                 discard_volumes,
-                baseline_volumes_begin_end,
                 dm_edges_clipping,
                 screen_size_cm,
                 screen_distance_cm,
@@ -153,7 +152,6 @@ if crossvalidate and fit_task is not None:
     test_prf_stim = create_full_stim(screenshot_paths,
                 n_pix,
                 discard_volumes,
-                baseline_volumes_begin_end,
                 dm_edges_clipping,
                 screen_size_cm,
                 screen_distance_cm,
@@ -164,7 +162,6 @@ else:
     prf_stim = create_full_stim(screenshot_paths,
                 n_pix,
                 discard_volumes,
-                baseline_volumes_begin_end,
                 dm_edges_clipping,
                 screen_size_cm,
                 screen_distance_cm,
@@ -179,7 +176,6 @@ for i,task in enumerate(task_names):
     prf_stims[task] = create_full_stim([screenshot_paths[i]],
                 n_pix,
                 discard_volumes,
-                baseline_volumes_begin_end,
                 dm_edges_clipping,
                 screen_size_cm,
                 screen_distance_cm,

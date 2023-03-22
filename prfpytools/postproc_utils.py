@@ -40,7 +40,14 @@ class results(object):
         an_tasks = []
         an_runs = []
         for i, an_info in enumerate(an_infos):
-            an_info['subj'] = subjects[i]
+
+            if 'subj' not in an_info:
+                an_info['subj'] = subjects[i]
+
+            if 'session' in an_info:
+                ses_str = an_info['session']+'_'
+            else:
+                ses_str = ''
             
             if len(an_info['task_names'])>1:
                 an_tasks.append('all')
@@ -52,7 +59,7 @@ class results(object):
             else:
                 an_runs.append('all')
             
-            an_names.append(f"{subjects[i]}_fit-task-{an_tasks[i]}_fit-runs-{an_runs[i]}")
+            an_names.append(f"{subjects[i]}_{ses_str}fit-task-{an_tasks[i]}_fit-runs-{an_runs[i]}")
             
         unique_an_names = np.unique(np.array(an_names)).tolist()
         
@@ -63,24 +70,29 @@ class results(object):
         for an_name in tqdm(unique_an_names):
             current_an_infos = np.array(an_infos)[np.array(an_names)==an_name]
             merged_an_info = mergedict_AND(current_an_infos)
+
+            if 'session' in current_an_infos[0]:
+                ses_str = current_an_infos[0]['session']+'_'
+            else:
+                ses_str = ''
   
             r_r = dict()
             r_r_full=dict()
             
             try:            
-                mask = np.load(opj(results_folder,f"{current_an_infos[0]['subj']}_mask_space-{current_an_infos[0]['fitting_space']}{current_an_infos[0]['analysis_time']}.npy"))
+                mask = np.load(opj(results_folder,f"{current_an_infos[0]['subj']}_{ses_str}mask_space-{current_an_infos[0]['fitting_space']}{current_an_infos[0]['analysis_time']}.npy"))
             except:
-                mask = np.load(opj(results_folder,f"{current_an_infos[0]['subj']}_mask_space-{current_an_infos[0]['fitting_space']}{current_an_infos[0]['previous_analysis_time']}.npy"))
+                mask = np.load(opj(results_folder,f"{current_an_infos[0]['subj']}_{ses_str}mask_space-{current_an_infos[0]['fitting_space']}{current_an_infos[0]['previous_analysis_time']}.npy"))
                 
             for i, curr_an_info in enumerate(current_an_infos):
-                if os.path.exists(opj(timecourse_folder,f"{curr_an_info['subj']}_timecourse_space-{curr_an_info['fitting_space']}{curr_an_info['analysis_time']}.npy")):
+                if os.path.exists(opj(timecourse_folder,f"{curr_an_info['subj']}_{ses_str}timecourse_space-{curr_an_info['fitting_space']}{curr_an_info['analysis_time']}.npy")):
                     merged_an_info["timecourse_analysis_time"] = curr_an_info["analysis_time"]
                 
                 for model in curr_an_info["models_to_fit"]:
                     try:
-                        raw_model_result = (np.load(opj(results_folder,f"{curr_an_info['subj']}_iterparams-{model.lower()}_space-{curr_an_info['fitting_space']}{curr_an_info['analysis_time']}.npy")))
+                        raw_model_result = (np.load(opj(results_folder,f"{curr_an_info['subj']}_{ses_str}iterparams-{model.lower()}_space-{curr_an_info['fitting_space']}{curr_an_info['analysis_time']}.npy")))
                     except:
-                        raw_model_result = (np.load(opj(results_folder,f"{curr_an_info['subj']}_iterparams-{model.lower()}_space-{curr_an_info['fitting_space']}{curr_an_info['previous_analysis_time']}.npy")))
+                        raw_model_result = (np.load(opj(results_folder,f"{curr_an_info['subj']}_{ses_str}iterparams-{model.lower()}_space-{curr_an_info['fitting_space']}{curr_an_info['previous_analysis_time']}.npy")))
                         
                     if i==0:
                         if model == 'norm':
@@ -108,7 +120,7 @@ class results(object):
             
                 
             #housekeeping
-            tc_paths = [str(path) for path in sorted(Path(timecourse_folder).glob(f"{merged_an_info['subj']}_timecourse_space-{merged_an_info['fitting_space']}_task-*_run-*.npy"))]    
+            tc_paths = [str(path) for path in sorted(Path(timecourse_folder).glob(f"{merged_an_info['subj']}_{ses_str}timecourse_space-{merged_an_info['fitting_space']}_task-*_run-*.npy"))]    
             mask_paths = [tc_path.replace('timecourse_','mask_') for tc_path in tc_paths]
             all_task_names = np.unique(np.array([elem.replace('task-','') for path in tc_paths for elem in path.split('_')  if 'task' in elem]))
             all_runs = np.unique(np.array([int(elem.replace('run-','').replace('.npy','')) for path in tc_paths for elem in path.split('_')  if 'run' in elem]))
@@ -117,7 +129,6 @@ class results(object):
                 # prf_stim = create_full_stim(screenshot_paths=screenshot_paths,
                 #                 n_pix=merged_an_info['n_pix'],
                 #                 discard_volumes=merged_an_info['discard_volumes'],
-                #                 baseline_volumes_begin_end=merged_an_info['baseline_volumes_begin_end'],
                 #                 dm_edges_clipping=merged_an_info['dm_edges_clipping'],
                 #                 screen_size_cm=merged_an_info['screen_size_cm'],
                 #                 screen_distance_cm=merged_an_info['screen_distance_cm'],
@@ -171,7 +182,6 @@ class results(object):
                         prf_stims[task] = create_full_stim(screenshot_paths=[s_p for s_p in screenshot_paths if task in s_p],
                                 n_pix=merged_an_info['n_pix'],
                                 discard_volumes=merged_an_info['discard_volumes'],
-                                baseline_volumes_begin_end=merged_an_info['baseline_volumes_begin_end'],
                                 dm_edges_clipping=merged_an_info['dm_edges_clipping'],
                                 screen_size_cm=merged_an_info['screen_size_cm'],
                                 screen_distance_cm=merged_an_info['screen_distance_cm'],
@@ -264,15 +274,28 @@ class results(object):
             an_res['analysis_info']['timecourse_folder'] = timecourse_folder
             
             subj = an_res['analysis_info']['subj']
+
+            if 'session' in an_res['analysis_info']:
+                ses = an_res['analysis_info']['session']
+                ses_str = '_'+an_res['analysis_info']['session']
+            else:
+                ses = ''
+                ses_str = ''
+
             space = an_res['analysis_info']['fitting_space']
             reduced_an_name = an.replace(f"{subj}_",'')
+
+            if ses_str != '':
+                reduced_an_name = reduced_an_name.replace(ses_str,'')
+
+
             mask = an_res['mask']
             
             for res in an_res:
                 if 'mask' not in res and 'info' not in res:
-                    self.main_dict[space][reduced_an_name][subj]['Results'][res] = deepcopy(an_res[res][mask])   
+                    self.main_dict[space][reduced_an_name][subj+ses_str]['Results'][res] = deepcopy(an_res[res][mask])   
                 else:
-                    self.main_dict[space][reduced_an_name][subj][res] = deepcopy(an_res[res])
+                    self.main_dict[space][reduced_an_name][subj+ses_str][res] = deepcopy(an_res[res])
                 
             
                        
@@ -284,8 +307,8 @@ class results(object):
                 tc_raw = np.load(opj(timecourse_folder,f'999999_timecourse-raw_space-{space}.npy'))
                 mask = np.load(opj(timecourse_folder,f'999999_mask-raw_space-{space}.npy'))
             else:
-                tc_raw = np.load(opj(timecourse_folder,f'{subj}_timecourse-raw_space-{space}.npy'))
-                mask = np.load(opj(timecourse_folder,f'{subj}_mask-raw_space-{space}.npy'))   
+                tc_raw = np.load(opj(timecourse_folder,f'{subj}{ses_str}_timecourse-raw_space-{space}.npy'))
+                mask = np.load(opj(timecourse_folder,f'{subj}{ses_str}_mask-raw_space-{space}.npy'))   
                 
             tc_mean = tc_raw.mean(-1)
             tc_mean_full = np.zeros(mask.shape)

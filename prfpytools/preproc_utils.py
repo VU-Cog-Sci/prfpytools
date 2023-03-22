@@ -227,7 +227,9 @@ def prepare_data(subj,
                     raw_tcs = True
                     tc_task.append(filter_predictions(tc_run_data,
                              filter_type=filter_type,
-                             filter_params=filter_params))                        
+                             filter_params=filter_params))
+
+                                       
 
             
             tc_dict[hemi][task_name]['timecourse'] = np.mean(tc_task, axis=0)
@@ -239,12 +241,16 @@ def prepare_data(subj,
         if crossvalidate:
             for task_name in test_prf_stim.task_names:                          
                 tc_task = []
+
                 if fitting_space == 'fsaverage' or fitting_space == 'fsnative':
-                    tc_paths = sorted(Path(opj(data_path,'fmriprep',subj)).glob(opj('**',subj+'_ses-*_task-'+task_name+'_run-*_space-'+fitting_space+'_hemi-'+hemi+'*.func.gii')))
+                    if pybest:
+                        tc_paths = sorted(Path(opj(data_path,'pybest',subj,'unzscored')).glob(f"{subj}_{session}_task-{task_name}*run-*_space-{fitting_space}_hemi-{hemi}*bold.npy"))
+                    else:                   
+                        tc_paths = sorted(Path(opj(data_path,'fmriprep',subj)).glob(opj('**',f"{subj}_{session}_task-{task_name}*run-*_space-{fitting_space}_hemi-{hemi}*.func.gii")))
                 elif fitting_space == 'HCP': 
                     tc_paths = sorted(Path(opj(data_path,subj)).glob(opj('**',f"tfMRI_RET{task_name}*_7T_*_Atlas_1.6mm_MSMAll_hp2000_clean.dtseries.nii")))
                 
-                print("For task "+task_name+", hemisphere "+hemi+" of subject "+subj+", a total of "+str(len(tc_paths))+" runs were found.")
+                print(f"For task {task_name}, session {session}, hemisphere {hemi}, of subject {subj}, a total of {len(tc_paths)} runs were found.")
                 
                 if fit_task is not None:
                     #if CV is over tasks, can use all runs for test data as well
@@ -253,13 +259,16 @@ def prepare_data(subj,
                     cv_runs = [run for run in np.arange(len(tc_paths)) if run not in fit_runs]
 
                 for tc_path in [tc_paths[run] for run in cv_runs]:
-                    tc_run = nb.load(str(tc_path))
-                    #no need to pass further args, only filtering 1 condition
                     if fitting_space == 'fsaverage' or fitting_space == 'fsnative':
-                        tc_run_data = np.array([arr.data for arr in tc_run.darrays]).T[...,discard_volumes:]
+                        if pybest:
+                            tc_run_data = np.load(str(tc_path)).T[...,discard_volumes:]
+                        else:
+                            tc_run = nb.load(str(tc_path))
+                            tc_run_data = np.array([arr.data for arr in tc_run.darrays]).T[...,discard_volumes:]
                     elif fitting_space == 'HCP':
                         #cortex only HCP data
-                        tc_run_data = np.array(tc_run.get_data()).T[:118584,discard_volumes:]                    
+                        tc_run = nb.load(str(tc_path))
+                        tc_run_data = np.array(tc_run.get_data()).T[:118584,discard_volumes:]                
                     
                     if data_scaling in ["zsc", "z-score"]:
                         tc_task.append(zscore(filter_predictions(tc_run_data,
@@ -275,13 +284,7 @@ def prepare_data(subj,
                         raw_tcs = True
                         tc_task.append(filter_predictions(tc_run_data,
                                  filter_type=filter_type,
-                                 filter_params=filter_params))   
-    
-                    #when scanning sub-001 i mistakenly set the length of the 4F scan to 147, while it should have been 145
-                    #therefore, there are two extra images at the end to discard in that time series.
-                    #from sub-002 onwards, this was corrected.
-                    if subj == 'sub-001' and task_name=='4F':
-                        tc_task[-1] = tc_task[-1][...,:-2]
+                                 filter_params=filter_params))  
 
                 
                 tc_dict[hemi][task_name]['timecourse_test'] = np.mean(tc_task, axis=0)
@@ -346,15 +349,15 @@ def prepare_data(subj,
                        
             
     if save_raw_timecourse and raw_tcs == True:
-        np.save(opj(data_path.replace('scratch-shared', 'home'),'prfpy',subj+"_timecourse-raw_space-"+fitting_space+".npy"),tc_full_iso[mask])
-        np.save(opj(data_path.replace('scratch-shared', 'home'),'prfpy',subj+"_mask-raw_space-"+fitting_space+".npy"),mask)
+        np.save(opj(data_path.replace('scratch-shared', 'home'),'prfpy',f"{subj}_{session}_timecourse-raw_space-{fitting_space}.npy"),tc_full_iso[mask])
+        np.save(opj(data_path.replace('scratch-shared', 'home'),'prfpy',f"{subj}_{session}_mask-raw_space-{fitting_space}.npy"),mask)
         
         if crossvalidate:
-            np.save(opj(data_path.replace('scratch-shared', 'home'),'prfpy',subj+"_timecourse-test-raw_space-"+fitting_space+".npy"),tc_full_iso_test[mask])
+            np.save(opj(data_path.replace('scratch-shared', 'home'),'prfpy',f"{subj}_{session}_timecourse-test-raw_space-{fitting_space}.npy"),tc_full_iso_test[mask])
             
     if save_noise_ceiling:
         noise_ceiling = 1-np.sum((tc_full_iso_nonzerovar_test-tc_full_iso_nonzerovar)**2, axis=-1)/(tc_full_iso_nonzerovar_test.shape[-1]*tc_full_iso_nonzerovar_test.var(-1))
-        np.save(opj(data_path,'prfpy',f"{subj}_noise-ceiling_space-{fitting_space}.npy"),noise_ceiling)
+        np.save(opj(data_path,'prfpy',f"{subj}_{session}_noise-ceiling_space-{fitting_space}.npy"),noise_ceiling)
             
     order = np.random.permutation(tc_full_iso_nonzerovar.shape[0])
 
