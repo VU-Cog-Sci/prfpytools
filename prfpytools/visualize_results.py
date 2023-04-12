@@ -390,10 +390,14 @@ class visualize_results(object):
                                     p_r['Alpha']['all'] *= (p_r['#Subjects with CVRSq>0'][model]>min_number_sjs)
                             
                             if len(excluded_rois)>0:
-                                if all(r in self.idx_rois[subj] for r in excluded_rois):
+                                if 'fsaverage' in space or 'fsaverage' in subj:
+                                    roi_subj = 'fsaverage'
+                                else:
+                                    roi_subj = subj
+                                if all(r in self.idx_rois[roi_subj] for r in excluded_rois):
 
-                                    p_r['Alpha'][model] = (inverse_roi_mask(np.concatenate(tuple([self.idx_rois[subj][r] for r in excluded_rois])), p_r['Alpha'][model]))
-                                    p_r['Alpha']['all'] = (inverse_roi_mask(np.concatenate(tuple([self.idx_rois[subj][r] for r in excluded_rois])), p_r['Alpha']['all']))   
+                                    p_r['Alpha'][model] = (inverse_roi_mask(np.concatenate(tuple([self.idx_rois[roi_subj][r] for r in excluded_rois])), p_r['Alpha'][model]))
+                                    p_r['Alpha']['all'] = (inverse_roi_mask(np.concatenate(tuple([self.idx_rois[roi_subj][r] for r in excluded_rois])), p_r['Alpha']['all']))   
                                 else:
                                     print("WARNING: excluded_rois contains undefined rois. roi exclusion not performed.")
                        
@@ -402,7 +406,7 @@ class visualize_results(object):
 
     def pycortex_plots(self, rois, rsq_thresh,
                        space_names = 'fsnative', analysis_names = 'all', subject_ids='all',
-                       timecourse_folder = None, screenshot_paths = [], pycortex_cmap = 'nipy_spectral',
+                       timecourse_folder = None, screenshot_paths = [], save_colorbars=False, pycortex_cmap = 'nipy_spectral',
                        rsq_max_opacity = 0.5, pycortex_image_path = None, roi_borders = None):        
         pl.rcParams.update({'font.size': 16})
         pl.rcParams.update({'pdf.fonttype':42})        
@@ -820,30 +824,36 @@ class visualize_results(object):
                     
                     if self.plot_rois_cortex and not plotted_rois[subj]:
                         
+                        plot_single_rois = False
+                        use_alpha_rois = True
+                        plot_my_vx = False
                         
                         ds_rois = {}
                         data = np.zeros_like(mask).astype('int')
                         custom_rois_data = np.zeros_like(mask).astype('int')
                         hcp_rois_data = np.zeros_like(mask).astype('int')
-                        glasser_rois_data = np.zeros_like(mask).astype('int')
+                        glasser_rois_data = np.zeros_like(mask)
                         
-                        
-                        myvx = np.zeros_like(mask).astype('int')
-                        myvx[87020] = 1
-                        myvx[45156] = 1
-                        ds_rois['my vx'] = Vertex2D_fix(myvx, myvx.astype('bool'), subject=pycortex_subj, cmap=pycortex_cmap, vmin=0, vmax=data.max(), vmin2=0, vmax2=1, roi_borders=roi_borders)
-        
+
+                        if plot_my_vx:
+                            myvx = np.zeros_like(mask).astype('int')
+                            myvx[87020] = 1
+                            myvx[45156] = 1
+                            ds_rois['my vx'] = Vertex2D_fix(myvx, myvx.astype('bool'), subject=pycortex_subj, cmap=pycortex_cmap, vmin=0, vmax=data.max(), vmin2=0, vmax2=1, roi_borders=roi_borders)
+            
                         for i, roi in enumerate([r for r in self.idx_rois[subj] if 'custom' in r and 'Pole' not in r]):        
                             roi_data = np.zeros_like(mask)
                             roi_data[self.idx_rois[subj][roi]] = 1
                             custom_rois_data[self.idx_rois[subj][roi]] = i+1
-                            ds_rois[roi] = Vertex2D_fix(roi_data, roi_data.astype('bool'), subject=pycortex_subj, cmap=pycortex_cmap, vmin=0, vmax=roi_data.max(), vmin2=0, vmax2=1, roi_borders=roi_borders)
+                            if plot_single_rois:
+                                ds_rois[roi] = Vertex2D_fix(roi_data, roi_data.astype('bool'), subject=pycortex_subj, cmap=pycortex_cmap, vmin=0, vmax=roi_data.max(), vmin2=0, vmax2=1, roi_borders=roi_borders)
                             
                         for i, roi in enumerate([r for r in self.idx_rois[subj] if 'custom' not in r and 'visual' not in r and 'HCP' not in r and 'glasser' not in r]):        
                             roi_data = np.zeros_like(mask)
                             roi_data[self.idx_rois[subj][roi]] = 1
-                            data[self.idx_rois[subj][roi]] = i+1                           
-                            ds_rois[roi] = Vertex2D_fix(roi_data, roi_data.astype('bool'), subject=pycortex_subj, cmap=pycortex_cmap, vmin=0, vmax=roi_data.max(), vmin2=0, vmax2=1, roi_borders=roi_borders)
+                            data[self.idx_rois[subj][roi]] = i+1
+                            if plot_single_rois:                                  
+                                ds_rois[roi] = Vertex2D_fix(roi_data, roi_data.astype('bool'), subject=pycortex_subj, cmap=pycortex_cmap, vmin=0, vmax=roi_data.max(), vmin2=0, vmax2=1, roi_borders=roi_borders)
                             
                         for i, roi in enumerate([r for r in self.idx_rois[subj] if 'HCPQ1Q6.' in r]):        
                             roi_data = np.zeros_like(mask)
@@ -851,28 +861,50 @@ class visualize_results(object):
                             hcp_rois_data[self.idx_rois[subj][roi]] = i+1                              
                             ds_rois[roi] = Vertex2D_fix(roi_data, roi_data.astype('bool'), subject=pycortex_subj, cmap=pycortex_cmap, vmin=0, vmax=roi_data.max(), vmin2=0, vmax2=1, roi_borders=roi_borders)
 
+                        cmap_values = np.linspace(0.9, 0.0, len([r for r in self.idx_rois[subj] if 'glasser' in r]))
+                        #print(cmap_values)
+
                         for i, roi in enumerate([r for r in self.idx_rois[subj] if 'glasser' in r]):        
                             roi_data = np.zeros_like(mask)
                             roi_data[self.idx_rois[subj][roi]] = 1
-                            glasser_rois_data[self.idx_rois[subj][roi]] = i+1                                                                  
-                            ds_rois[roi] = Vertex2D_fix(roi_data, roi_data.astype('bool'), subject=pycortex_subj, cmap=pycortex_cmap, vmin=0, vmax=roi_data.max(), vmin2=0, vmax2=1, roi_borders=roi_borders)
+                            glasser_rois_data[self.idx_rois[subj][roi]] = cmap_values[i]
+                            #print(glasser_rois_data.sum())
+                            if plot_single_rois:                                                             
+                                ds_rois[roi] = Vertex2D_fix(roi_data, roi_data.astype('bool'), subject=pycortex_subj, cmap=pycortex_cmap, vmin=0, vmax=roi_data.max(), vmin2=0, vmax2=1, roi_borders=roi_borders)
         
+                        
+
+                        if use_alpha_rois:
+                            alpha_rois = alpha[analysis][subj][self.only_models[0]]
+                            vmin2_rois = rsq_thresh
+                            vmax2_rois = rsq_max_opacity
+                        else:
+                            vmin2_rois = 0
+                            vmax2_rois = 1
 
                         if data.sum()>0:
-                            ds_rois['Wang2015Atlas'] = Vertex2D_fix(data, data.astype('bool'), subject=pycortex_subj, cmap=pycortex_cmap, vmin=0, vmax=data.max(), vmin2=0, vmax2=1, roi_borders=roi_borders)
+                            if not use_alpha_rois:
+                                alpha_rois = data.astype('bool')
+                            ds_rois['Wang2015Atlas'] = Vertex2D_fix(data, alpha_rois, subject=pycortex_subj, cmap=pycortex_cmap, vmin=0, vmax=data.max(), vmin2=vmin2_rois, vmax2=vmax2_rois, roi_borders=roi_borders)
                         if custom_rois_data.sum()>0:
-                            ds_rois['Custom ROIs'] = Vertex2D_fix(custom_rois_data, custom_rois_data.astype('bool'), subject=pycortex_subj, cmap=pycortex_cmap, vmin=0, vmax=custom_rois_data.max(), vmin2=0, vmax2=1, roi_borders=roi_borders)
+                            if not use_alpha_rois:
+                                alpha_rois = custom_rois_data.astype('bool')
+                            ds_rois['Custom ROIs'] = Vertex2D_fix(custom_rois_data, alpha_rois, subject=pycortex_subj, cmap=pycortex_cmap, vmin=0, vmax=custom_rois_data.max(), vmin2=vmin2_rois, vmax2=vmax2_rois, roi_borders=roi_borders)
                         if hcp_rois_data.sum()>0:
-                            ds_rois['HCP ROIs'] = Vertex2D_fix(hcp_rois_data, hcp_rois_data.astype('bool'), subject=pycortex_subj, cmap=pycortex_cmap, vmin=0, vmax=hcp_rois_data.max(), vmin2=0, vmax2=1, roi_borders=roi_borders)
+                            if not use_alpha_rois:
+                                alpha_rois = hcp_rois_data.astype('bool')
+                            ds_rois['HCP ROIs'] = Vertex2D_fix(hcp_rois_data, alpha_rois, subject=pycortex_subj, cmap=pycortex_cmap, vmin=0, vmax=hcp_rois_data.max(), vmin2=vmin2_rois, vmax2=vmax2_rois, roi_borders=roi_borders)
                         if glasser_rois_data.sum()>0:
-                            ds_rois['Glasser ROIs'] = Vertex2D_fix(glasser_rois_data, glasser_rois_data.astype('bool'), subject=pycortex_subj, cmap=pycortex_cmap, vmin=0, vmax=glasser_rois_data.max(), vmin2=0, vmax2=1, roi_borders=roi_borders) 
+                            if not use_alpha_rois:
+                                alpha_rois = glasser_rois_data.astype('bool')
+                            ds_rois['Glasser ROIs'] = Vertex2D_fix(glasser_rois_data, alpha_rois, subject=pycortex_subj, cmap=pycortex_cmap, vmin=0, vmax=glasser_rois_data.max(), vmin2=vmin2_rois, vmax2=vmax2_rois, roi_borders=roi_borders) 
                                                 
                         self.js_handle_dict[space][analysis][subj]['rois'] = cortex.webgl.show(ds_rois, pickerfun=clicker_function,  overlays_visible=[], labels_visible=[]) 
         
-                        plotted_rois[subj] = True
+                        plotted_rois[subj] = True 
                                                 
 
-                        
+               
         
                     if self.plot_rsq_cortex:              
                         ds_rsq = dict()
@@ -898,7 +930,7 @@ class visualize_results(object):
                                             vmax=0.15,#np.nanquantile(p_r['RSq'][model][alpha[analysis][subj][model]>rsq_thresh],0.9),
                                             cmap_name='inferno', ori='horizontal', param_name='$R^2$')
                             
-                            if self.pycortex_image_path is not None:
+                            if self.pycortex_image_path is not None and save_colorbars:
                                 fig.savefig(f"{self.pycortex_image_path}/{model}_rsq_cbar.pdf", dpi=600, bbox_inches='tight', transparent=True)
                             
                         if 'Noise Ceiling' in p_r:
@@ -915,7 +947,7 @@ class visualize_results(object):
                                                 vmax=-0.75,#np.nanquantile(p_r['RSq'][model][alpha[analysis][subj][model]>rsq_thresh],0.9),
                                                 cmap_name=pycortex_cmap, ori='horizontal', param_name='Inter-run $R^2$')
                                 
-                                if self.pycortex_image_path is not None:
+                                if self.pycortex_image_path is not None and save_colorbars:
                                     fig.savefig(f"{self.pycortex_image_path}/nc_cbar.pdf", dpi=600, bbox_inches='tight', transparent=True)                                
  
                             
@@ -923,7 +955,7 @@ class visualize_results(object):
                             for model in self.only_models:
                                 #print(np.nanquantile(p_r['Noise Ceiling'][nc_type][alpha[analysis][subj][model]>rsq_thresh],0.1))
                                 #print(np.nanquantile(p_r['Noise Ceiling'][nc_type][alpha[analysis][subj][model]>rsq_thresh],0.9))
-                                ds_rsq[model] = Vertex2D_fix(p_r['#Subjects with CVRSq>0'][model],
+                                ds_rsq[f"#subj cvrsq>0 {model}"] = Vertex2D_fix(p_r['#Subjects with CVRSq>0'][model],
                                                                np.ones_like(alpha[analysis][subj][model]), subject=pycortex_subj, 
                                                             vmin=0,#np.nanquantile(p_r['Noise Ceiling'][nc_type][alpha[analysis][subj][model]>rsq_thresh],0.1), 
                                                             vmax=100,#np.nanquantile(p_r['Noise Ceiling'][nc_type][alpha[analysis][subj][model]>rsq_thresh],0.9),
@@ -933,8 +965,8 @@ class visualize_results(object):
                                                 vmax=100,#np.nanquantile(p_r['RSq'][model][alpha[analysis][subj][model]>rsq_thresh],0.9),
                                                 cmap_name=pycortex_cmap, ori='horizontal', param_name='#Subjects with cv$R^2$>0')
                                 
-                                if self.pycortex_image_path is not None:
-                                    fig.savefig(f"{self.pycortex_image_path}/nsubj_cbar.pdf", dpi=600, bbox_inches='tight', transparent=True)     
+                                if self.pycortex_image_path is not None and save_colorbars:
+                                    fig.savefig(f"{self.pycortex_image_path}/{model}_nsubj_cbar.pdf", dpi=600, bbox_inches='tight', transparent=True)     
                                     
                         if 'CSS' in models and p_r['RSq']['CSS'].sum()>0:
                             ds_rsq['CSS - Gauss'] = Vertex2D_fix(p_r['RSq']['CSS']-p_r['RSq']['Gauss'], alpha[analysis][subj]['all'], subject=pycortex_subj,
@@ -991,14 +1023,14 @@ class visualize_results(object):
                             #print("Note: eccentricity plot has vmax set at 0.95 quantile")
                             ds_ecc[f"{model} Eccentricity"] = Vertex2D_fix(p_r['Eccentricity'][model], alpha[analysis][subj][model], subject=pycortex_subj, 
                                                             vmin=self.ecc_min,#np.nanquantile(p_r['Eccentricity'][model][alpha[analysis][subj][model]>rsq_thresh],0.1), 
-                                                            vmax=0.8*self.ecc_max,#np.nanquantile(p_r['Eccentricity'][model][alpha[analysis][subj][model]>rsq_thresh],0.9), 
+                                                            vmax=0.75*self.ecc_max,#np.nanquantile(p_r['Eccentricity'][model][alpha[analysis][subj][model]>rsq_thresh],0.9), 
                                                             vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap=pycortex_cmap, roi_borders=roi_borders) #np.nanquantile(alpha[analysis][subj][model][alpha[analysis][subj][model]>rsq_thresh],0.9
         
                             fig = simple_colorbar(vmin=self.ecc_min,#np.nanquantile(p_r['Eccentricity'][model][alpha[analysis][subj][model]>rsq_thresh],0.1), 
-                                            vmax=0.8*self.ecc_max,#np.nanquantile(p_r['Eccentricity'][model][alpha[analysis][subj][model]>rsq_thresh],0.9),
+                                            vmax=0.75*self.ecc_max,#np.nanquantile(p_r['Eccentricity'][model][alpha[analysis][subj][model]>rsq_thresh],0.9),
                                             cmap_name=pycortex_cmap, ori='polar', param_name='Eccentricity (°)')
                             
-                            if self.pycortex_image_path is not None:
+                            if self.pycortex_image_path is not None and save_colorbars:
                                 fig.savefig(f"{self.pycortex_image_path}/{model}_ecc_cbar.pdf", dpi=600, bbox_inches='tight', transparent=True)
                         
                         self.js_handle_dict[space][analysis][subj]['ecc'] = cortex.webgl.show(ds_ecc, pickerfun=clicker_function,  overlays_visible=[], labels_visible=[]) 
@@ -1015,7 +1047,7 @@ class visualize_results(object):
                             fig = simple_colorbar(vmin=-3.1415, vmax=3.1415,
                                             cmap_name='hsvx2', ori='polar', param_name='Polar Angle (°)')                                     
                             
-                            if self.pycortex_image_path is not None:
+                            if self.pycortex_image_path is not None and save_colorbars:
                                 fig.savefig(f"{self.pycortex_image_path}/{model}_polar_hsvx2cbar.pdf", dpi=600, bbox_inches='tight', transparent=True)
 
                             ds_polar[f"{model} polar angle HSV1"] = Vertex2D_fix(p_r['Polar Angle'][model], alpha[analysis][subj][model], subject=pycortex_subj, 
@@ -1025,7 +1057,7 @@ class visualize_results(object):
                             fig = simple_colorbar(vmin=-3.1415, vmax=3.1415,
                                             cmap_name='hsv', ori='polar', param_name='Polar Angle (°)')                                     
                             
-                            if self.pycortex_image_path is not None:
+                            if self.pycortex_image_path is not None and save_colorbars:
                                 fig.savefig(f"{self.pycortex_image_path}/{model}_polar_hsvcbar.pdf", dpi=600, bbox_inches='tight', transparent=True)                            
                         
                         if 'Processed Results' in self.main_dict['T1w'][analysis][subj] and self.compare_volume_surface:
@@ -1067,7 +1099,7 @@ class visualize_results(object):
                                             vmax=4.4,#np.nanquantile(p_r['Size (sigma_1)'][model][alpha[analysis][subj][model]>rsq_thresh],0.9),
                                             cmap_name=pycortex_cmap, ori='horizontal', param_name='$\sigma_1$ (°)')
                             
-                            if self.pycortex_image_path is not None:
+                            if self.pycortex_image_path is not None and save_colorbars:
                                 fig.savefig(f"{self.pycortex_image_path}/{model}_sigma1_cbar.pdf", dpi=600, bbox_inches='tight', transparent=True)                            
                             
                         self.js_handle_dict[space][analysis][subj]['size'] = cortex.webgl.show(ds_size, pickerfun=clicker_function,  overlays_visible=[], labels_visible=[]) 
@@ -1085,7 +1117,7 @@ class visualize_results(object):
                                             vmax=np.nanquantile(p_r['Amplitude'][model][alpha[analysis][subj][model]>rsq_thresh],0.9),
                                             cmap_name=pycortex_cmap, ori='horizontal', param_name='Amplitude')
                             
-                            if self.pycortex_image_path is not None:
+                            if self.pycortex_image_path is not None and save_colorbars:
                                 fig.savefig(f"{self.pycortex_image_path}/{model}_amplitude_cbar.pdf", dpi=600, bbox_inches='tight', transparent=True)  
                             
                             if model == 'DoG' or 'Norm' in model:
@@ -1097,7 +1129,7 @@ class visualize_results(object):
                                                 vmax=np.nanquantile(p_r['Surround Amplitude'][model][alpha[analysis][subj][model]>rsq_thresh],0.9),
                                                 cmap_name=pycortex_cmap, ori='horizontal', param_name='Surround Amplitude')
                                 
-                                if self.pycortex_image_path is not None:
+                                if self.pycortex_image_path is not None and save_colorbars:
                                     fig.savefig(f"{self.pycortex_image_path}/{model}_surround_amplitude_cbar.pdf", dpi=600, bbox_inches='tight', transparent=True)  
 
                         
@@ -1132,7 +1164,7 @@ class visualize_results(object):
                                                 vmax=np.nanquantile(p_r['Size (sigma_2)'][model][alpha[analysis][subj][model]>rsq_thresh],0.9),
                                                 cmap_name=pycortex_cmap, ori='horizontal', param_name='$\sigma_2$ (°)')
                                 
-                                if self.pycortex_image_path is not None:
+                                if self.pycortex_image_path is not None and save_colorbars:
                                     fig.savefig(f"{self.pycortex_image_path}/{model}_sigma2_cbar.pdf", dpi=600, bbox_inches='tight', transparent=True)   
                                 
                                 
@@ -1168,11 +1200,30 @@ class visualize_results(object):
                                                 vmax=np.nanquantile(p_r['Size ratio (sigma_2/sigma_1)'][model][alpha[analysis][subj][model]>rsq_thresh],0.9),
                                                 cmap_name=pycortex_cmap, ori='horizontal', param_name='Size ratio ($\sigma_2/\sigma_1$)')
                                 
-                                if self.pycortex_image_path is not None:
+                                if self.pycortex_image_path is not None and save_colorbars:
                                     fig.savefig(f"{self.pycortex_image_path}/{model}_sizeratio_cbar.pdf", dpi=600, bbox_inches='tight', transparent=True)  
 
                         self.js_handle_dict[space][analysis][subj]['size_ratio'] = cortex.webgl.show(ds_size_ratio, pickerfun=clicker_function,  overlays_visible=[], labels_visible=[])     
+
+                    if self.plot_hrf_cortex:
+                        ds_hrf = dict()           
+                        for model in self.only_models:
+                            for key in [k for k in p_r if 'hrf' in k]:
+                                if model in p_r[key]:
+                                    ds_hrf[f'{model} {key}'] = Vertex2D_fix(p_r[key][model], alpha[analysis][subj][model], subject=pycortex_subj, 
+                                                                vmin=np.nanquantile(p_r[key][model][alpha[analysis][subj][model]>rsq_thresh],0.1), 
+                                                                vmax=np.nanquantile(p_r[key][model][alpha[analysis][subj][model]>rsq_thresh],0.9), vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap=pycortex_cmap, roi_borders=roi_borders)                                                      
+
+                                    fig = simple_colorbar(vmin=np.nanquantile(p_r[key][model][alpha[analysis][subj][model]>rsq_thresh],0.1), 
+                                                    vmax=np.nanquantile(p_r[key][model][alpha[analysis][subj][model]>rsq_thresh],0.9),
+                                                    cmap_name=pycortex_cmap, ori='horizontal', param_name=key)
+                                    
+                                    if self.pycortex_image_path is not None and save_colorbars:
+                                        fig.savefig(f"{self.pycortex_image_path}/{model}_sizeratio_cbar.pdf", dpi=600, bbox_inches='tight', transparent=True)  
+
+                        self.js_handle_dict[space][analysis][subj]['hrf_params'] = cortex.webgl.show(ds_hrf, pickerfun=clicker_function,  overlays_visible=[], labels_visible=[])     
                     
+
                     if self.plot_receptors_cortex:
                         if 'Receptor Maps' in p_r:
                             ds_receptors = dict()           
@@ -1191,7 +1242,7 @@ class visualize_results(object):
                                                 vmax=np.nanquantile(p_r['Receptor Maps'][receptor][alpha[analysis][subj][rec_mod_alpha]>rsq_thresh],0.9), 
                                                 cmap_name=pycortex_cmap, ori='horizontal', param_name=f'{receptor} (pmol/ml)')
                                 
-                                if self.pycortex_image_path is not None:
+                                if self.pycortex_image_path is not None and save_colorbars:
                                     fig.savefig(f"{self.pycortex_image_path}/{receptor}_cbar.pdf", dpi=600, bbox_inches='tight', transparent=True)                                                    
             
                             self.js_handle_dict[space][analysis][subj]['receptors'] = cortex.webgl.show(ds_receptors, pickerfun=clicker_function,  overlays_visible=[], labels_visible=[])     
@@ -1206,27 +1257,27 @@ class visualize_results(object):
 
                             ds_norm_baselines[f'{model} Param. B'] = Vertex2D_fix(p_r['Norm Param. B'][model], alpha[analysis][subj][model], subject=pycortex_subj, 
                                                                          vmin=0,#np.nanquantile(p_r['Norm Param. B'][model][alpha[analysis][subj][model]>rsq_thresh],0.01), 
-                                                                         vmax=50,#np.nanquantile(p_r['Norm Param. B'][model][alpha[analysis][subj][model]>rsq_thresh],0.99), 
+                                                                         vmax=100,#np.nanquantile(p_r['Norm Param. B'][model][alpha[analysis][subj][model]>rsq_thresh],0.99), 
                                                                          vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap='viridis_r', roi_borders=roi_borders)     
                             
                             fig = simple_colorbar(vmin=0,#np.nanquantile(p_r['Norm Param. B'][model][alpha[analysis][subj][model]>rsq_thresh],0.01), 
-                                            vmax=50,#np.nanquantile(p_r['Norm Param. B'][model][alpha[analysis][subj][model]>rsq_thresh],0.99),
+                                            vmax=100,#np.nanquantile(p_r['Norm Param. B'][model][alpha[analysis][subj][model]>rsq_thresh],0.99),
                                             cmap_name='viridis_r', ori='horizontal', param_name='Norm Param. B')
                             
-                            if self.pycortex_image_path is not None:
+                            if self.pycortex_image_path is not None and save_colorbars:
                                 fig.savefig(f"{self.pycortex_image_path}/{model}_paramB_cbar.pdf", dpi=600, bbox_inches='tight', transparent=True)  
                             
                                 
                             ds_norm_baselines[f'{model} Param. D'] = Vertex2D_fix(p_r['Norm Param. D'][model], alpha[analysis][subj][model], subject=pycortex_subj, 
                                                                          vmin=1,#np.nanquantile(p_r['Norm Param. D'][model][alpha[analysis][subj][model]>rsq_thresh],0.01), 
-                                                                         vmax=50,#np.nanquantile(p_r['Norm Param. D'][model][alpha[analysis][subj][model]>rsq_thresh],0.99),
+                                                                         vmax=100,#np.nanquantile(p_r['Norm Param. D'][model][alpha[analysis][subj][model]>rsq_thresh],0.99),
                                                                          vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap='inferno_r', roi_borders=roi_borders)
                             
                             fig = simple_colorbar(vmin=1,#np.nanquantile(p_r['Norm Param. D'][model][alpha[analysis][subj][model]>rsq_thresh],0.01), 
-                                            vmax=50,#np.nanquantile(p_r['Norm Param. D'][model][alpha[analysis][subj][model]>rsq_thresh],0.99),
+                                            vmax=100,#np.nanquantile(p_r['Norm Param. D'][model][alpha[analysis][subj][model]>rsq_thresh],0.99),
                                             cmap_name='inferno_r', ori='horizontal', param_name='Norm Param. D')
                             
-                            if self.pycortex_image_path is not None:
+                            if self.pycortex_image_path is not None and save_colorbars:
                                 fig.savefig(f"{self.pycortex_image_path}/{model}_paramD_cbar.pdf", dpi=600, bbox_inches='tight', transparent=True)                              
                             
                             if 'Ratio (B/D)' in p_r:
@@ -1238,7 +1289,7 @@ class visualize_results(object):
                                                 vmax=np.nanquantile(p_r['Ratio (B/D)'][model][alpha[analysis][subj][model]>rsq_thresh],0.9),
                                                 cmap_name=pycortex_cmap, ori='horizontal', param_name='Ratio (B/D)')
                                 
-                                if self.pycortex_image_path is not None:
+                                if self.pycortex_image_path is not None and save_colorbars:
                                     fig.savefig(f"{self.pycortex_image_path}/{model}_BDratio_cbar.pdf", dpi=600, bbox_inches='tight', transparent=True)   
                             
                         self.js_handle_dict[space][analysis][subj]['norm_baselines'] = cortex.webgl.show(ds_norm_baselines, pickerfun=clicker_function,  overlays_visible=[], labels_visible=[]) 
@@ -1625,7 +1676,7 @@ class visualize_results(object):
                     #max b and d
                     bd_max=1000
                 #bar or violin width
-                bar_or_violin_width = 0.3
+                bar_or_violin_width = 1.5
 
                 
                         
@@ -1686,7 +1737,7 @@ class visualize_results(object):
                                 try:
                                     if subj.isdecimal() and space == 'HCP':
                                         pycortex_subj = '999999'
-                                    elif 'fsaverage' in subj:
+                                    elif 'fsaverage' in subj or 'fsaverage' in space:
                                         pycortex_subj = 'fsaverage'                                        
                                     else:
                                         pycortex_subj = subj.split('_')[0]
@@ -2028,7 +2079,7 @@ class visualize_results(object):
                                                    edgecolor=model_colors[model], label=model, color=model_colors[model])
                                             
                                             if subj == 'Group' and each_subj_on_group:
-                                                ssj_datapoints_x = np.linspace(bar_position-0.66*bar_or_violin_width, bar_position+0.66*bar_or_violin_width, len(subjects)-1)
+                                                ssj_datapoints_x = np.linspace(bar_position-0.33*bar_or_violin_width, bar_position+0.33*bar_or_violin_width, len(subjects)-1)
                                                 for ssj_nr, ssj in enumerate(subjects[:-1]):
                                                     
                                                     ssj_stats = weightstats.DescrStatsW(y_par[analysis][ssj[0]][model][roi],
@@ -2038,9 +2089,9 @@ class visualize_results(object):
                                                         yerr_sj = (np.abs(ssj_stats.zconfint_mean(alpha=zconfint_err_alpha) - ssj_stats.mean)).reshape(2,1)*upsampling_corr_factor**0.5
                                                     else:
                                                         yerr_sj = ssj_stats.std_mean*upsampling_corr_factor**0.5
-                                                        
+                                                       
                                                     pl.errorbar(ssj_datapoints_x[ssj_nr], ssj_stats.mean,
-                                                    yerr=yerr_sj,  
+                                                    yerr=yerr_sj, alpha=np.nanmean(rsq_y[analysis][ssj[0]][model][roi]),
                                                     fmt='s',  mec='k', color=model_colors[model], ecolor='k')
                                         
     
@@ -2249,7 +2300,7 @@ class visualize_results(object):
                                                    edgecolor=cmap_rois[i], color=cmap_rois[i])
                                             
                                             if subj == 'Group' and each_subj_on_group:
-                                                ssj_datapoints_x = np.linspace(bar_position-0.66*bar_or_violin_width, bar_position+0.66*bar_or_violin_width, len(subjects)-1)
+                                                ssj_datapoints_x = np.linspace(bar_position-0.15*bar_or_violin_width, bar_position+0.15*bar_or_violin_width, len(subjects)-1)
                                                 for ssj_nr, ssj in enumerate(subjects[:-1]):
                                                     
                                                     ssj_stats = weightstats.DescrStatsW(y_par[analysis][ssj[0]][model][roi],
@@ -2261,10 +2312,10 @@ class visualize_results(object):
                                                         yerr_sj = ssj_stats.std_mean*upsampling_corr_factor**0.5
                                                         
                                                     pl.errorbar(ssj_datapoints_x[ssj_nr], ssj_stats.mean,
-                                                    yerr=yerr_sj,   
+                                                    yerr=yerr_sj,  # alpha=np.nanmean(rsq_y[analysis][ssj[0]][model][roi]),
                                                     fmt='s',  mec='k', color=cmap_rois[i], ecolor='k')                                        
                                     
-                                    bar_position += bar_or_violin_width
+                                    bar_position += (0.4*bar_or_violin_width)
     
                                     pl.xticks(x_ticks,x_labels)
                                     
