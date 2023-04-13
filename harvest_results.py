@@ -21,8 +21,9 @@ results_path = sys.argv[1]
 subjects = sys.argv[2]
 
 
-for subj in subjects.split(','):
-    analysis_settings_files = sorted(Path(results_path).glob(f"{subj}_*_analysis_settings.yml"))
+for subj_ses in subjects.split(','):
+    subj = subj_ses.split('_')[0]
+    analysis_settings_files = sorted(Path(results_path).glob(f"{subj_ses}_analysis_settings.yml"))
 
     for analysis_settings in analysis_settings_files:
 
