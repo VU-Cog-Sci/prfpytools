@@ -285,7 +285,7 @@ class visualize_results(object):
     
                     
                 
-    def compute_roi_borders(self, subject_ids = ['fsaverage'], rois_prefix='glasser', previous_borders_path=None):
+    def compute_roi_borders(self, subject_ids = ['fsaverage'], rois_prefix='glasser', only_rois = [], previous_borders_path=None):
                
         
         def comp_border(face):
@@ -307,7 +307,14 @@ class visualize_results(object):
             
                 zz = np.zeros(len(left[0])+len(right[0]))
                 
-                rois = [self.idx_rois[subj][r] for r in self.idx_rois[subj] if rois_prefix in r]
+                rois_names = [r for r in self.idx_rois[subj] if rois_prefix in r]
+
+                if len(only_rois)>0:
+                    rois_names = [r for r in rois_names if r in only_rois]
+
+                rois = [self.idx_rois[subj][r] for r in rois_names]
+
+
            
                 
                 res = np.array(Parallel(n_jobs=6, verbose=True)(delayed(comp_border)(face) for face in faces))
@@ -1654,6 +1661,8 @@ class visualize_results(object):
         cmap_values += [0 for r in rois  if r in ['Brain', 'all_custom', 'combined']]
         
         cmap_rois = cm.get_cmap('nipy_spectral')(cmap_values)#
+
+        self.curr_rois_names = []
         
         #making black into dark gray for visualization reasons
         cmap_rois[(cmap_rois == [0,0,0,1]).sum(1)==4] = [0.33,0.33,0.33,1]
@@ -1984,6 +1993,8 @@ class visualize_results(object):
                         for i, roi in enumerate([r for r in rois if 'all' not in r and 'combined' not in r and 'Brain' not in r]):
                             
                             if len(y_par[analysis][subj][model][roi])>10:
+                                self.curr_rois_names.append(roi)
+
                             
                                 samples_in_roi = len(y_par[analysis][subj][model][roi])
                                 print(f"Samples in ROI {roi}: {samples_in_roi}")
@@ -2776,7 +2787,7 @@ class visualize_results(object):
                                     CC_boot = []
                                     CC_boot_full_data = []
                                     
-                                    for perm in range(n_perm):                                        
+                                    for perm in tqdm(range(n_perm)):                                        
                                         if use_roi_means:
                                             #samp_idx = np.random.randint(0, len(all_rois_x_means), len(all_rois_x_means))
                                             perm_x = np.copy(all_rois_x_means)#[samp_idx]
@@ -2791,16 +2802,16 @@ class visualize_results(object):
                                             CC_boot.append(weightstats.DescrStatsW(np.stack((perm_x,perm_y)).T, weights=perm_w).corrcoef[0,1])
                                             
                                         if use_full_data:
-                                            samp_idx = np.random.randint(0, len(all_rois_x), int(len(all_rois_x)/upsampling_corr_factor))                                        
+                                            #samp_idx = np.random.randint(0, len(all_rois_x), int(len(all_rois_x)/upsampling_corr_factor))                                        
                                             # perm_x = all_rois_x[samp_idx]
-                                            perm_y_full_data = all_rois_y[samp_idx]
-                                            perm_w_full_data = all_rois_rsq[samp_idx]      
+                                            perm_y_full_data = np.copy(all_rois_y)#[samp_idx]
+                                            perm_w_full_data = np.copy(all_rois_rsq)#[samp_idx]      
                                             
-                                            perm_x_full_data = graph_randomization(data_max_x, data_min_x, eigvecs_reduced, ft_x)[samp_idx]
+                                            perm_x_full_data = graph_randomization(data_max_x, data_min_x, eigvecs_reduced, ft_x)#[samp_idx]
                                             
                                             if perm_yw:
-                                                perm_y_full_data = graph_randomization(data_max_y, data_min_y, eigvecs_reduced, ft_y)[samp_idx]
-                                                perm_w_full_data = graph_randomization(data_max_w, data_min_w, eigvecs_reduced, ft_w)[samp_idx]
+                                                perm_y_full_data = graph_randomization(data_max_y, data_min_y, eigvecs_reduced, ft_y)#[samp_idx]
+                                                perm_w_full_data = graph_randomization(data_max_w, data_min_w, eigvecs_reduced, ft_w)#[samp_idx]
                                                 
                                             CC_boot_full_data.append(weightstats.DescrStatsW(np.stack((perm_x_full_data,perm_y_full_data)).T, 
                                                                                              weights=perm_w_full_data).corrcoef[0,1])
@@ -2989,6 +3000,7 @@ class visualize_results(object):
                     vis_pca_comps_rois = ['combined'], vis_pca_comps_axes = [0,1], rsq_alpha_pca_plot = True):
         
         np.set_printoptions(precision=4,suppress=True)
+        self.curr_rois_names = []
         
         if not os.path.exists(figure_path) and save_figures:
             os.makedirs(figure_path)
@@ -3864,6 +3876,7 @@ class visualize_results(object):
                                     
                                 ###########1D regressions
                                 if perform_ols and np.sum(alpha[analysis][subj][roi]>rsq_thresh)>10:
+                                    self.curr_rois_names.append(roi)
                                     print("performing OLS (1D y)")
                                     
                                     for y_dim in y_dims:
@@ -3963,9 +3976,46 @@ class visualize_results(object):
                                                 for ddd in range(len(x_dims)):
                                                     
                                                     corr_prediction_fit_roi_means_perm = []
-                                                    for perm in range(1000000):
+                                                    corr_prediction_perm_fd = []
+
+                                                    w_fd = np.copy(multidim_param_array[analysis][subj][roi][ordered_dimensions.index('RSq Norm_abcd')])
+                                                    x_perm_fd = np.copy(X)
+
+                                                    eigvecs_reduced, ft_x = reduced_graph_ft(x_perm_fd[:,ddd], alpha[analysis][subj][roi]>rsq_thresh, 
+                                                                                            eigenvectors_path='/Users/marcoaqil/1000eigvecs_full_quantrois.npy', 
+                                                                                            eigenvectors_indices_path='/Users/marcoaqil/full_quantrois.npy', 
+                                                                                            pycortex_subj=pycortex_subj)
+                                                    data_max_x_fd = x_perm_fd[:,ddd].max()
+                                                    data_min_x_fd = x_perm_fd[:,ddd].min()
+
+                                                    
+
+                                                    perms = 100
+                                                    print(f'computing OLS stats with {perms} permutations')
+                                                    
+                                                    if perms<1000000:
+                                                        print('WARNING: less than 10^6 permutations. stats probably unreliable. use for visualization only')
+                                                    
+                                                    for perm in tqdm(range(perms)):
                                                         # testing whether adding parameters significantly increases wCC (nocv here)
                                                         # the idea is asking how likely it is to get the same wCC improvement when adding a randomized version of the parameter, instead of the true one
+                                                        
+                                                        ls1_perm = LinearRegression()
+                                                        #samp_idx = np.random.randint(0, len(y), int(len(y)/upsampling_corr_factor))
+
+                                                        x_perm_curr_dim_fd = graph_randomization(data_max_x_fd, data_min_x_fd, eigvecs_reduced, ft_x)#[samp_idx]  
+                                                        
+                                                        x_perm_fd[:,ddd] = x_perm_curr_dim_fd
+
+                                                        #y_perm_fd = np.copy(y)#[samp_idx]
+                                                        #w_perm_fd = np.copy(multidim_param_array[analysis][subj][roi][ordered_dimensions.index('RSq Norm_abcd')])#[samp_idx]                                                     
+                                                        
+                                                        ls1_perm.fit(x_perm_fd, y, sample_weight = w_fd)
+                                                        Zs_pred_perm_fd = ls1_perm.predict(x_perm_fd)
+     
+                                                        corr_prediction_perm_fd.append(weightstats.DescrStatsW(np.stack((Zs_pred_perm_fd,y)).T , weights=np.array(w_fd)).corrcoef[0,1])
+                                                                                                           
+                                                        
                                                         ls2_perm = LinearRegression()
                                                         #samp_idx = np.random.randint(0, len(rois_ols_x_means), len(rois_ols_x_means))
                                                         x_perm = np.copy(rois_ols_x_means)#[samp_idx])
@@ -3983,9 +4033,13 @@ class visualize_results(object):
                                                 
                                                 
                                                     pval_wcc_roimeans = np.sum(np.abs(corr_prediction_fit_roi_means)<np.abs(np.array(corr_prediction_fit_roi_means_perm)))/len(corr_prediction_fit_roi_means_perm)
-                                                    self.ols_result_dict[ols_y_dim][f"{[ordered_dimensions[x_dim] for x_dim in x_dims]} {ordered_dimensions[x_dims[ddd]]}"]['pval'].append(pval_wcc_roimeans)
-                                                    print(f"{ordered_dimensions[x_dims[ddd]]} pval={pval_wcc_roimeans:.7f}")                                            
+                                                    self.ols_result_dict[ols_y_dim][f"{[ordered_dimensions[x_dim] for x_dim in x_dims]} {ordered_dimensions[x_dims[ddd]]} roi means"]['pval'].append(pval_wcc_roimeans)
+                                                    print(f"{ordered_dimensions[x_dims[ddd]]} roi means pval={pval_wcc_roimeans:.7f}")                                            
 
+
+                                                    pval_wcc_fd = np.sum(np.abs(corr_prediction)<np.abs(np.array(corr_prediction_perm_fd)))/len(corr_prediction_perm_fd)
+                                                    self.ols_result_dict[ols_y_dim][f"{[ordered_dimensions[x_dim] for x_dim in x_dims]} {ordered_dimensions[x_dims[ddd]]} full data"]['pval'].append(pval_wcc_fd)
+                                                    print(f"{ordered_dimensions[x_dims[ddd]]} full data pval={pval_wcc_fd:.7f}")     
                                             
                                                                                         
                                             
@@ -4258,7 +4312,8 @@ class visualize_results(object):
                                                     print(f"wR2 (fit on full data {subj}, eval on full data {cv_subj}): {rsq_prediction_cv:.4f}")
                                                     print(f"wCC prediction (fit on full data {subj}, eval on full data {cv_subj}) {corr_prediction_cv:.4f}")
 
-
+                                               
+                                                print(f"wCC(cv) predictions (fit on roi means, eval on roi means) {np.mean(self.ols_result_dict[ols_y_dim][f'{[ordered_dimensions[x_dim] for x_dim in x_dims]}']['wCC'])}")
 
 
                                                     
