@@ -299,9 +299,8 @@ class results(object):
                 
             
                        
-        raw_tc_stats = dict()
+            raw_tc_stats = dict()
 
-        for subj in set(subjects):
             
             if '999999' in subj:
                 tc_raw = np.load(opj(timecourse_folder,f'999999_timecourse-raw_space-{space}.npy'))
@@ -324,9 +323,8 @@ class results(object):
             tc_tsnr_full[mask] = tc_mean/np.sqrt(tc_var)
             raw_tc_stats['TSNR'] = tc_tsnr_full
             
-            for ke in self.main_dict[space]:
-                if subj in ke:
-                    self.main_dict[space][ke][subj]['Timecourse Stats'] = deepcopy(raw_tc_stats)
+
+            self.main_dict[space][reduced_an_name][subj+ses_str]['Timecourse Stats'] = deepcopy(raw_tc_stats)
                 
         return
         

@@ -76,7 +76,10 @@ verbose = analysis_info["verbose"]
 rsq_threshold = analysis_info["rsq_threshold"]
 models_to_fit = analysis_info["models_to_fit"]
 n_batches = analysis_info["n_batches"]
-fit_hrf = analysis_info["fit_hrf"]
+
+grid_fit_hrf = analysis_info["grid_fit_hrf"]
+use_previous_gaussian_fitter_hrf = analysis_info["use_previous_gaussian_fitter_hrf"]
+
 fix_bold_baseline = analysis_info["fix_bold_baseline"]
     
 dog_grid = analysis_info["dog_grid"]
@@ -209,9 +212,6 @@ else:
     analysis_info["previous_analysis_refit_mode"] = ""
     with open(save_path+".yml", 'w+') as outfile:
         yaml.dump(analysis_info, outfile)
-
-    
-
 
 
 if verbose == True:
@@ -417,6 +417,13 @@ inf = np.inf
 eps = 1e-1
 ss = prf_stim.screen_size_degrees
 
+if grid_fit_hrf:
+    hrf_1_grid = np.linspace(0,10,grid_nr)
+    hrf_2_grid = np.linspace(0,0,1)
+else:
+    hrf_1_grid = None
+    hrf_2_grid = None
+
 # model parameter bounds
 gauss_bounds, css_bounds, dog_bounds, norm_bounds = None, None, None, None
 
@@ -523,26 +530,13 @@ if param_bounds and fix_bold_baseline:
 
 
 #second bound set to zero to avoid potential negative hrf-response given by the disp. derivative
-if param_bounds and fit_hrf:
+if param_bounds:
     gauss_bounds += [(0,10),(0,0)]
     css_bounds += [(0,10),(0,0)]
     dog_bounds += [(0,10),(0,0)]
     norm_bounds += [(0,10),(0,0)]
     
-if param_bounds and not fit_hrf and single_hrf and refit_mode == 'iterate':
-    #ugly AF. using max() just because it should all be zeros aside from the median values
-    gauss_hrf = np.load(opj(data_path, f"{subj}_{session}_iterparams-gauss_space-{fitting_space}{chunk_nr}.npy"))[:,-3].max()
-    gauss_bounds += [(gauss_hrf,gauss_hrf),(0,0)]
-
-    if "CSS" in models_to_fit:
-        css_hrf = np.load(opj(data_path, f"{subj}_{session}_iterparams-css_space-{fitting_space}{chunk_nr}.npy"))[:,-3].max()
-        css_bounds += [(css_hrf,css_hrf),(0,0)]
-    if "DoG" in models_to_fit:
-        dog_hrf = np.load(opj(data_path, f"{subj}_{session}_iterparams-dog_space-{fitting_space}{chunk_nr}.npy"))[:,-3].max()
-        dog_bounds += [(dog_hrf,dog_hrf),(0,0)]
-    if "norm" in models_to_fit:
-        norm_hrf = np.load(opj(data_path, f"{subj}_{session}_iterparams-norm_space-{fitting_space}{chunk_nr}.npy"))[:,-3].max()  
-        norm_bounds += [(norm_hrf,norm_hrf),(0,0)]    
+  
     
 #this ensures that all models use the same optimizer, even if only some
 #have constraints
@@ -555,20 +549,14 @@ else:
     if surround_sigma_larger_than_centre:
     
         #enforcing surround size larger than prf size in DoG model
-        if fit_hrf:
-            A_ssc_dog = np.array([[0,0,-1,0,0,0,1,0,0]])
-        else:
-            A_ssc_dog = np.array([[0,0,-1,0,0,0,1]])
+        A_ssc_dog = np.array([[0,0,-1,0,0,0,1,0,0]])
     
         constraints_dog.append(LinearConstraint(A_ssc_dog,
                                                     lb=0,
                                                     ub=+inf))
         
         #enforcing surround size larger than prf size in norm
-        if fit_hrf:
-            A_ssc_norm = np.array([[0,0,-1,0,0,0,1,0,0,0,0]])
-        else:
-            A_ssc_norm = np.array([[0,0,-1,0,0,0,1,0,0]])
+        A_ssc_norm = np.array([[0,0,-1,0,0,0,1,0,0,0,0]])
     
         constraints_norm.append(LinearConstraint(A_ssc_norm,
                                                     lb=0,
@@ -612,7 +600,7 @@ gg = Iso2DGaussianModel(stimulus=prf_stim,
 
 
 gf = Iso2DGaussianFitter(
-    data=tc_full_iso_nonzerovar_dict['tc'], model=gg, n_jobs=n_jobs, fit_hrf=fit_hrf)
+    data=tc_full_iso_nonzerovar_dict['tc'], model=gg, n_jobs=n_jobs)
 
 # gaussian grid fit
 if "gauss_gridparams_path" not in analysis_info and "gauss_iterparams_path" not in analysis_info:
@@ -627,7 +615,9 @@ if "gauss_gridparams_path" not in analysis_info and "gauss_iterparams_path" not 
                 verbose=verbose,
                 n_batches=n_batches,
                 fixed_grid_baseline=fixed_grid_baseline,
-                grid_bounds=gauss_grid_bounds)
+                grid_bounds=gauss_grid_bounds,
+                hrf_1_grid=hrf_1_grid,
+                hrf_2_grid=hrf_2_grid)
         print("Gaussian gridfit completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+
           ". voxels/vertices above "+str(rsq_threshold)+": "+str(np.sum(gf.gridsearch_params[:, -1]>rsq_threshold))+" out of "+
           str(gf.data.shape[0]))
@@ -763,8 +753,8 @@ if "CSS" in models_to_fit:
                                       filter_params=filter_params,                                     
                                       normalize_RFs=normalize_RFs)
     gf_css = CSS_Iso2DGaussianFitter(
-        data=tc_full_iso_nonzerovar_dict['tc'], model=gg_css, n_jobs=n_jobs, fit_hrf=fit_hrf,
-        previous_gaussian_fitter=gf)
+        data=tc_full_iso_nonzerovar_dict['tc'], model=gg_css, n_jobs=n_jobs,
+        previous_gaussian_fitter=gf, use_previous_gaussian_fitter_hrf=use_previous_gaussian_fitter_hrf)
 
 
     # CSS grid fit
@@ -778,7 +768,9 @@ if "CSS" in models_to_fit:
                     verbose=verbose,
                     n_batches=n_batches,
                     fixed_grid_baseline=fixed_grid_baseline,
-                    grid_bounds=css_grid_bounds)
+                    grid_bounds=css_grid_bounds,
+                    hrf_1_grid=hrf_1_grid,
+                    hrf_2_grid=hrf_2_grid)
             print("CSS gridfit completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+
               ". voxels/vertices above "+str(rsq_threshold)+": "+str(np.sum(gf_css.gridsearch_params[:, -1]>rsq_threshold))+" out of "+
               str(gf_css.data.shape[0]))
@@ -912,8 +904,8 @@ if "DoG" in models_to_fit:
     gf_dog = DoG_Iso2DGaussianFitter(data=tc_full_iso_nonzerovar_dict['tc'],
                                      model=gg_dog,
                                      n_jobs=n_jobs,
-                                     fit_hrf=fit_hrf,
-                                     previous_gaussian_fitter=gf)
+                                     previous_gaussian_fitter=gf,
+                                     use_previous_gaussian_fitter_hrf=use_previous_gaussian_fitter_hrf)
 
     # DoG grid fit
     if "dog_gridparams_path" not in analysis_info and "dog_iterparams_path" not in analysis_info and dog_grid:
@@ -927,7 +919,9 @@ if "DoG" in models_to_fit:
                             verbose=verbose,
                             n_batches=n_batches,
                             fixed_grid_baseline=fixed_grid_baseline,
-                            grid_bounds=dog_grid_bounds)
+                            grid_bounds=dog_grid_bounds,
+                            hrf_1_grid=hrf_1_grid,
+                            hrf_2_grid=hrf_2_grid)
             print("DoG gridfit completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+
               ". voxels/vertices above "+str(rsq_threshold)+": "+str(np.sum(gf_dog.gridsearch_params[:, -1]>rsq_threshold))+" out of "+
               str(gf_dog.data.shape[0]))
@@ -1064,8 +1058,8 @@ if "norm" in models_to_fit:
     gf_norm = Norm_Iso2DGaussianFitter(data=tc_full_iso_nonzerovar_dict['tc'],
                                        model=gg_norm,
                                        n_jobs=n_jobs,
-                                       fit_hrf=fit_hrf,
-                                       previous_gaussian_fitter=gf)
+                                       previous_gaussian_fitter=gf,
+                                       use_previous_gaussian_fitter_hrf=use_previous_gaussian_fitter_hrf)
     
     #normalization grid stage
     if "norm_gridparams_path" not in analysis_info and "norm_iterparams_path" not in analysis_info:
@@ -1084,7 +1078,9 @@ if "norm" in models_to_fit:
                          n_batches=n_batches,
                          rsq_threshold=rsq_threshold,
                          fixed_grid_baseline=fixed_grid_baseline,
-                         grid_bounds=norm_grid_bounds)
+                         grid_bounds=norm_grid_bounds,
+                         hrf_1_grid=hrf_1_grid,
+                         hrf_2_grid=hrf_2_grid)
         
             print("Norm gridfit completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Mean rsq>"+str(rsq_threshold)+": "+str(np.mean(gf_norm.gridsearch_params[gf_norm.gridsearch_rsq_mask, -1])))
         
