@@ -379,10 +379,13 @@ class results(object):
                         processed_results['x_pos'][k2][mask] = np.copy(v2[:,0])
                         processed_results['y_pos'][k2][mask] = np.copy(v2[:,1])
                         
-                        if v['analysis_info']['fit_hrf']:
+                        if 'fit_hrf' in v['analysis_info']: #legacy
+                            if v['analysis_info']['fit_hrf']:
+                                processed_results['hrf_1'][k2][mask] = np.copy(v2[:,-3])
+                                processed_results['hrf_2'][k2][mask] = np.copy(v2[:,-2])
+                        elif 'grid_fit_hrf' in v['analysis_info']: #current
                             processed_results['hrf_1'][k2][mask] = np.copy(v2[:,-3])
-                            processed_results['hrf_2'][k2][mask] = np.copy(v2[:,-2])
-                            
+                            processed_results['hrf_2'][k2][mask] = np.copy(v2[:,-2])                         
     
                         if k2 == 'CSS':
                             processed_results['CSS Exponent'][k2][mask] =  np.copy(v2[:,5])

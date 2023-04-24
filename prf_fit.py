@@ -438,12 +438,6 @@ if param_bounds:
                     (eps, 1.5*ss),  # prf size
                     (0, 1000),  # prf amplitude
                     (0, 1000)]  # bold baseline
-    
-    if not pos_prfs_only:
-        gauss_grid_bounds[0] = (-1000,1000)
-        gauss_bounds[3] = (-1000,1000)
-        css_grid_bounds[0] = (-1000,1000)
-        css_bounds[3] = (-1000,1000)
         
     css_bounds = [(-1.5*max_ecc_size, 1.5*max_ecc_size),  # x
                     (-1.5*max_ecc_size, 1.5*max_ecc_size),  # y
@@ -470,6 +464,12 @@ if param_bounds:
                     (0, 1000),  # neural baseline
                     (1e-6, 1000)]  # surround baseline
 
+    if not pos_prfs_only:
+        gauss_grid_bounds[0] = (-1000,1000)
+        gauss_bounds[3] = (-1000,1000)
+        css_grid_bounds[0] = (-1000,1000)
+        css_bounds[3] = (-1000,1000)
+
 if dog_grid:
     dog_surround_amplitude_grid=np.array([0.05,0.1,0.25,0.5,0.75,1,2], dtype='float32')
     dog_surround_size_grid=np.array([3,5,8,11,14,17,20,23,26], dtype='float32')
@@ -486,9 +486,9 @@ if norm_model_variant == "abcd":
     
 
 elif norm_model_variant == "abc":
-    surround_amplitude_grid=np.array([0,0.05,0.1,0.5,1,5,10,20,50,100,200,500], dtype='float32')
-    surround_size_grid=np.array([3,5,8,12,18], dtype='float32')
-    neural_baseline_grid=np.array([0,0.05,0.1,0.5,1,5,10,20,50,100], dtype='float32')
+    surround_amplitude_grid=np.array([0.05,0.1,0.2,0.4,0.6,0.8,1,1.5,2,3], dtype='float32')
+    surround_size_grid=np.array([3,5,7,9,11,13,15,18], dtype='float32')
+    neural_baseline_grid=np.array([0,1,5,10,20,40,70,100], dtype='float32')
     surround_baseline_grid=np.array([1], dtype='float32')
 
     norm_bounds[8] = (1, 1)  # fix surround baseline
