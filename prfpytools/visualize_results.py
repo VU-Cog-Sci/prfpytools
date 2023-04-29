@@ -929,12 +929,12 @@ class visualize_results(object):
                             #print(np.nanquantile(p_r['RSq'][model][alpha[analysis][subj][model]>rsq_thresh],0.9))
                             ds_rsq[f"{subj} {model} rsq"] = Vertex2D_fix(p_r['RSq'][model], 
                                                             np.ones_like(alpha[analysis][subj][model]), subject=pycortex_subj, 
-                                                            vmin=0,#np.nanquantile(p_r['RSq'][model][alpha[analysis][subj][model]>rsq_thresh],0.1), 
-                                                            vmax=0.15,#np.nanquantile(p_r['RSq'][model][alpha[analysis][subj][model]>rsq_thresh],0.9),
+                                                            vmin=rsq_thresh,#0,#np.nanquantile(p_r['RSq'][model][alpha[analysis][subj][model]>rsq_thresh],0.1), 
+                                                            vmax=rsq_max_opacity,#0.15,#np.nanquantile(p_r['RSq'][model][alpha[analysis][subj][model]>rsq_thresh],0.9),
                                                             vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap='inferno', roi_borders=roi_borders)
                             
-                            fig = simple_colorbar(vmin=0,#np.nanquantile(p_r['RSq'][model][alpha[analysis][subj][model]>rsq_thresh],0.1), 
-                                            vmax=0.15,#np.nanquantile(p_r['RSq'][model][alpha[analysis][subj][model]>rsq_thresh],0.9),
+                            fig = simple_colorbar(vmin=rsq_thresh,#0,#np.nanquantile(p_r['RSq'][model][alpha[analysis][subj][model]>rsq_thresh],0.1), 
+                                            vmax=rsq_max_opacity,#0.15,#np.nanquantile(p_r['RSq'][model][alpha[analysis][subj][model]>rsq_thresh],0.9),
                                             cmap_name='inferno', ori='horizontal', param_name='$R^2$')
                             
                             if self.pycortex_image_path is not None and save_colorbars:
@@ -976,20 +976,22 @@ class visualize_results(object):
                                     fig.savefig(f"{self.pycortex_image_path}/{model}_nsubj_cbar.pdf", dpi=600, bbox_inches='tight', transparent=True)     
                                     
                         if 'CSS' in models and p_r['RSq']['CSS'].sum()>0:
+                            mdiff=True
                             ds_rsq[f'{subj} CSS - Gauss'] = Vertex2D_fix(p_r['RSq']['CSS']-p_r['RSq']['Gauss'], alpha[analysis][subj]['all'], subject=pycortex_subj,
                                                                       vmin=-0.1, vmax=0.1, vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap=pycortex_cmap, roi_borders=roi_borders)  
                             
                         if 'DoG' in models and p_r['RSq']['DoG'].sum()>0:
+                            mdiff=True
                             ds_rsq[f'{subj} DoG - Gauss'] = Vertex2D_fix(p_r['RSq']['DoG']-p_r['RSq']['Gauss'], alpha[analysis][subj]['all'], subject=pycortex_subj,
                                                                   vmin=-0.1, vmax=0.1, vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap=pycortex_cmap, roi_borders=roi_borders)
                         
                         if 'Norm_abcd' in self.only_models and 'Gauss' in self.only_models:
-
+                            mdiff=True
                             ds_rsq[f'{subj} Norm_abcd - Gauss'] = Vertex2D_fix(p_r['RSq']['Norm_abcd']-p_r['RSq']['Gauss'], alpha[analysis][subj]['all'], subject=pycortex_subj,
                                                                       vmin=-0.1, vmax=0.1, vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap=pycortex_cmap, roi_borders=roi_borders)
 
                             if 'CSS' in self.only_models and 'DoG' in self.only_models:
-                            
+                                mdiff=True
                                 ds_rsq[f'{subj} Norm_abcd - DoG'] = Vertex2D_fix(p_r['RSq']['Norm_abcd']-p_r['RSq']['DoG'], alpha[analysis][subj]['all'], subject=pycortex_subj,
                                                                       vmin=-0.1, vmax=0.1, vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap=pycortex_cmap, roi_borders=roi_borders)
 
@@ -998,11 +1000,18 @@ class visualize_results(object):
  
 
                         for model in [model for model in self.only_models if 'Norm' in model and 'Norm_abcd' != model]:
-
+                            mdiff=True
                             ds_rsq[f'{subj} Norm_abcd - {model}'] = Vertex2D_fix(p_r['RSq'][model]-p_r['RSq']['Norm_abcd'], alpha[analysis][subj]['all'], subject=pycortex_subj,
                                                                       vmin=-0.1, vmax=0.1, vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap=pycortex_cmap, roi_borders=roi_borders)
+
+                        if mdiff:    
+                            fig = simple_colorbar(vmin=-0.1, 
+                                            vmax=0.1,
+                                            cmap_name=pycortex_cmap, ori='horizontal', param_name='$R^2$ difference')
                             
-                            
+                            if self.pycortex_image_path is not None and save_colorbars:
+                                fig.savefig(f"{self.pycortex_image_path}/rsqdiff_cbar.pdf", dpi=600, bbox_inches='tight', transparent=True)   
+
                         if 'Processed Results' in self.main_dict['T1w'][analysis][subj] and self.compare_volume_surface:
                             
                             ds_rsq_comp = dict()
@@ -1781,7 +1790,7 @@ class visualize_results(object):
                         
                         # binned eccentricity vs other parameters relationships       
             
-                        model_colors = {'Gauss':'blue','CSS':'orange','DoG':'green','Norm_abcd':'red'}
+                        model_colors = {'Gauss':'blue','CSS':'orange','DoG':'green','Norm_abcd':'red','Norm_abc':'purple'}
                                                 
 
     
@@ -3113,7 +3122,7 @@ class visualize_results(object):
                     
                     # binned eccentricity vs other parameters relationships       
         
-                    model_colors = {'Gauss':'blue','CSS':'orange','DoG':'green','Norm_abcd':'red'}                                                
+                    model_colors = {'Gauss':'blue','CSS':'orange','DoG':'green','Norm_abcd':'red','Norm_abc':'purple'}                                              
 
                     for i, roi in enumerate(rois):                              
                         if 'mean' not in analysis or 'fsaverage' in subj:

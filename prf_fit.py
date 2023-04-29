@@ -78,6 +78,8 @@ models_to_fit = analysis_info["models_to_fit"]
 n_batches = analysis_info["n_batches"]
 
 grid_fit_hrf = analysis_info["grid_fit_hrf"]
+iter_fit_hrf = analysis_info["iterx_fit_hrf"]
+
 use_previous_gaussian_fitter_hrf = analysis_info["use_previous_gaussian_fitter_hrf"]
 
 fix_bold_baseline = analysis_info["fix_bold_baseline"]
@@ -531,11 +533,16 @@ if param_bounds and fix_bold_baseline:
 
 #second bound set to zero to avoid potential negative hrf-response given by the disp. derivative
 if param_bounds:
-    gauss_bounds += [(0,10),(0,0)]
-    css_bounds += [(0,10),(0,0)]
-    dog_bounds += [(0,10),(0,0)]
-    norm_bounds += [(0,10),(0,0)]
-    
+    if iter_fit_hrf:
+        gauss_bounds += [(0,10),(0,0)]
+        css_bounds += [(0,10),(0,0)]
+        dog_bounds += [(0,10),(0,0)]
+        norm_bounds += [(0,10),(0,0)]
+    else:
+         gauss_bounds += [(hrf[1],hrf[1]),(hrf[2],hrf[2])]
+        css_bounds += [(hrf[1],hrf[1]),(hrf[2],hrf[2])]
+        dog_bounds += [(hrf[1],hrf[1]),(hrf[2],hrf[2])]
+        norm_bounds += [(hrf[1],hrf[1]),(hrf[2],hrf[2])]   
   
     
 #this ensures that all models use the same optimizer, even if only some

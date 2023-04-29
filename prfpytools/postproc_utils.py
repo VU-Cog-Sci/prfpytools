@@ -85,29 +85,37 @@ class results(object):
                 mask = np.load(opj(results_folder,f"{current_an_infos[0]['subj']}_{ses_str}mask_space-{current_an_infos[0]['fitting_space']}{current_an_infos[0]['previous_analysis_time']}.npy"))
                 
             for i, curr_an_info in enumerate(current_an_infos):
+
+
                 if os.path.exists(opj(timecourse_folder,f"{curr_an_info['subj']}_{ses_str}timecourse_space-{curr_an_info['fitting_space']}{curr_an_info['analysis_time']}.npy")):
                     merged_an_info["timecourse_analysis_time"] = curr_an_info["analysis_time"]
                 
                 for model in curr_an_info["models_to_fit"]:
-                    try:
-                        raw_model_result = (np.load(opj(results_folder,f"{curr_an_info['subj']}_{ses_str}iterparams-{model.lower()}_space-{curr_an_info['fitting_space']}{curr_an_info['analysis_time']}.npy")))
-                    except:
-                        raw_model_result = (np.load(opj(results_folder,f"{curr_an_info['subj']}_{ses_str}iterparams-{model.lower()}_space-{curr_an_info['fitting_space']}{curr_an_info['previous_analysis_time']}.npy")))
+                    if os.path.exists(opj(results_folder,f"{curr_an_info['subj']}_{ses_str}iterparams-{model.lower()}_space-{curr_an_info['fitting_space']}{curr_an_info['analysis_time']}.npy")) or \
+                       os.path.exists(opj(results_folder,f"{curr_an_info['subj']}_{ses_str}iterparams-{model.lower()}_space-{curr_an_info['fitting_space']}{curr_an_info['previous_analysis_time']}.npy")):
+                    
+                        try:
+                            raw_model_result = (np.load(opj(results_folder,f"{curr_an_info['subj']}_{ses_str}iterparams-{model.lower()}_space-{curr_an_info['fitting_space']}{curr_an_info['analysis_time']}.npy")))
+                        except:
+                            raw_model_result = (np.load(opj(results_folder,f"{curr_an_info['subj']}_{ses_str}iterparams-{model.lower()}_space-{curr_an_info['fitting_space']}{curr_an_info['previous_analysis_time']}.npy")))
                         
-                    if i==0:
                         if model == 'norm':
-                            r_r[f"Norm_{curr_an_info['norm_model_variant']}"] = np.copy(raw_model_result)
+                            if f"Norm_{curr_an_info['norm_model_variant']}" not in r_r:
+                                r_r[f"Norm_{curr_an_info['norm_model_variant']}"] = np.copy(raw_model_result)
+                            else:
+                                r_r[f"Norm_{curr_an_info['norm_model_variant']}"][r_r[f"Norm_{curr_an_info['norm_model_variant']}"][:,-1]<raw_model_result[:,-1]] = np.copy(raw_model_result[r_r[f"Norm_{curr_an_info['norm_model_variant']}"][:,-1]<raw_model_result[:,-1]])
+
                         elif model == 'gauss':
-                            r_r['Gauss'] = np.copy(raw_model_result)
+                            if 'Gauss' not in r_r:
+                                r_r['Gauss'] = np.copy(raw_model_result)
+                            else:
+                                r_r['Gauss'][r_r['Gauss'][:,-1]<raw_model_result[:,-1]] = np.copy(raw_model_result[r_r['Gauss'][:,-1]<raw_model_result[:,-1]])
+                        
                         else:
-                            r_r[model] = np.copy(raw_model_result)
-                    else:
-                        if model == 'norm':
-                            r_r[f"Norm_{curr_an_info['norm_model_variant']}"][r_r[f"Norm_{curr_an_info['norm_model_variant']}"][:,-1]<raw_model_result[:,-1]] = np.copy(raw_model_result[r_r[f"Norm_{curr_an_info['norm_model_variant']}"][:,-1]<raw_model_result[:,-1]])
-                        elif model == 'gauss':
-                            r_r['Gauss'][r_r['Gauss'][:,-1]<raw_model_result[:,-1]] = np.copy(raw_model_result[r_r['Gauss'][:,-1]<raw_model_result[:,-1]])
-                        else:
-                            r_r[model][r_r[model][:,-1]<raw_model_result[:,-1]] = np.copy(raw_model_result[r_r[model][:,-1]<raw_model_result[:,-1]])                            
+                            if model not in r_r:
+                                r_r[model] = np.copy(raw_model_result)
+                            else:
+                                r_r[model][r_r[model][:,-1]<raw_model_result[:,-1]] = np.copy(raw_model_result[r_r[model][:,-1]<raw_model_result[:,-1]])                            
                         
                     
 
