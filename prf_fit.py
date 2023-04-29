@@ -539,7 +539,7 @@ if param_bounds:
         dog_bounds += [(0,10),(0,0)]
         norm_bounds += [(0,10),(0,0)]
     else:
-         gauss_bounds += [(hrf[1],hrf[1]),(hrf[2],hrf[2])]
+        gauss_bounds += [(hrf[1],hrf[1]),(hrf[2],hrf[2])]
         css_bounds += [(hrf[1],hrf[1]),(hrf[2],hrf[2])]
         dog_bounds += [(hrf[1],hrf[1]),(hrf[2],hrf[2])]
         norm_bounds += [(hrf[1],hrf[1]),(hrf[2],hrf[2])]   
