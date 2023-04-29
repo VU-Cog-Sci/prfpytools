@@ -78,7 +78,7 @@ models_to_fit = analysis_info["models_to_fit"]
 n_batches = analysis_info["n_batches"]
 
 grid_fit_hrf = analysis_info["grid_fit_hrf"]
-iter_fit_hrf = analysis_info["iterx_fit_hrf"]
+iter_fit_hrf = analysis_info["iter_fit_hrf"]
 
 use_previous_gaussian_fitter_hrf = analysis_info["use_previous_gaussian_fitter_hrf"]
 
