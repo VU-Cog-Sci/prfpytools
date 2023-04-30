@@ -773,8 +773,7 @@ class visualize_results(object):
                     #output freesurefer-format polar angle maps to draw custom ROIs in freeview    
                     if self.output_freesurfer_maps:
                         
-                        if 'fsaverage' in subj:
-                            fs_sj = 'fsaverage'
+                        fs_sj = pycortex_subj
                         
                         lh_c = read_morph_data(opj(self.fs_dir, fs_sj+'/surf/lh.curv'))
         
@@ -857,7 +856,7 @@ class visualize_results(object):
                             
                         for i, roi in enumerate([r for r in self.idx_rois[subj] if 'custom' not in r and 'visual' not in r and 'HCP' not in r and 'glasser' not in r]):        
                             roi_data = np.zeros_like(mask)
-                            roi_data[self.idx_rois[subj][roi]] = 1
+                            roi_data[self.idx_rois[subj][roi]] = 1 
                             data[self.idx_rois[subj][roi]] = i+1
                             if plot_single_rois:                                  
                                 ds_rois[roi] = Vertex2D_fix(roi_data, roi_data.astype('bool'), subject=pycortex_subj, cmap=pycortex_cmap, vmin=0, vmax=roi_data.max(), vmin2=0, vmax2=1, roi_borders=roi_borders)
@@ -1798,7 +1797,7 @@ class visualize_results(object):
                             for model in self.only_models:                                
 
                                 
-                                if 'mean' not in analysis or 'fsaverage' in subj:
+                                if 'mean an' not in analysis or 'fsaverage' in subj:
                                     if 'sub' in subj or 'fsaverage' in subj or subj.isdecimal():
                                         if 'rsq' in y_parameter.lower():
                                             #comparing same vertices for model performance
@@ -1978,7 +1977,7 @@ class visualize_results(object):
 
                                 elif 'fsaverage' not in subjects:
                                     #mean analysis
-                                    ans = [an[0] for an in analyses if 'mean' not in an[0]]
+                                    ans = [an[0] for an in analyses if 'mean an' not in an[0]]
                                     alpha[analysis][subj][model][roi] = np.hstack(tuple([alpha[an][subj][model][roi] for an in ans]))
                                     x_par[analysis][subj][model][roi] = np.hstack(tuple([x_par[an][subj][model][roi] for an in ans]))
                                     y_par[analysis][subj][model][roi] = np.hstack(tuple([y_par[an][subj][model][roi] for an in ans]))
@@ -1999,7 +1998,7 @@ class visualize_results(object):
                                     rsq_y[analysis][subj][model][roi] = np.ones_like(rsq_y[analysis][subj][model][roi])
                             
 
-                        for i, roi in enumerate([r for r in rois if 'all' not in r and 'combined' not in r and 'Brain' not in r]):
+                        for i, roi in enumerate([r for r in rois]):# if 'all' not in r and 'combined' not in r and 'Brain' not in r]):
                             
                             if len(y_par[analysis][subj][model][roi])>10:
                                 self.curr_rois_names.append(roi)
@@ -3125,7 +3124,7 @@ class visualize_results(object):
                     model_colors = {'Gauss':'blue','CSS':'orange','DoG':'green','Norm_abcd':'red','Norm_abc':'purple'}                                              
 
                     for i, roi in enumerate(rois):                              
-                        if 'mean' not in analysis or 'fsaverage' in subj:
+                        if 'mean an' not in analysis or 'fsaverage' in subj:
                             if 'sub' in subj or 'fsaverage' in subj:
                                 if len(self.only_models)>1:
                                     curr_alpha = subj_res['Processed Results']['Alpha']['all']
@@ -3207,7 +3206,7 @@ class visualize_results(object):
 
                                                 
                     for i, roi in enumerate(rois):                              
-                        if 'mean' not in analysis or 'fsaverage' in subj:
+                        if 'mean an' not in analysis or 'fsaverage' in subj:
                             if 'sub' in subj or 'fsaverage' in subj:
                                 for param in parameters:                                           
                                     
@@ -3282,7 +3281,7 @@ class visualize_results(object):
                                 
                         elif space != 'fsaverage':
                             #all analyses data
-                            ans = [an[0] for an in analyses if 'mean' not in an[0]]
+                            ans = [an[0] for an in analyses if 'mean an' not in an[0]]
                             dimensions[analysis][subj][roi] = dimensions[analyses[0][0]][subj][roi]
                             alpha[analysis][subj][roi] = np.hstack(tuple([alpha[an][subj][roi] for an in ans]))
                             multidim_param_array[analysis][subj][roi] = np.hstack(tuple([multidim_param_array[an][subj][roi] for an in ans]))

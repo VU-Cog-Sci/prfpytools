@@ -386,8 +386,9 @@ else:
     else:
 
         while not os.path.exists(opj(data_path, f"{subj}_{session}_timecourse_space-{fitting_space}.npy")):
-            time.sleep(30)
+            time.sleep(10)
         else:
+            time.sleep(10)
             print("Using time series from: "+opj(data_path, f"{subj}_{session}_timecourse_space-{fitting_space}.npy"))
             tc_full_iso_nonzerovar_dict = {}
             tc_full_iso_nonzerovar_dict['tc'] = np.load(opj(data_path, f"{subj}_{session}_timecourse_space-{fitting_space}.npy"))

@@ -25,6 +25,7 @@ class results(object):
     def combine_results(self, results_folder,
                         timecourse_folder=None,
                         ref_volume_path=None,
+                        cvfold_comb='median',
                         calculate_CCrsq=False,
                         calculate_noise_ceiling=False,
                         screenshot_paths = []):
@@ -69,12 +70,20 @@ class results(object):
         #this is to combine multiple iterations (max) and different models fit on the same fold
         for an_name in tqdm(unique_an_names):
             current_an_infos = np.array(an_infos)[np.array(an_names)==an_name]
-            merged_an_info = mergedict_AND(current_an_infos)
 
             if 'session' in current_an_infos[0]:
                 ses_str = current_an_infos[0]['session']+'_'
             else:
                 ses_str = ''
+                
+            print(current_an_infos)
+            current_an_infos = np.array([cai for cai in current_an_infos if (os.path.exists(opj(results_folder,f"{cai['subj']}_{ses_str}mask_space-{cai['fitting_space']}{cai['analysis_time']}.npy"))\
+                                or os.path.exists(opj(results_folder,f"{cai['subj']}_{ses_str}mask_space-{cai['fitting_space']}{cai['previous_analysis_time']}.npy")))])
+            print(current_an_infos)
+
+            merged_an_info = mergedict_AND(current_an_infos)
+
+
   
             r_r = dict()
             r_r_full=dict()
@@ -263,13 +272,20 @@ class results(object):
         for key in set(['_'.join(key.split('_')[:-1]) for key in folds]):
             current_fold_infos = [unique_an_results[fold]['analysis_info'] for fold in folds if key in fold]
             for res in unique_an_results[folds[0]]:
-                if 'info' in res:
-                    combined_results[key+'_fit-runs-CVmedian'][res] = mergedict_AND(current_fold_infos)
-                elif 'mask' in res:
-                    combined_results[key+'_fit-runs-CVmedian'][res] = np.product([unique_an_results[fold][res] for fold in folds if key in fold], axis=0).astype('bool')
+                if cvfold_comb == 'median':
+                    if 'info' in res:
+                        combined_results[key+'_fit-runs-CVmedian'][res] = mergedict_AND(current_fold_infos)
+                    elif 'mask' in res:
+                        combined_results[key+'_fit-runs-CVmedian'][res] = np.product([unique_an_results[fold][res] for fold in folds if key in fold], axis=0).astype('bool')
+                    else:
+                        combined_results[key+'_fit-runs-CVmedian'][res] = np.median([unique_an_results[fold][res] for fold in folds if key in fold], axis=0)
                 else:
-                    combined_results[key+'_fit-runs-CVmedian'][res] = np.median([unique_an_results[fold][res] for fold in folds if key in fold], axis=0)
-                    
+                    if 'info' in res:
+                        combined_results[key+'_fit-runs-CVmean'][res] = mergedict_AND(current_fold_infos)
+                    elif 'mask' in res:
+                        combined_results[key+'_fit-runs-CVmean'][res] = np.product([unique_an_results[fold][res] for fold in folds if key in fold], axis=0).astype('bool')
+                    else:
+                        combined_results[key+'_fit-runs-CVmean'][res] = np.mean([unique_an_results[fold][res] for fold in folds if key in fold], axis=0)                                       
                                    
         for key in no_folds:
             combined_results[key] = deepcopy(unique_an_results[key])
