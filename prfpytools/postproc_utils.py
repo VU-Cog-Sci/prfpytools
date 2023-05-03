@@ -75,7 +75,7 @@ class results(object):
                 ses_str = current_an_infos[0]['session']+'_'
             else:
                 ses_str = ''
-                
+
             print(current_an_infos)
             current_an_infos = np.array([cai for cai in current_an_infos if (os.path.exists(opj(results_folder,f"{cai['subj']}_{ses_str}mask_space-{cai['fitting_space']}{cai['analysis_time']}.npy"))\
                                 or os.path.exists(opj(results_folder,f"{cai['subj']}_{ses_str}mask_space-{cai['fitting_space']}{cai['previous_analysis_time']}.npy")))])
@@ -403,11 +403,11 @@ class results(object):
                         processed_results['x_pos'][k2][mask] = np.copy(v2[:,0])
                         processed_results['y_pos'][k2][mask] = np.copy(v2[:,1])
                         
-                        if 'fit_hrf' in v['analysis_info']: #legacy
+                        if 'fit_hrf' in v['analysis_info']: #legacy (param only present if fit)
                             if v['analysis_info']['fit_hrf']:
                                 processed_results['hrf_1'][k2][mask] = np.copy(v2[:,-3])
                                 processed_results['hrf_2'][k2][mask] = np.copy(v2[:,-2])
-                        elif 'grid_fit_hrf' in v['analysis_info']: #current
+                        elif 'grid_fit_hrf' in v['analysis_info']: #current (parm always present)
                             processed_results['hrf_1'][k2][mask] = np.copy(v2[:,-3])
                             processed_results['hrf_2'][k2][mask] = np.copy(v2[:,-2])                         
     

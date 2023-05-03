@@ -29,6 +29,7 @@ from prfpytools.preproc_utils import roi_mask, inverse_roi_mask, create_full_sti
 from skimage import filters
 
 import time
+import scipy as sp
 from scipy.stats import sem, ks_2samp, ttest_1samp, wilcoxon, pearsonr, ttest_ind, ttest_rel, zscore, spearmanr, gaussian_kde
 from scipy.optimize import minimize
 
@@ -500,6 +501,9 @@ class visualize_results(object):
                                 normalize_integral_dx=an_info['normalize_integral_dx'])                    
                         
                     tc_runs=[]
+
+                    red_per = self.prf_stims[task].late_iso_dict['periods'][(self.prf_stims[task].late_iso_dict['periods']<20) | (self.prf_stims[task].late_iso_dict['periods']>234)]
+
                     
                     for run in all_runs:
                         mask_run = [np.load(mask_path) for mask_path in mask_paths if f"task-{task}_" in mask_path and f"run-{run}." in mask_path][0]
@@ -510,15 +514,34 @@ class visualize_results(object):
                             tc_run_idx = np.sum(mask_run[:index])
                         
                         tc_runs.append([np.load(tc_path)[tc_run_idx] for tc_path in tc_paths if f"task-{task}_" in tc_path and f"run-{run}." in tc_path][0])
+
+                        # coeffs = sp.fft.dct(tc_runs[-1], norm='ortho')
                         
-                        #tc_runs[-1] *=(100/tc_runs[-1].mean(-1))[...,np.newaxis]
-                        #tc_runs[-1] += (tc_runs[-1].mean(-1)-np.median(tc_runs[-1][...,self.prf_stims[task].late_iso_dict[task]], axis=-1))[...,np.newaxis]
+                        # last_modes_to_remove_percent = 50
+                        # if last_modes_to_remove_percent>0:
+                        #     last_modes_to_remove = int(len(tc_runs[-1])*last_modes_to_remove_percent/100)
+                        #     coeffs[-last_modes_to_remove:] = 0
+                    
+                        # tc_runs[-1] = sp.fft.idct(coeffs, norm='ortho')
+
+
+                        #tc_runs[-1] -= np.median(tc_runs[-1][...,self.prf_stims[task].late_iso_dict[task]], axis=-1)[...,np.newaxis]
+                        tc_runs[-1] -= np.median(tc_runs[-1][...,red_per], axis=-1)[...,np.newaxis]
+
+                        
                       
                     tc[task] = np.mean(tc_runs, axis=0)
                     tc_err[task] = sem(tc_runs, axis=0)
                     
-                    #tc[task] *= (100/tc[task].mean(-1))[...,np.newaxis]
-                    #tc[task] += np.median(tc[task][...,self.prf_stims[task].late_iso_dict[task]], axis=-1)[...,np.newaxis]
+                    #tc[task] -= np.median(tc[task][...,self.prf_stims[task].late_iso_dict[task]], axis=-1)[...,np.newaxis]
+                    tc[task] -= np.median(tc[task][...,red_per], axis=-1)[...,np.newaxis]
+
+
+                    if 'CVmean' in analysis or 'CVmedian' in analysis:
+                        vertex_info+=f"WARNING: predictions based on mean/median CV parameters are not usually meaningful\n"
+
+                    vertex_info+=f"{task} late iso dict median (begin/end only): {np.median(tc[task][red_per])}\n"
+
                     
                     #fit and test timecourses separately
                     if an_info['crossvalidate']:
@@ -535,9 +558,9 @@ class visualize_results(object):
                             tc_fit[task] = np.mean([tc_runs[i] for i in all_runs if i in fit_runs], axis=0)
                             
                         #tc_test[task] *= (100/tc_test[task].mean(-1))[...,np.newaxis]
-                        #tc_test[task] += (tc_test[task].mean(-1)-np.median(tc_test[task][...,self.prf_stims[task].late_iso_dict[task]], axis=-1))[...,np.newaxis]
+                        tc_test[task] -= np.median(tc_test[task][...,self.prf_stims[task].late_iso_dict[task]], axis=-1)[...,np.newaxis]
                         #tc_fit[task] *= (100/tc_fit[task].mean(-1))[...,np.newaxis]
-                        #tc_fit[task] += (tc_fit[task].mean(-1)-np.median(tc_fit[task][...,self.prf_stims[task].late_iso_dict[task]], axis=-1))[...,np.newaxis]     
+                        tc_fit[task] -= np.median(tc_fit[task][...,self.prf_stims[task].late_iso_dict[task]], axis=-1)[...,np.newaxis]     
                         
     
                     
@@ -635,40 +658,57 @@ class visualize_results(object):
                 if an_info['crossvalidate'] and 'fit_task' not in an_info:
                     
                     print(np.std([tc_full_test,tc_full_fit],axis=0))
+                    for i,tc_run in enumerate(tc_runs):
+                        if i in fit_runs:
+                            self.axes[0,0].plot(tseconds, tc_run, label=f'Run {i} (fit)', linestyle = ':', marker='^', markersize=3, color=cmap(5), linewidth=0.5, alpha=0.5)
+                        else:
+                            self.axes[0,0].plot(tseconds, tc_run, label=f'Run {i} (test)', linestyle = ':', marker='v', markersize=3, color=cmap(5), linewidth=0.5, alpha=0.5)
                     
-                    
-                    self.axes[0,0].plot(tseconds, tc_full_test, label='Data (test)', linestyle = ':', marker='^', markersize=3, color=cmap(4), linewidth=0.5, alpha=0.5) 
-                    self.axes[0,0].plot(tseconds, tc_full_fit, label='Data (fit)', linestyle = ':', marker='v', markersize=3, color=cmap(5), linewidth=0.5, alpha=0.5) 
-                
+                    #self.axes[0,0].plot(tseconds, tc_full_test, label='Data (test)', linestyle = ':', marker='^', markersize=3, color=cmap(4), linewidth=0.5, alpha=0.5) 
+                    #self.axes[0,0].plot(tseconds, tc_full_fit, label='Data (fit)', linestyle = ':', marker='v', markersize=3, color=cmap(5), linewidth=0.5, alpha=0.5) 
                 else:
-                    self.axes[0,0].errorbar(tseconds, tc_full, yerr=0, label='Data',  fmt = 'sk', markersize=3,  linewidth=0.5, zorder=1) 
+                    for i,tc_run in enumerate(tc_runs):
+                        
+                        self.axes[0,0].plot(tseconds, tc_run, label=f'Run {i} (fit)', linestyle = ':', marker='^', markersize=3, color=cmap(5), linewidth=0.5, alpha=0.5)                    
+                
+                self.axes[0,0].errorbar(tseconds, tc_full, yerr=0, label='Data',  fmt = 'sk', markersize=5,  linewidth=0, zorder=1) 
                     
     
                 
                 for model in self.only_models: 
                     if 'Norm' in model:
-                        self.axes[0,0].plot(tseconds, preds[model], linewidth=2, color=cmap(3), label=f"Norm ({subj_res['Processed Results']['RSq'][model][index]:.2f})", zorder=2)
+                        self.axes[0,0].plot(tseconds, preds[model], linewidth=5, color=cmap(3), label=f"Norm ({subj_res['Processed Results']['RSq'][model][index]:.2f})", zorder=2)
                     elif model == 'DoG':
-                        self.axes[0,0].plot(tseconds, preds[model], linewidth=2, color=cmap(2), label=f"DoG ({subj_res['Processed Results']['RSq'][model][index]:.2f})", zorder=3)
+                        self.axes[0,0].plot(tseconds, preds[model], linewidth=4, color=cmap(2), label=f"DoG ({subj_res['Processed Results']['RSq'][model][index]:.2f})", zorder=3)
                     elif model == 'CSS':
-                        self.axes[0,0].plot(tseconds, preds[model], linewidth=2, color=cmap(1), label=f"CSS ({subj_res['Processed Results']['RSq'][model][index]:.2f})", zorder=4)
+                        self.axes[0,0].plot(tseconds, preds[model], linewidth=3, color=cmap(1), label=f"CSS ({subj_res['Processed Results']['RSq'][model][index]:.2f})", zorder=4)
                     elif model == 'Gauss':
                         self.axes[0,0].plot(tseconds, preds[model], linewidth=2, color=cmap(0), label=f"Gauss ({subj_res['Processed Results']['RSq'][model][index]:.2f})", zorder=5)
                         
                 
+                fillin_surround = False
+                fillin_late_iso_dict = True
+
+                if fillin_late_iso_dict:
+                    min_lid = np.zeros_like(tseconds)
+                    max_lid = np.zeros_like(tseconds)
+                    min_lid[self.prf_stim.late_iso_dict['periods']] = self.axes[0,0].get_ylim()[0]
+                    max_lid[self.prf_stim.late_iso_dict['periods']] = self.axes[0,0].get_ylim()[1]
+
+                    self.axes[0,0].fill_between(tseconds,min_lid,max_lid,label='Late iso dict', alpha=0.2, color='gray')
                 
-       
+                if fillin_surround:
                 
-                if np.any(['Norm' in model for model in self.only_models]) or 'DoG' in self.only_models:
-                    try:
-                        if ((subj_res['Processed Results']['RSq']['DoG'][index]-subj_res['Processed Results']['RSq']['Gauss'][index]) > 0.05) or ((subj_res['Processed Results']['RSq']['Norm_abcd'][index]-subj_res['Processed Results']['RSq']['CSS'][index]) > 0.05):
-                            surround_effect = np.min([preds[model] for model in preds if 'Norm' in model or 'DoG' in model],axis=0)
-                            surround_effect[surround_effect>0] = preds['Gauss'][surround_effect>0]
-                            self.axes[0,0].fill_between(tseconds,
-                                                         surround_effect, 
-                                             preds['Gauss'], label='Surround suppression', alpha=0.2, color='gray')
-                    except:
-                        pass
+                    if np.any(['Norm' in model for model in self.only_models]) or 'DoG' in self.only_models:
+                        try:
+                            if ((subj_res['Processed Results']['RSq']['DoG'][index]-subj_res['Processed Results']['RSq']['Gauss'][index]) > 0.05) or ((subj_res['Processed Results']['RSq']['Norm_abcd'][index]-subj_res['Processed Results']['RSq']['CSS'][index]) > 0.05):
+                                surround_effect = np.min([preds[model] for model in preds if 'Norm' in model or 'DoG' in model],axis=0)
+                                surround_effect[surround_effect>0] = preds['Gauss'][surround_effect>0]
+                                self.axes[0,0].fill_between(tseconds,
+                                                            surround_effect, 
+                                                preds['Gauss'], label='Surround suppression', alpha=0.2, color='gray')
+                        except:
+                            pass
     
               
                 self.axes[0,0].legend(ncol=3, fontsize=8, loc=9)
@@ -927,14 +967,15 @@ class visualize_results(object):
                             #print(np.nanquantile(p_r['RSq'][model][alpha[analysis][subj][model]>rsq_thresh],0.1))
                             #print(np.nanquantile(p_r['RSq'][model][alpha[analysis][subj][model]>rsq_thresh],0.9))
                             ds_rsq[f"{subj} {model} rsq"] = Vertex2D_fix(p_r['RSq'][model], 
-                                                            np.ones_like(alpha[analysis][subj][model]), subject=pycortex_subj, 
+                                                            np.ones_like(alpha[analysis][subj][model]), 
+                                                            subject=pycortex_subj, 
                                                             vmin=rsq_thresh,#0,#np.nanquantile(p_r['RSq'][model][alpha[analysis][subj][model]>rsq_thresh],0.1), 
                                                             vmax=rsq_max_opacity,#0.15,#np.nanquantile(p_r['RSq'][model][alpha[analysis][subj][model]>rsq_thresh],0.9),
-                                                            vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap='inferno', roi_borders=roi_borders)
+                                                            vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap=pycortex_cmap, roi_borders=roi_borders)
                             
                             fig = simple_colorbar(vmin=rsq_thresh,#0,#np.nanquantile(p_r['RSq'][model][alpha[analysis][subj][model]>rsq_thresh],0.1), 
                                             vmax=rsq_max_opacity,#0.15,#np.nanquantile(p_r['RSq'][model][alpha[analysis][subj][model]>rsq_thresh],0.9),
-                                            cmap_name='inferno', ori='horizontal', param_name='$R^2$')
+                                            cmap_name=pycortex_cmap, ori='horizontal', param_name='$R^2$')
                             
                             if self.pycortex_image_path is not None and save_colorbars:
                                 fig.savefig(f"{self.pycortex_image_path}/{model}_rsq_cbar.pdf", dpi=600, bbox_inches='tight', transparent=True)
@@ -973,7 +1014,7 @@ class visualize_results(object):
                                 
                                 if self.pycortex_image_path is not None and save_colorbars:
                                     fig.savefig(f"{self.pycortex_image_path}/{model}_nsubj_cbar.pdf", dpi=600, bbox_inches='tight', transparent=True)     
-                                    
+                        mdiff=False            
                         if 'CSS' in models and p_r['RSq']['CSS'].sum()>0:
                             mdiff=True
                             ds_rsq[f'{subj} CSS - Gauss'] = Vertex2D_fix(p_r['RSq']['CSS']-p_r['RSq']['Gauss'], alpha[analysis][subj]['all'], subject=pycortex_subj,

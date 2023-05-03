@@ -77,6 +77,7 @@ rsq_threshold = analysis_info["rsq_threshold"]
 models_to_fit = analysis_info["models_to_fit"]
 n_batches = analysis_info["n_batches"]
 
+norm_full_grid = analysis_info["norm_full_grid"]
 grid_fit_hrf = analysis_info["grid_fit_hrf"]
 iter_fit_hrf = analysis_info["iter_fit_hrf"]
 
@@ -421,11 +422,16 @@ eps = 1e-1
 ss = prf_stim.screen_size_degrees
 
 if grid_fit_hrf:
-    hrf_1_grid = np.linspace(0,10,grid_nr)
-    hrf_2_grid = np.linspace(0,0,1)
+    hrf_1_grid, hrf_2_grid = np.linspace(0,10,grid_nr), np.linspace(0,0,1)
 else:
-    hrf_1_grid = None
-    hrf_2_grid = None
+    hrf_1_grid, hrf_2_grid = None, None
+
+if norm_full_grid:
+    sizes_norm, eccs_norm, polars_norm = sizes[::4], eccs[::4], polars[::2]
+    hrf_1_grid_norm, hrf_2_grid_norm = hrf_1_grid[::4], hrf_2_grid
+else:
+    sizes_norm, eccs_norm, polars_norm = None, None, None
+    hrf_1_grid_norm, hrf_2_grid_norm = hrf_1_grid, hrf_2_grid
 
 # model parameter bounds
 gauss_bounds, css_bounds, dog_bounds, norm_bounds = None, None, None, None
@@ -1087,8 +1093,9 @@ if "norm" in models_to_fit:
                          rsq_threshold=rsq_threshold,
                          fixed_grid_baseline=fixed_grid_baseline,
                          grid_bounds=norm_grid_bounds,
-                         hrf_1_grid=hrf_1_grid,
-                         hrf_2_grid=hrf_2_grid)
+                         hrf_1_grid=hrf_1_grid_norm,
+                         hrf_2_grid=hrf_2_grid_norm,
+                         ecc_grid=eccs_norm, size_grid=sizes_norm, polar_grid=polars_norm)
         
             print("Norm gridfit completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Mean rsq>"+str(rsq_threshold)+": "+str(np.mean(gf_norm.gridsearch_params[gf_norm.gridsearch_rsq_mask, -1])))
         
