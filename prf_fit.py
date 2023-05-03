@@ -427,8 +427,8 @@ else:
     hrf_1_grid, hrf_2_grid = None, None
 
 if norm_full_grid:
-    sizes_norm, eccs_norm, polars_norm = sizes[::4], eccs[::4], polars[::2]
-    hrf_1_grid_norm, hrf_2_grid_norm = hrf_1_grid[::4], hrf_2_grid
+    sizes_norm, eccs_norm, polars_norm = sizes[::2], eccs[::2], polars[::2]
+    hrf_1_grid_norm, hrf_2_grid_norm = hrf_1_grid[::2], hrf_2_grid
 else:
     sizes_norm, eccs_norm, polars_norm = None, None, None
     hrf_1_grid_norm, hrf_2_grid_norm = hrf_1_grid, hrf_2_grid
