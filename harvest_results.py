@@ -51,7 +51,8 @@ for subj_ses in subjects.split(','):
         rsq_threshold = analysis_info["rsq_threshold"]
         models_to_fit = analysis_info["models_to_fit"]
         n_batches = analysis_info["n_batches"]
-        grid_fit_hrf = analysis_info["grid_fit_hrf"]
+        grid_fit_hrf_norm = analysis_info["grid_fit_hrf_norm"]
+        grid_fit_hrf_gauss = analysis_info["grid_fit_hrf_gauss"]
         use_previous_gaussian_fitter_hrf = analysis_info["use_previous_gaussian_fitter_hrf"]
         crossvalidate = analysis_info["crossvalidate"]
             

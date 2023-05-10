@@ -80,7 +80,8 @@ models_to_fit = analysis_info["models_to_fit"]
 n_batches = analysis_info["n_batches"]
 
 norm_full_grid = analysis_info["norm_full_grid"]
-grid_fit_hrf = analysis_info["grid_fit_hrf"]
+grid_fit_hrf_norm = analysis_info["grid_fit_hrf_norm"]
+grid_fit_hrf_gauss = analysis_info["grid_fit_hrf_gauss"]
 iter_fit_hrf = analysis_info["iter_fit_hrf"]
 
 use_previous_gaussian_fitter_hrf = analysis_info["use_previous_gaussian_fitter_hrf"]
@@ -456,17 +457,22 @@ inf = np.inf
 eps = 1e-1
 ss = prf_stim.screen_size_degrees
 
-if grid_fit_hrf:
-    hrf_1_grid, hrf_2_grid = np.linspace(0,10,grid_nr), np.linspace(0,0,1)
+if grid_fit_hrf_gauss:
+    hrf_1_grid_gauss, hrf_2_grid_gauss = np.linspace(0,10,grid_nr), np.linspace(0,0,1)
 else:
-    hrf_1_grid, hrf_2_grid = None, None
+    hrf_1_grid_gauss, hrf_2_grid_gauss = None, None
+
+if grid_fit_hrf_norm:
+    hrf_1_grid_norm, hrf_2_grid_norm = np.linspace(0,10,grid_nr), np.linspace(0,0,1)
+else:
+    hrf_1_grid_norm, hrf_2_grid_norm = None, None
 
 if norm_full_grid:
     sizes_norm, eccs_norm, polars_norm = sizes[::2], eccs[::4], polars[::2]
-    hrf_1_grid_norm, hrf_2_grid_norm = hrf_1_grid[::4], hrf_2_grid
+    hrf_1_grid_norm, hrf_2_grid_norm = hrf_1_grid_norm[::4], hrf_2_grid_norm
 else:
     sizes_norm, eccs_norm, polars_norm = None, None, None
-    hrf_1_grid_norm, hrf_2_grid_norm = hrf_1_grid, hrf_2_grid
+
 
 # model parameter bounds
 gauss_bounds, css_bounds, dog_bounds, norm_bounds = None, None, None, None
@@ -671,8 +677,8 @@ if "gauss_gridparams_path" not in analysis_info and "gauss_iterparams_path" not 
                 n_batches=n_batches,
                 fixed_grid_baseline=fixed_grid_baseline,
                 grid_bounds=gauss_grid_bounds,
-                hrf_1_grid=hrf_1_grid,
-                hrf_2_grid=hrf_2_grid)
+                hrf_1_grid=hrf_1_grid_gauss,
+                hrf_2_grid=hrf_2_grid_gauss)
         print("Gaussian gridfit completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+
           ". voxels/vertices above "+str(rsq_threshold)+": "+str(np.sum(gf.gridsearch_params[:, -1]>rsq_threshold))+" out of "+
           str(gf.data.shape[0]))
@@ -824,8 +830,8 @@ if "CSS" in models_to_fit:
                     n_batches=n_batches,
                     fixed_grid_baseline=fixed_grid_baseline,
                     grid_bounds=css_grid_bounds,
-                    hrf_1_grid=hrf_1_grid,
-                    hrf_2_grid=hrf_2_grid)
+                    hrf_1_grid=hrf_1_grid_gauss,
+                    hrf_2_grid=hrf_2_grid_gauss)
             print("CSS gridfit completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+
               ". voxels/vertices above "+str(rsq_threshold)+": "+str(np.sum(gf_css.gridsearch_params[:, -1]>rsq_threshold))+" out of "+
               str(gf_css.data.shape[0]))
@@ -975,8 +981,8 @@ if "DoG" in models_to_fit:
                             n_batches=n_batches,
                             fixed_grid_baseline=fixed_grid_baseline,
                             grid_bounds=dog_grid_bounds,
-                            hrf_1_grid=hrf_1_grid,
-                            hrf_2_grid=hrf_2_grid)
+                            hrf_1_grid=hrf_1_grid_gauss,
+                            hrf_2_grid=hrf_2_grid_gauss)
             print("DoG gridfit completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+
               ". voxels/vertices above "+str(rsq_threshold)+": "+str(np.sum(gf_dog.gridsearch_params[:, -1]>rsq_threshold))+" out of "+
               str(gf_dog.data.shape[0]))

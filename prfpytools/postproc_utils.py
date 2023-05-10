@@ -407,7 +407,7 @@ class results(object):
                             if v['analysis_info']['fit_hrf']:
                                 processed_results['hrf_1'][k2][mask] = np.copy(v2[:,-3])
                                 processed_results['hrf_2'][k2][mask] = np.copy(v2[:,-2])
-                        elif 'grid_fit_hrf' in v['analysis_info']: #current (parm always present)
+                        else: #current (parm always present)
                             processed_results['hrf_1'][k2][mask] = np.copy(v2[:,-3])
                             processed_results['hrf_2'][k2][mask] = np.copy(v2[:,-2])                         
     
