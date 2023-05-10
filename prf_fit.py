@@ -234,7 +234,7 @@ if 'sourcedata_path' in analysis_info:
                 exp_dict = yaml.safe_load(f)
 
             if 'screen_delim' in exp_dict:    
-                sc_delims_top_prop.append(exp_dict['screen_delim']['top']/exp_dict['size'][1])
+                sc_delims_top_prop.append(exp_dict['screen_delim']['top']/exp_dict['window']['size'][1])
         
         sc_delim_top_prop = np.max(sc_delims_top_prop)
 
