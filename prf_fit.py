@@ -220,7 +220,12 @@ else:
 
 #DM masking based on screen delim if possible
 if 'sourcedata_path' in analysis_info:
-    exp_files = sorted(Path(opj(analysis_info['sourcedata_path'],subj)).glob(opj('**',f"{subj}_{session}_task-*_run-*_expsettings.yml")))
+    if len(task_names)>1:
+        t_n = '*'
+    else:
+        t_n = task_names[0]
+
+    exp_files = sorted(Path(analysis_info['sourcedata_path']).glob(f"{subj}_{session}_task-{t_n}_run-*_expsettings.yml"))
     if len(exp_files)>0:
         print("computing DM clipping from screen delims")
         sc_delims_top_prop = []
@@ -232,9 +237,10 @@ if 'sourcedata_path' in analysis_info:
                 sc_delims_top_prop.append(exp_dict['screen_delim']['top']/exp_dict['size'][1])
         
         sc_delim_top_prop = np.max(sc_delims_top_prop)
-        
+
         if sc_delim_top_prop>0:
             dm_edges_clipping = [int(sc_delim_top_prop*n_pix),0,0,0]
+            print(dm_edges_clipping)
         else:
             dm_edges_clipping = analysis_info["dm_edges_clipping"]
 
