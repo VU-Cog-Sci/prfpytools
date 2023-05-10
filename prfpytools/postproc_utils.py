@@ -356,7 +356,7 @@ class results(object):
 
     
     
-    def process_results(self, results_dict, compute_suppression_index = False, return_norm_profiles=False):
+    def process_results(self, results_dict, compute_suppression_index = False, return_norm_profiles=False, compute_fwhmax_fwatmin = False):
         for k, v in tqdm(results_dict.items()):
             if 'sub-' not in k and not k.isdecimal() and '999999' not in k:
                 self.process_results(v, compute_suppression_index, return_norm_profiles)
@@ -418,10 +418,13 @@ class results(object):
                             processed_results['Surround Amplitude'][k2][mask] = np.copy(v2[:,5])
                             processed_results['Size (sigma_2)'][k2][mask] = np.copy(v2[:,6])
                             processed_results['Size ratio (sigma_2/sigma_1)'][k2][mask] = v2[:,6]/v2[:,2]
-                            (processed_results['Size (fwhmax)'][k2][mask],
-                            processed_results['Surround Size (fwatmin)'][k2][mask]) = fwhmax_fwatmin(k2, v2, normalize_RFs)
-                            processed_results['Suppression Index (full)'][k2][mask] = (v2[:,5] * v2[:,6]**2)/(v2[:,3] * v2[:,2]**2)
+
+                            if compute_fwhmax_fwatmin:
+                                (processed_results['Size (fwhmax)'][k2][mask],
+                                processed_results['Surround Size (fwatmin)'][k2][mask]) = fwhmax_fwatmin(k2, v2, normalize_RFs)
+                            
                             if compute_suppression_index:
+                                processed_results['Suppression Index (full)'][k2][mask] = (v2[:,5] * v2[:,6]**2)/(v2[:,3] * v2[:,2]**2)
                                 processed_results['Suppression Index'][k2][mask] = suppression_index(self.prf_stim, aperture, v2, normalize_RFs)
     
                         elif 'Norm' in k2:
@@ -431,24 +434,27 @@ class results(object):
                             processed_results['Norm Param. B'][k2][mask] = np.copy(v2[:,7])
                             processed_results['Norm Param. D'][k2][mask] = np.copy(v2[:,8])
                             processed_results['Ratio (B/D)'][k2][mask] = v2[:,7]/v2[:,8]
-                            processed_results['Suppression Index (full)'][k2][mask] = (v2[:,5] * v2[:,6]**2)/(v2[:,3] * v2[:,2]**2)
+                            
                             
                             if compute_suppression_index:
+                                processed_results['Suppression Index (full)'][k2][mask] = (v2[:,5] * v2[:,6]**2)/(v2[:,3] * v2[:,2]**2)
                                 processed_results['Suppression Index'][k2][mask] = suppression_index(self.prf_stim, aperture, v2, normalize_RFs)
                             
     
                             if return_norm_profiles and len(mask.shape)<2:
                                 processed_results['pRF Profiles'][k2] = np.zeros((mask.shape[0],1000))
-                                ((processed_results['Size (fwhmax)'][k2][mask],
-                                processed_results['Surround Size (fwatmin)'][k2][mask]),
+                                if compute_fwhmax_fwatmin:
+                                    ((processed_results['Size (fwhmax)'][k2][mask],
+                                    processed_results['Surround Size (fwatmin)'][k2][mask]),
                                 processed_results['pRF Profiles'][k2][mask]) = fwhmax_fwatmin(k2, v2, normalize_RFs, True)
                             else:
-                                
-                                (processed_results['Size (fwhmax)'][k2][mask],
-                                processed_results['Surround Size (fwatmin)'][k2][mask]) = fwhmax_fwatmin(k2, v2, normalize_RFs, False)
+                                if compute_fwhmax_fwatmin:
+                                    (processed_results['Size (fwhmax)'][k2][mask],
+                                    processed_results['Surround Size (fwatmin)'][k2][mask]) = fwhmax_fwatmin(k2, v2, normalize_RFs, False)
     
                         else:
-                            processed_results['Size (fwhmax)'][k2][mask] = fwhmax_fwatmin(k2, v2, normalize_RFs)
+                            if compute_fwhmax_fwatmin:
+                                processed_results['Size (fwhmax)'][k2][mask] = fwhmax_fwatmin(k2, v2, normalize_RFs)
 
                         ####copy beta and cross-cond rsq to processed results
                             #####################

@@ -114,9 +114,10 @@ def create_full_stim(screenshot_paths,
     # late-empty DM periods (for calculation of BOLD baseline)
     shifted_dm = np.zeros_like(dm_full)
     
-    # use timepoints where bar was gone from at least 7 TRs (this is a heuristic approximation)
-    shifted_dm[..., 7:] = dm_full[..., :-7]
-    
+    # use timepoints where bar was gone from at least X TRs (this is a heuristic approximation) DN/HCP: 7 
+    shifted_dm[..., 15:] = dm_full[..., :-15]
+
+  
     late_iso_dict = {}
     late_iso_dict['periods'] = np.where((np.sum(dm_full, axis=(0, 1)) == 0) & (
         np.sum(shifted_dm, axis=(0, 1)) == 0))[0]

@@ -318,14 +318,22 @@ class visualize_results(object):
 
            
                 
-                res = np.array(Parallel(n_jobs=6, verbose=True)(delayed(comp_border)(face) for face in faces))
+                res = np.array(Parallel(n_jobs=8, verbose=True)(delayed(comp_border)(face) for face in faces))
                     
                 zz[np.ravel(faces[res])] = 1
                             
-                 
-                self.idx_rois_borders[subj][rois_prefix] = np.copy(zz)
+                if 'ses-' in subj:
+                    for sj in [s for s in self.idx_rois if subj.split('_')[0] in s]:
+                        self.idx_rois_borders[sj][rois_prefix] = np.copy(zz)
+                else:
+                    self.idx_rois_borders[subj][rois_prefix] = np.copy(zz)
             else:
-                self.idx_rois_borders[subj][rois_prefix] = np.load(previous_borders_path)
+                
+                if 'ses-' in subj:
+                    for sj in [s for s in self.idx_rois if subj.split('_')[0] in s]:
+                        self.idx_rois_borders[sj][rois_prefix] = np.load(previous_borders_path)
+                else:
+                    self.idx_rois_borders[subj][rois_prefix] = np.load(previous_borders_path)
             
             return
                         
@@ -415,7 +423,7 @@ class visualize_results(object):
     def pycortex_plots(self, rois, rsq_thresh,
                        space_names = 'fsnative', analysis_names = 'all', subject_ids='all',
                        timecourse_folder = None, screenshot_paths = [], save_colorbars=False, pycortex_cmap = 'nipy_spectral',
-                       rsq_max_opacity = 0.5, pycortex_image_path = None, roi_borders = None):        
+                       rsq_max_opacity = 0.5, pycortex_image_path = None, roi_borders_name = None):        
         pl.rcParams.update({'font.size': 16})
         pl.rcParams.update({'pdf.fonttype':42})        
         self.click=0
@@ -525,16 +533,16 @@ class visualize_results(object):
                         # tc_runs[-1] = sp.fft.idct(coeffs, norm='ortho')
 
 
-                        #tc_runs[-1] -= np.median(tc_runs[-1][...,self.prf_stims[task].late_iso_dict[task]], axis=-1)[...,np.newaxis]
-                        tc_runs[-1] -= np.median(tc_runs[-1][...,red_per], axis=-1)[...,np.newaxis]
+                        tc_runs[-1] -= np.median(tc_runs[-1][...,self.prf_stims[task].late_iso_dict[task]], axis=-1)[...,np.newaxis]
+                        #tc_runs[-1] -= np.median(tc_runs[-1][...,red_per], axis=-1)[...,np.newaxis]
 
                         
                       
                     tc[task] = np.mean(tc_runs, axis=0)
                     tc_err[task] = sem(tc_runs, axis=0)
                     
-                    #tc[task] -= np.median(tc[task][...,self.prf_stims[task].late_iso_dict[task]], axis=-1)[...,np.newaxis]
-                    tc[task] -= np.median(tc[task][...,red_per], axis=-1)[...,np.newaxis]
+                    tc[task] -= np.median(tc[task][...,self.prf_stims[task].late_iso_dict[task]], axis=-1)[...,np.newaxis]
+                    #tc[task] -= np.median(tc[task][...,red_per], axis=-1)[...,np.newaxis]
 
 
                     if 'CVmean' in analysis or 'CVmedian' in analysis:
@@ -779,8 +787,8 @@ class visualize_results(object):
                         mask = np.ones_like(p_r['RSq'][list(models)[0]])
 
          
-                    if roi_borders is not None:
-                        roi_borders = self.idx_rois_borders[pycortex_subj][roi_borders]
+                    if roi_borders_name is not None:
+                        roi_borders = self.idx_rois_borders[subj][roi_borders_name]
                     
                     curr_models = deepcopy(self.only_models)
                     if len(self.only_models)>1:
