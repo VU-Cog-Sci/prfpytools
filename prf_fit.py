@@ -12,6 +12,8 @@ import yaml
 import sys
 from datetime import datetime
 import time
+from pathlib import Path
+
 
 subj = sys.argv[1]
 session = sys.argv[2]
@@ -114,7 +116,6 @@ return_noise_ceiling_fraction = analysis_info["return_noise_ceiling_fraction"]
 xtol = analysis_info["xtol"]
 ftol = analysis_info["ftol"]
 
-dm_edges_clipping = analysis_info["dm_edges_clipping"]
 min_percent_var = analysis_info["min_percent_var"]
 
 param_bounds = analysis_info["param_bounds"]
@@ -217,9 +218,37 @@ else:
         yaml.dump(analysis_info, outfile)
 
 
+#DM masking based on screen delim if possible
+if 'sourcedata_path' in analysis_info:
+    exp_files = sorted(Path(opj(analysis_info['sourcedata_path'],subj)).glob(opj('**',f"{subj}_{session}_task-*_run-*_expsettings.yml")))
+    if len(exp_files)>0:
+        print("computing DM clipping from screen delims")
+        sc_delims_top_prop = []
+        for exp_file in exp_files:
+            with open(str(exp_file)) as f:
+                exp_dict = yaml.safe_load(f)
+
+            if 'screen_delim' in exp_dict:    
+                sc_delims_top_prop.append(exp_dict['screen_delim']['top']/exp_dict['size'][1])
+        
+        sc_delim_top_prop = np.max(sc_delims_top_prop)
+        
+        if sc_delim_top_prop>0:
+            dm_edges_clipping = [int(sc_delim_top_prop*n_pix),0,0,0]
+        else:
+            dm_edges_clipping = analysis_info["dm_edges_clipping"]
+
+    else:
+        dm_edges_clipping = analysis_info["dm_edges_clipping"]
+
+
+else:
+    dm_edges_clipping = analysis_info["dm_edges_clipping"]
+
+
+
 if verbose == True:
-    print("Creating PRF stimulus from screenshots...")
-    
+    print("Creating PRF stimulus from screenshots...")    
     
 if crossvalidate and fit_task is not None:
     
