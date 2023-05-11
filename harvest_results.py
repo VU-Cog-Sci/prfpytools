@@ -144,16 +144,16 @@ for subj_ses in subjects.split(','):
                                                                         int(analysis_time.split('-')[5]), 0) for chunk_nr in finished_chunks])
                 
                 
-                        if np.any(last_edited):
-                
-                            print(f"Fitting of {model} model has not been completed")
-                            for value in np.where(last_edited)[0]:
-                                unfinished_chunks.append(value)
-                
-                                filepath = opj(data_path,f"{subj}_{session}_iterparams-{model}_space-{fitting_space}"+str(value)+".npy")
-                                if refit_mode == "overwrite":
-                                    #print("Renaming unfinished files to _old, so can run next in skip mode.")
-                                    os.rename(filepath,filepath[:-4]+"_old.npy")
+                    if np.any(last_edited):
+            
+                        print(f"Fitting of {model} model has not been completed")
+                        for value in np.where(last_edited)[0]:
+                            unfinished_chunks.append(value)
+            
+                            filepath = opj(data_path,f"{subj}_{session}_iterparams-{model}_space-{fitting_space}"+str(value)+".npy")
+                            if refit_mode == "overwrite":
+                                #print("Renaming unfinished files to _old, so can run next in skip mode.")
+                                os.rename(filepath,filepath[:-4]+"_old.npy")
         
         
         
