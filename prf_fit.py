@@ -581,7 +581,7 @@ if "abc" in norm_model_variant:
     dict_norm_model_variants['neural_baseline_grid_abc']=np.array([0,0.1,1,2,5,10,20,50,75,100], dtype='float32')
     dict_norm_model_variants['surround_baseline_grid_abc']=np.array([1], dtype='float32')
 
-    dict_norm_model_variants['bounds_abc'][8] = (1, 1)  # fix surround baseline
+    dict_norm_model_variants['norm_bounds_abc'][8] = (1, 1)  # fix surround baseline
         
 
 
