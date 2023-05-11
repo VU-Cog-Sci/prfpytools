@@ -520,68 +520,6 @@ if param_bounds:
         css_grid_bounds[0] = (-1000,1000)
         css_bounds[3] = (-1000,1000)
 
-if dog_grid:
-    dog_surround_amplitude_grid=np.array([0.05,0.1,0.25,0.5,0.75,1,2], dtype='float32')
-    dog_surround_size_grid=np.array([3,5,8,11,14,17,20,23,26], dtype='float32')
-    
-if css_grid:
-    css_exponent_grid=np.array([0.05,0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1,1.1], dtype='float32')
-    
-# norm grid params
-#note: prfpy surround size can be intepreted as proportion or absolute. check
-if norm_model_variant == "abcd":
-    # surround_amplitude_grid=np.array([0.05,0.2,0.4,0.7,1,3], dtype='float32')
-    # surround_size_grid=np.array([3,5,8,12,18], dtype='float32')
-    # neural_baseline_grid=np.array([0,1,10,100], dtype='float32')
-    # surround_baseline_grid=np.array([0.1,1.0,10.0,100.0], dtype='float32')
-
-    # surround_amplitude_grid=np.array([0.05,0.2,0.4,0.7,1,3], dtype='float32')
-    # surround_size_grid=np.array([0.5,1,2.5,4,7], dtype='float32')
-    # neural_baseline_grid=np.array([0,1,10,100], dtype='float32')
-    # surround_baseline_grid=np.array([0.1,1.0,10.0,100.0], dtype='float32')
-
-
-    #finer grid
-    surround_amplitude_grid=np.array([0.001,0.01,0.05,0.1,0.2,0.5,0.75,1,2], dtype='float32')
-    surround_size_grid=np.array([0.5,0.75,1,1.1,1.5,3,5,8], dtype='float32')
-    neural_baseline_grid=np.array([0,1,2,5,10,20,50,75,100], dtype='float32')
-    surround_baseline_grid=np.array([0.1,1.0,2,5,10.0,20,50,75,100.0], dtype='float32')
-
-
-elif norm_model_variant == "abc":
-    surround_amplitude_grid=np.array([0.05,0.1,0.2,0.4,0.6,0.8,1,1.5,2,3], dtype='float32')
-    surround_size_grid=np.array([3,5,7,9,11,13,15,18], dtype='float32')
-    neural_baseline_grid=np.array([0,1,5,10,20,40,70,100], dtype='float32')
-    surround_baseline_grid=np.array([1], dtype='float32')
-
-    norm_bounds[8] = (1, 1)  # fix surround baseline
-        
-elif norm_model_variant == "acd":
-    surround_amplitude_grid=np.array([0.05,0.2,0.4,0.7,1,3], dtype='float32')
-    surround_size_grid=np.array([3,5,8,12,18], dtype='float32')
-    neural_baseline_grid=np.array([1], dtype='float32')
-    surround_baseline_grid=np.array([0.1,1.0,10.0,100.0], dtype='float32')
-
-    norm_bounds[7] = (1, 1)  # fix neural baseline
-
-elif norm_model_variant == "abd":
-    surround_amplitude_grid=np.array([1], dtype='float32')
-    surround_size_grid=np.array([3,5,8,12,18], dtype='float32')
-    neural_baseline_grid=np.array([0,1,10,100], dtype='float32')
-    surround_baseline_grid=np.array([0.1,1.0,10.0,100.0], dtype='float32')
-
-    norm_bounds[5] = (1, 1)  # fix surround amplitude 
-
-
-elif norm_model_variant == "ab":
-    surround_amplitude_grid=np.array([1], dtype='float32')
-    surround_size_grid=np.array([3,5,8,12,18], dtype='float32')
-    neural_baseline_grid=np.array([0,1,10,100], dtype='float32')
-    surround_baseline_grid=np.array([1], dtype='float32')
-    
-    norm_bounds[5] = (1, 1)  # fix surround amplitude 
-    norm_bounds[8] = (1, 1)  # fix surround baseline
-
 
 if param_bounds and fix_bold_baseline:
     fixed_grid_baseline = 0
@@ -589,8 +527,6 @@ if param_bounds and fix_bold_baseline:
     gauss_bounds[4] = (0,0)
     css_bounds[4] = (0,0)
     dog_bounds[4] = (0,0)
-
-
 
 #second bound set to zero to avoid potential negative hrf-response given by the disp. derivative
 if param_bounds:
@@ -604,8 +540,51 @@ if param_bounds:
         css_bounds += [(hrf[1],hrf[1]),(hrf[2],hrf[2])]
         dog_bounds += [(hrf[1],hrf[1]),(hrf[2],hrf[2])]
         norm_bounds += [(hrf[1],hrf[1]),(hrf[2],hrf[2])]   
-  
+
+
+if dog_grid:
+    dog_surround_amplitude_grid=np.array([0.05,0.1,0.25,0.5,0.75,1,2], dtype='float32')
+    dog_surround_size_grid=np.array([3,5,8,11,14,17,20,23,26], dtype='float32')
     
+if css_grid:
+    css_exponent_grid=np.array([0.05,0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1,1.1], dtype='float32')
+    
+# norm grid params
+#note: prfpy surround size can be intepreted as proportion or absolute. check
+dict_norm_model_variants = dict()
+
+if "abcd" in norm_model_variant:
+    dict_norm_model_variants['norm_bounds_abcd'] = np.copy(norm_bounds)
+    # surround_amplitude_grid=np.array([0.05,0.2,0.4,0.7,1,3], dtype='float32')
+    # surround_size_grid=np.array([3,5,8,12,18], dtype='float32')
+    # neural_baseline_grid=np.array([0,1,10,100], dtype='float32')
+    # surround_baseline_grid=np.array([0.1,1.0,10.0,100.0], dtype='float32')
+
+    # surround_amplitude_grid=np.array([0.05,0.2,0.4,0.7,1,3], dtype='float32')
+    # surround_size_grid=np.array([0.5,1,2.5,4,7], dtype='float32')
+    # neural_baseline_grid=np.array([0,1,10,100], dtype='float32')
+    # surround_baseline_grid=np.array([0.1,1.0,10.0,100.0], dtype='float32')
+
+
+    #finer grid
+    dict_norm_model_variants['surround_amplitude_grid_abcd']=np.array([0.01,0.02,0.05,0.1,0.2,0.5,0.75,1,2,3], dtype='float32')
+    dict_norm_model_variants['surround_size_grid_abcd']=np.array([0.5,0.75,1,1.1,1.5,3,5,8,12], dtype='float32')
+    dict_norm_model_variants['neural_baseline_grid_abcd']=np.array([0,0.1,1,2,5,10,20,50,75,100], dtype='float32')
+    dict_norm_model_variants['surround_baseline_grid_abcd']=np.array([0.1,0.5,1.0,2,5,10.0,20,50,75,100.0], dtype='float32')
+
+
+if "abc" in norm_model_variant:
+    dict_norm_model_variants['norm_bounds_abc'] = np.copy(norm_bounds)
+
+    dict_norm_model_variants['surround_amplitude_grid_abc']=np.array([0.01,0.02,0.05,0.1,0.2,0.5,0.75,1,2,3], dtype='float32')
+    dict_norm_model_variants['surround_size_grid_abc']=np.array([0.5,0.75,1,1.1,1.5,3,5,8,12], dtype='float32')
+    dict_norm_model_variants['neural_baseline_grid_abc']=np.array([0,0.1,1,2,5,10,20,50,75,100], dtype='float32')
+    dict_norm_model_variants['surround_baseline_grid_abc']=np.array([1], dtype='float32')
+
+    dict_norm_model_variants['bounds_abc'][8] = (1, 1)  # fix surround baseline
+        
+
+
 #this ensures that all models use the same optimizer, even if only some
 #have constraints
 if not param_constraints:
@@ -1115,152 +1094,153 @@ if "DoG" in models_to_fit:
 
 
 if "norm" in models_to_fit:
-    # normalization iterative fit
-    gg_norm = Norm_Iso2DGaussianModel(stimulus=prf_stim,
-                                        hrf=hrf,
-                                        filter_predictions=filter_predictions,
-                                        filter_type=filter_type,
-                                        filter_params=filter_params,                                       
-                                        normalize_RFs=normalize_RFs)
+    for variant in norm_model_variant:
+        # normalization iterative fit
+        gg_norm = Norm_Iso2DGaussianModel(stimulus=prf_stim,
+                                            hrf=hrf,
+                                            filter_predictions=filter_predictions,
+                                            filter_type=filter_type,
+                                            filter_params=filter_params,                                       
+                                            normalize_RFs=normalize_RFs)
 
-    gf_norm = Norm_Iso2DGaussianFitter(data=tc_full_iso_nonzerovar_dict['tc'],
-                                       model=gg_norm,
-                                       n_jobs=n_jobs,
-                                       previous_gaussian_fitter=gf,
-                                       use_previous_gaussian_fitter_hrf=use_previous_gaussian_fitter_hrf)
-    
-    #normalization grid stage
-    if "norm_gridparams_path" not in analysis_info and "norm_iterparams_path" not in analysis_info:
-
-        save_path = opj(data_path, f"{subj}_{session}_gridparams-norm_space-{fitting_space}{chunk_nr}")
-
-        if not os.path.exists(f"{save_path}.npy") or refit_mode == "overwrite":
-
-
-            print("Starting norm grid fit at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S'))
-            gf_norm.grid_fit(surround_amplitude_grid,
-                         surround_size_grid,
-                         neural_baseline_grid,
-                         surround_baseline_grid,
-                         verbose=verbose,
-                         n_batches=n_batches,
-                         rsq_threshold=rsq_threshold,
-                         fixed_grid_baseline=fixed_grid_baseline,
-                         grid_bounds=norm_grid_bounds,
-                         hrf_1_grid=hrf_1_grid_norm,
-                         hrf_2_grid=hrf_2_grid_norm,
-                         ecc_grid=eccs_norm, size_grid=sizes_norm, polar_grid=polars_norm)
+        gf_norm = Norm_Iso2DGaussianFitter(data=tc_full_iso_nonzerovar_dict['tc'],
+                                        model=gg_norm,
+                                        n_jobs=n_jobs,
+                                        previous_gaussian_fitter=gf,
+                                        use_previous_gaussian_fitter_hrf=use_previous_gaussian_fitter_hrf)
         
-            print("Norm gridfit completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Mean rsq>"+str(rsq_threshold)+": "+str(np.mean(gf_norm.gridsearch_params[gf_norm.gridsearch_rsq_mask, -1])))
+        #normalization grid stage
+        if "norm_gridparams_path" not in analysis_info and "norm_iterparams_path" not in analysis_info:
+
+            save_path = opj(data_path, f"{subj}_{session}_gridparams-norm{variant}_space-{fitting_space}{chunk_nr}")
+
+            if not os.path.exists(f"{save_path}.npy") or refit_mode == "overwrite":
+
+
+                print("Starting norm grid fit at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S'))
+                gf_norm.grid_fit(dict_norm_model_variants[f'surround_amplitude_grid_{variant}'], 
+                            dict_norm_model_variants[f'surround_size_grid_{variant}'],
+                            dict_norm_model_variants[f'neural_baseline_grid_{variant}'],
+                            dict_norm_model_variants[f'surround_baseline_grid_{variant}'],
+                            verbose=verbose,
+                            n_batches=n_batches,
+                            rsq_threshold=rsq_threshold,
+                            fixed_grid_baseline=fixed_grid_baseline,
+                            grid_bounds=norm_grid_bounds,
+                            hrf_1_grid=hrf_1_grid_norm,
+                            hrf_2_grid=hrf_2_grid_norm,
+                            ecc_grid=eccs_norm, size_grid=sizes_norm, polar_grid=polars_norm)
+            
+                print(f"Norm {variant} gridfit completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Mean rsq>"+str(rsq_threshold)+": "+str(np.mean(gf_norm.gridsearch_params[gf_norm.gridsearch_rsq_mask, -1])))
+            
+                np.save(save_path, gf_norm.gridsearch_params)
+            elif os.path.exists(f"{save_path}.npy") and refit_mode in ["iterate","skip"]:
+                gf_norm.gridsearch_params = np.load(f"{save_path}.npy")
+
+        else:
+            gf_norm.gridsearch_params = np.array_split(np.load(analysis_info["norm_gridparams_path"]), n_chunks)[chunk_nr]
+
+
+        save_path = opj(data_path, f"{subj}_{session}_iterparams-norm{variant}_space-{fitting_space}{chunk_nr}")
+
+        if "norm_iterparams_path" in analysis_info:
+            gf_norm.iterative_search_params = np.array_split(np.load(analysis_info["norm_iterparams_path"]), n_chunks)[chunk_nr]
+            if refit_mode in ["overwrite", "iterate"]:
         
-            np.save(save_path, gf_norm.gridsearch_params)
-        elif os.path.exists(f"{save_path}.npy") and refit_mode in ["iterate","skip"]:
-            gf_norm.gridsearch_params = np.load(f"{save_path}.npy")
-
-    else:
-        gf_norm.gridsearch_params = np.array_split(np.load(analysis_info["norm_gridparams_path"]), n_chunks)[chunk_nr]
-
-
-    save_path = opj(data_path, f"{subj}_{session}_iterparams-norm_space-{fitting_space}{chunk_nr}")
-
-    if "norm_iterparams_path" in analysis_info:
-        gf_norm.iterative_search_params = np.array_split(np.load(analysis_info["norm_iterparams_path"]), n_chunks)[chunk_nr]
-        if refit_mode in ["overwrite", "iterate"]:
-    
-            print("Starting Norm iterfit at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S'))
-    
-            gf_norm.iterative_fit(rsq_threshold=rsq_threshold, verbose=verbose,
-                             starting_params=gf_norm.iterative_search_params,
-                             bounds=norm_bounds,
-                             constraints=constraints_norm,
-                             xtol=xtol,
-                             ftol=ftol)
-            print("Norm iterfit completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Mean rsq>"+str(rsq_threshold)+": "+str(np.mean(gf_norm.iterative_search_params[gf_norm.rsq_mask, -1])))
-            
-            if crossvalidate:
-                gf_norm.crossvalidate_fit(tc_full_iso_nonzerovar_dict['tc_test'],
-                                 test_stimulus=test_prf_stim,
-                                 single_hrf=single_hrf)
-                print("Norm Crossvalidation completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Mean rsq>"+str(rsq_threshold)+": "+str(np.mean(gf_norm.iterative_search_params[gf_norm.rsq_mask, -1])))
-
-                if hasattr(gf_norm, 'noise_ceiling'):
-                    print("Mean noise-ceiling >"+str(rsq_threshold)+": "+str(np.mean(gf_norm.noise_ceiling[gf_norm.rsq_mask])))  
-                    noise_ceiling_fraction = gf_norm.iterative_search_params[gf_norm.rsq_mask, -1]/gf_norm.noise_ceiling[gf_norm.rsq_mask]
-                    print("Mean noise-ceiling-fraction rsq>"+str(rsq_threshold)+": "+str(np.mean(noise_ceiling_fraction)))
-                    
-                    if return_noise_ceiling_fraction:
-                        gf_norm.iterative_search_params[gf_norm.rsq_mask, -1] = noise_ceiling_fraction
-            
-            np.save(save_path, gf_norm.iterative_search_params)
-
-
-    else:
-        if not os.path.exists(f"{save_path}.npy") or refit_mode == "overwrite":
-    
-            print("Starting norm iterfit at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S'))
-    
-            gf_norm.iterative_fit(rsq_threshold=rsq_threshold, verbose=verbose,
-                                           bounds=norm_bounds,
-                                           constraints=constraints_norm,
-                                           xtol=xtol,
-                                           ftol=ftol)
-            print("Norm iterfit completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Mean rsq>"+str(rsq_threshold)+": "+str(np.mean(gf_norm.iterative_search_params[gf_norm.rsq_mask, -1])))
-            
-            if crossvalidate:
-                gf_norm.crossvalidate_fit(tc_full_iso_nonzerovar_dict['tc_test'],
-                                 test_stimulus=test_prf_stim,
-                                 single_hrf=single_hrf)
-                print("Norm Crossvalidation completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Mean rsq>"+str(rsq_threshold)+": "+str(np.mean(gf_norm.iterative_search_params[gf_norm.rsq_mask, -1])))
-
-                if hasattr(gf_norm, 'noise_ceiling'):
-                    print("Mean noise-ceiling >"+str(rsq_threshold)+": "+str(np.mean(gf_norm.noise_ceiling[gf_norm.rsq_mask])))  
-                    noise_ceiling_fraction = gf_norm.iterative_search_params[gf_norm.rsq_mask, -1]/gf_norm.noise_ceiling[gf_norm.rsq_mask]
-                    print("Mean noise-ceiling-fraction rsq>"+str(rsq_threshold)+": "+str(np.mean(noise_ceiling_fraction)))
-                    
-                    if return_noise_ceiling_fraction:
-                        gf_norm.iterative_search_params[gf_norm.rsq_mask, -1] = noise_ceiling_fraction
-            
-            np.save(save_path, gf_norm.iterative_search_params)
-    
-    
-        elif os.path.exists(f"{save_path}.npy") and refit_mode == "iterate":
-    
-            if previous_analysis_refit_mode != "iterate" or (datetime.fromtimestamp(os.stat(f"{save_path}.npy").st_mtime)) < datetime(\
-                                                        int(previous_analysis_time.split('-')[0]),
-                                                        int(previous_analysis_time.split('-')[1]),
-                                                        int(previous_analysis_time.split('-')[2]),
-                                                        int(previous_analysis_time.split('-')[3]),
-                                                        int(previous_analysis_time.split('-')[4]),
-                                                        int(previous_analysis_time.split('-')[5]), 0):
-    
-                print("Starting norm iterfit at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S'))
+                print(f"Starting Norm {variant} iterfit at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S'))
         
                 gf_norm.iterative_fit(rsq_threshold=rsq_threshold, verbose=verbose,
-                                      starting_params=np.load(f"{save_path}.npy"),
-                                              bounds=norm_bounds,
-                                              constraints=constraints_norm,
-                                              xtol=xtol,
-                                              ftol=ftol)
-                print("Norm iterfit completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Mean rsq>"+str(rsq_threshold)+": "+str(np.mean(gf_norm.iterative_search_params[gf_norm.rsq_mask, -1])))
-            
+                                starting_params=gf_norm.iterative_search_params,
+                                bounds=dict_norm_model_variants[f'norm_bounds_{variant}'],
+                                constraints=constraints_norm,
+                                xtol=xtol,
+                                ftol=ftol)
+                print(f"Norm {variant} iterfit completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Mean rsq>"+str(rsq_threshold)+": "+str(np.mean(gf_norm.iterative_search_params[gf_norm.rsq_mask, -1])))
+                
                 if crossvalidate:
                     gf_norm.crossvalidate_fit(tc_full_iso_nonzerovar_dict['tc_test'],
-                                 test_stimulus=test_prf_stim,
-                                 single_hrf=single_hrf)
-                    print("Norm Crossvalidation completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Mean rsq>"+str(rsq_threshold)+": "+str(np.mean(gf_norm.iterative_search_params[gf_norm.rsq_mask, -1])))
-            
+                                    test_stimulus=test_prf_stim,
+                                    single_hrf=single_hrf)
+                    print(f"Norm {variant} Crossvalidation completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Mean rsq>"+str(rsq_threshold)+": "+str(np.mean(gf_norm.iterative_search_params[gf_norm.rsq_mask, -1])))
+
                     if hasattr(gf_norm, 'noise_ceiling'):
                         print("Mean noise-ceiling >"+str(rsq_threshold)+": "+str(np.mean(gf_norm.noise_ceiling[gf_norm.rsq_mask])))  
                         noise_ceiling_fraction = gf_norm.iterative_search_params[gf_norm.rsq_mask, -1]/gf_norm.noise_ceiling[gf_norm.rsq_mask]
                         print("Mean noise-ceiling-fraction rsq>"+str(rsq_threshold)+": "+str(np.mean(noise_ceiling_fraction)))
                         
                         if return_noise_ceiling_fraction:
-                            gf_norm.iterative_search_params[gf_norm.rsq_mask, -1] = noise_ceiling_fraction    
-                            
-                            
+                            gf_norm.iterative_search_params[gf_norm.rsq_mask, -1] = noise_ceiling_fraction
+                
                 np.save(save_path, gf_norm.iterative_search_params)
-    
 
-    
-        elif os.path.exists(f"{save_path}.npy") and refit_mode == "skip":
-            gf_norm.iterative_search_params = np.load(f"{save_path}.npy")
+
+        else:
+            if not os.path.exists(f"{save_path}.npy") or refit_mode == "overwrite":
+        
+                print(f"Starting norm {variant} iterfit at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S'))
+        
+                gf_norm.iterative_fit(rsq_threshold=rsq_threshold, verbose=verbose,
+                                            bounds=dict_norm_model_variants[f'norm_bounds_{variant}'],
+                                            constraints=constraints_norm,
+                                            xtol=xtol,
+                                            ftol=ftol)
+                print(f"Norm {variant} iterfit completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Mean rsq>"+str(rsq_threshold)+": "+str(np.mean(gf_norm.iterative_search_params[gf_norm.rsq_mask, -1])))
+                
+                if crossvalidate:
+                    gf_norm.crossvalidate_fit(tc_full_iso_nonzerovar_dict['tc_test'],
+                                    test_stimulus=test_prf_stim,
+                                    single_hrf=single_hrf)
+                    print(f"Norm {variant} Crossvalidation completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Mean rsq>"+str(rsq_threshold)+": "+str(np.mean(gf_norm.iterative_search_params[gf_norm.rsq_mask, -1])))
+
+                    if hasattr(gf_norm, 'noise_ceiling'):
+                        print("Mean noise-ceiling >"+str(rsq_threshold)+": "+str(np.mean(gf_norm.noise_ceiling[gf_norm.rsq_mask])))  
+                        noise_ceiling_fraction = gf_norm.iterative_search_params[gf_norm.rsq_mask, -1]/gf_norm.noise_ceiling[gf_norm.rsq_mask]
+                        print("Mean noise-ceiling-fraction rsq>"+str(rsq_threshold)+": "+str(np.mean(noise_ceiling_fraction)))
+                        
+                        if return_noise_ceiling_fraction:
+                            gf_norm.iterative_search_params[gf_norm.rsq_mask, -1] = noise_ceiling_fraction
+                
+                np.save(save_path, gf_norm.iterative_search_params)
+        
+        
+            elif os.path.exists(f"{save_path}.npy") and refit_mode == "iterate":
+        
+                if previous_analysis_refit_mode != "iterate" or (datetime.fromtimestamp(os.stat(f"{save_path}.npy").st_mtime)) < datetime(\
+                                                            int(previous_analysis_time.split('-')[0]),
+                                                            int(previous_analysis_time.split('-')[1]),
+                                                            int(previous_analysis_time.split('-')[2]),
+                                                            int(previous_analysis_time.split('-')[3]),
+                                                            int(previous_analysis_time.split('-')[4]),
+                                                            int(previous_analysis_time.split('-')[5]), 0):
+        
+                    print(f"Starting norm {variant} iterfit at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S'))
+            
+                    gf_norm.iterative_fit(rsq_threshold=rsq_threshold, verbose=verbose,
+                                        starting_params=np.load(f"{save_path}.npy"),
+                                                bounds=dict_norm_model_variants[f'norm_bounds_{variant}'],
+                                                constraints=constraints_norm,
+                                                xtol=xtol,
+                                                ftol=ftol)
+                    print("Norm iterfit completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Mean rsq>"+str(rsq_threshold)+": "+str(np.mean(gf_norm.iterative_search_params[gf_norm.rsq_mask, -1])))
+                
+                    if crossvalidate:
+                        gf_norm.crossvalidate_fit(tc_full_iso_nonzerovar_dict['tc_test'],
+                                    test_stimulus=test_prf_stim,
+                                    single_hrf=single_hrf)
+                        print(f"Norm {variant} Crossvalidation completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Mean rsq>"+str(rsq_threshold)+": "+str(np.mean(gf_norm.iterative_search_params[gf_norm.rsq_mask, -1])))
+                
+                        if hasattr(gf_norm, 'noise_ceiling'):
+                            print("Mean noise-ceiling >"+str(rsq_threshold)+": "+str(np.mean(gf_norm.noise_ceiling[gf_norm.rsq_mask])))  
+                            noise_ceiling_fraction = gf_norm.iterative_search_params[gf_norm.rsq_mask, -1]/gf_norm.noise_ceiling[gf_norm.rsq_mask]
+                            print("Mean noise-ceiling-fraction rsq>"+str(rsq_threshold)+": "+str(np.mean(noise_ceiling_fraction)))
+                            
+                            if return_noise_ceiling_fraction:
+                                gf_norm.iterative_search_params[gf_norm.rsq_mask, -1] = noise_ceiling_fraction    
+                                
+                                
+                    np.save(save_path, gf_norm.iterative_search_params)
+        
+
+        
+            elif os.path.exists(f"{save_path}.npy") and refit_mode == "skip":
+                gf_norm.iterative_search_params = np.load(f"{save_path}.npy")
