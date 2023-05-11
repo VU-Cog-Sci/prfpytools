@@ -528,17 +528,24 @@ if css_grid:
     css_exponent_grid=np.array([0.05,0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1,1.1], dtype='float32')
     
 # norm grid params
+#note: prfpy surround size can be intepreted as proportion or absolute. check
 if norm_model_variant == "abcd":
     # surround_amplitude_grid=np.array([0.05,0.2,0.4,0.7,1,3], dtype='float32')
     # surround_size_grid=np.array([3,5,8,12,18], dtype='float32')
     # neural_baseline_grid=np.array([0,1,10,100], dtype='float32')
     # surround_baseline_grid=np.array([0.1,1.0,10.0,100.0], dtype='float32')
 
+    surround_amplitude_grid=np.array([0.05,0.2,0.4,0.7,1,3], dtype='float32')
+    surround_size_grid=np.array([0.5,1,2.5,4,7], dtype='float32')
+    neural_baseline_grid=np.array([0,1,10,100], dtype='float32')
+    surround_baseline_grid=np.array([0.1,1.0,10.0,100.0], dtype='float32')
+
+
     #finer grid
-    surround_amplitude_grid=np.array([0.01,0.05,0.1,0.2,0.5,0.75,1,2,3,5], dtype='float32')
-    surround_size_grid=np.array([0.5,1,2,3,5,8,13,18], dtype='float32')
-    neural_baseline_grid=np.array([0,1,2,5,10,20,50,75,100], dtype='float32')
-    surround_baseline_grid=np.array([0.1,1.0,2,5,10.0,20,50,75,100.0], dtype='float32')
+    # surround_amplitude_grid=np.array([0.001,0.01,0.05,0.1,0.2,0.5,0.75,1,2], dtype='float32')
+    # surround_size_grid=np.array([0.5,0.75,1,1.05,1.1,1.5,2.1,3,4.5,6,8], dtype='float32')
+    # neural_baseline_grid=np.array([0,1,2,5,10,20,50,75,100], dtype='float32')
+    # surround_baseline_grid=np.array([0.1,1.0,2,5,10.0,20,50,75,100.0], dtype='float32')
 
 
 elif norm_model_variant == "abc":
