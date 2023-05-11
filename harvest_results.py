@@ -55,6 +55,11 @@ for subj_ses in subjects.split(','):
         grid_fit_hrf_gauss = analysis_info["grid_fit_hrf_gauss"]
         use_previous_gaussian_fitter_hrf = analysis_info["use_previous_gaussian_fitter_hrf"]
         crossvalidate = analysis_info["crossvalidate"]
+
+        if "norm" in models_to_fit and "norm_model_variant" in analysis_info:
+            norm_model_variant = analysis_info["norm_model_variant"]
+        else:
+            norm_model_variant = ["abcd"]
             
         save_noise_ceiling = analysis_info["save_noise_ceiling"]
         
@@ -89,8 +94,11 @@ for subj_ses in subjects.split(','):
         #     print(opj(data_path, f"{subj}_{session}_iterparams-{models_to_fit[-1].lower()}_space-{fitting_space}{chunk_nr}.npy"))
                                 
         if refit_mode in ["skip", "overwrite"]:
+            last_model = models_to_fit[-1].lower()
+            if last_model == 'norm':
+                last_model += norm_model_variant[-1]
             
-            exists = np.array([os.path.exists(opj(data_path, f"{subj}_{session}_iterparams-{models_to_fit[-1].lower()}_space-{fitting_space}{chunk_nr}.npy")) for chunk_nr in range(n_chunks)])
+            exists = np.array([os.path.exists(opj(data_path, f"{subj}_{session}_iterparams-{last_model}_space-{fitting_space}{chunk_nr}.npy")) for chunk_nr in range(n_chunks)])
             finished_chunks = np.where(exists)[0]
             if np.any(exists==False):
                 for value in np.where(exists==False)[0]:
@@ -103,26 +111,49 @@ for subj_ses in subjects.split(','):
         if refit_mode in ["iterate", "overwrite"] and "--force_harvest" not in sys.argv:
             for model in models_to_fit:
                 model=model.lower()
-                last_edited = np.array([(datetime.fromtimestamp(os.stat(opj(data_path,
-                                                                f"{subj}_{session}_iterparams-{model}_space-{fitting_space}{chunk_nr}.npy")).st_mtime)) < datetime(\
-                                                                int(analysis_time.split('-')[0]),
-                                                                int(analysis_time.split('-')[1]),
-                                                                int(analysis_time.split('-')[2]),
-                                                                int(analysis_time.split('-')[3]),
-                                                                int(analysis_time.split('-')[4]),
-                                                                int(analysis_time.split('-')[5]), 0) for chunk_nr in finished_chunks])
-        
-        
-                if np.any(last_edited):
-        
-                    print(f"Fitting of {model} model has not been completed")
-                    for value in np.where(last_edited)[0]:
-                        unfinished_chunks.append(value)
-        
-                        filepath = opj(data_path,f"{subj}_{session}_iterparams-{model}_space-{fitting_space}"+str(value)+".npy")
-                        if refit_mode == "overwrite":
-                            #print("Renaming unfinished files to _old, so can run next in skip mode.")
-                            os.rename(filepath,filepath[:-4]+"_old.npy")
+                if model == 'norm':
+                    for variant in norm_model_variant:
+                        last_edited = np.array([(datetime.fromtimestamp(os.stat(opj(data_path,
+                                                                        f"{subj}_{session}_iterparams-{model}{variant}_space-{fitting_space}{chunk_nr}.npy")).st_mtime)) < datetime(\
+                                                                        int(analysis_time.split('-')[0]),
+                                                                        int(analysis_time.split('-')[1]),
+                                                                        int(analysis_time.split('-')[2]),
+                                                                        int(analysis_time.split('-')[3]),
+                                                                        int(analysis_time.split('-')[4]),
+                                                                        int(analysis_time.split('-')[5]), 0) for chunk_nr in finished_chunks])
+                
+                
+                        if np.any(last_edited):
+                
+                            print(f"Fitting of {model} {variant} model has not been completed")
+                            for value in np.where(last_edited)[0]:
+                                unfinished_chunks.append(value)
+                
+                                filepath = opj(data_path,f"{subj}_{session}_iterparams-{model}{variant}_space-{fitting_space}"+str(value)+".npy")
+                                if refit_mode == "overwrite":
+                                    #print("Renaming unfinished files to _old, so can run next in skip mode.")
+                                    os.rename(filepath,filepath[:-4]+"_old.npy")
+                else:
+                    last_edited = np.array([(datetime.fromtimestamp(os.stat(opj(data_path,
+                                                                        f"{subj}_{session}_iterparams-{model}_space-{fitting_space}{chunk_nr}.npy")).st_mtime)) < datetime(\
+                                                                        int(analysis_time.split('-')[0]),
+                                                                        int(analysis_time.split('-')[1]),
+                                                                        int(analysis_time.split('-')[2]),
+                                                                        int(analysis_time.split('-')[3]),
+                                                                        int(analysis_time.split('-')[4]),
+                                                                        int(analysis_time.split('-')[5]), 0) for chunk_nr in finished_chunks])
+                
+                
+                        if np.any(last_edited):
+                
+                            print(f"Fitting of {model} model has not been completed")
+                            for value in np.where(last_edited)[0]:
+                                unfinished_chunks.append(value)
+                
+                                filepath = opj(data_path,f"{subj}_{session}_iterparams-{model}_space-{fitting_space}"+str(value)+".npy")
+                                if refit_mode == "overwrite":
+                                    #print("Renaming unfinished files to _old, so can run next in skip mode.")
+                                    os.rename(filepath,filepath[:-4]+"_old.npy")
         
         
         
@@ -150,25 +181,48 @@ for subj_ses in subjects.split(','):
         for model in models_to_fit:
             model = model.lower()
 
-            if model in grid_models and refit_mode != "iterate":
-                grid_path = opj(data_path, f"{subj}_{session}_gridparams-{model}_space-{fitting_space}")
-                grid_result = np.concatenate(tuple([np.load(grid_path+str(chunk_nr)+".npy") for chunk_nr in range(n_chunks)]), axis=0)
-        
-                grid_path+=analysis_time
-        
-                grid_result[order] = np.copy(grid_result)
-        
-                np.save(grid_path.replace(grid_path.split(os.path.sep)[1], replacer), grid_result) 
-        
-            iter_path = opj(data_path, f"{subj}_{session}_iterparams-{model}_space-{fitting_space}")
-        
-            model_result = np.concatenate(tuple([np.load(iter_path+str(chunk_nr)+".npy") for chunk_nr in range(n_chunks)]), axis=0)
-        
-            iter_path+=analysis_time
-        
-            model_result[order] = np.copy(model_result)
-        
-            np.save(iter_path.replace(iter_path.split(os.path.sep)[1], replacer), model_result)
+            if model == 'norm':
+                for variant in norm_model_variant:
+
+                    if model in grid_models and refit_mode != "iterate":
+                        grid_path = opj(data_path, f"{subj}_{session}_gridparams-{model}{variant}_space-{fitting_space}")
+                        grid_result = np.concatenate(tuple([np.load(grid_path+str(chunk_nr)+".npy") for chunk_nr in range(n_chunks)]), axis=0)
+                
+                        grid_path+=analysis_time
+                
+                        grid_result[order] = np.copy(grid_result)
+                
+                        np.save(grid_path.replace(grid_path.split(os.path.sep)[1], replacer), grid_result) 
+                
+                    iter_path = opj(data_path, f"{subj}_{session}_iterparams-{model}{variant}_space-{fitting_space}")
+                
+                    model_result = np.concatenate(tuple([np.load(iter_path+str(chunk_nr)+".npy") for chunk_nr in range(n_chunks)]), axis=0)
+                
+                    iter_path+=analysis_time
+                
+                    model_result[order] = np.copy(model_result)
+                
+                    np.save(iter_path.replace(iter_path.split(os.path.sep)[1], replacer), model_result)
+            else:
+                if model in grid_models and refit_mode != "iterate":
+                    grid_path = opj(data_path, f"{subj}_{session}_gridparams-{model}_space-{fitting_space}")
+                    grid_result = np.concatenate(tuple([np.load(grid_path+str(chunk_nr)+".npy") for chunk_nr in range(n_chunks)]), axis=0)
+            
+                    grid_path+=analysis_time
+            
+                    grid_result[order] = np.copy(grid_result)
+            
+                    np.save(grid_path.replace(grid_path.split(os.path.sep)[1], replacer), grid_result) 
+            
+                iter_path = opj(data_path, f"{subj}_{session}_iterparams-{model}_space-{fitting_space}")
+            
+                model_result = np.concatenate(tuple([np.load(iter_path+str(chunk_nr)+".npy") for chunk_nr in range(n_chunks)]), axis=0)
+            
+                iter_path+=analysis_time
+            
+                model_result[order] = np.copy(model_result)
+            
+                np.save(iter_path.replace(iter_path.split(os.path.sep)[1], replacer), model_result)
         
         #mask is saved in original order so only need to copypaste
         mask_path=opj(data_path,  f"{subj}_{session}_mask_space-{fitting_space}.npy")

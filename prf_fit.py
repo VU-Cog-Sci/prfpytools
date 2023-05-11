@@ -140,7 +140,7 @@ else:
 if "norm" in models_to_fit and "norm_model_variant" in analysis_info:
     norm_model_variant = analysis_info["norm_model_variant"]
 else:
-    norm_model_variant = "abcd"
+    norm_model_variant = ["abcd"]
 
 if "roi_idx_path" in analysis_info:
     roi_idx_path = analysis_info["roi_idx_path"].replace("$subj$", subj)
