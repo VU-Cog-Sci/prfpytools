@@ -115,7 +115,7 @@ def create_full_stim(screenshot_paths,
     shifted_dm = np.zeros_like(dm_full)
     
     # use timepoints where bar was gone from at least X TRs (this is a heuristic approximation) DN/HCP: 7 
-    shifted_dm[..., 15:] = dm_full[..., :-15]
+    shifted_dm[..., 7:] = dm_full[..., :-7]
 
   
     late_iso_dict = {}

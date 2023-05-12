@@ -539,6 +539,7 @@ class visualize_results(object):
                         
                       
                     tc[task] = np.mean(tc_runs, axis=0)
+                    
                     tc_err[task] = sem(tc_runs, axis=0)
                     
                     tc[task] -= np.median(tc[task][...,self.prf_stims[task].late_iso_dict[task]], axis=-1)[...,np.newaxis]
@@ -1320,26 +1321,26 @@ class visualize_results(object):
                             
 
                             ds_norm_baselines[f'{subj} {model} Param. B'] = Vertex2D_fix(p_r['Norm Param. B'][model], alpha[analysis][subj][model], subject=pycortex_subj, 
-                                                                         vmin=0,#np.nanquantile(p_r['Norm Param. B'][model][alpha[analysis][subj][model]>rsq_thresh],0.01), 
-                                                                         vmax=100,#np.nanquantile(p_r['Norm Param. B'][model][alpha[analysis][subj][model]>rsq_thresh],0.99), 
-                                                                         vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap='viridis_r', roi_borders=roi_borders)     
+                                                                         vmin=np.nanquantile(p_r['Norm Param. B'][model][alpha[analysis][subj][model]>rsq_thresh],0.1), 
+                                                                         vmax=np.nanquantile(p_r['Norm Param. B'][model][alpha[analysis][subj][model]>rsq_thresh],0.9), 
+                                                                         vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap=pycortex_cmap, roi_borders=roi_borders)     
                             
-                            fig = simple_colorbar(vmin=0,#np.nanquantile(p_r['Norm Param. B'][model][alpha[analysis][subj][model]>rsq_thresh],0.01), 
-                                            vmax=100,#np.nanquantile(p_r['Norm Param. B'][model][alpha[analysis][subj][model]>rsq_thresh],0.99),
-                                            cmap_name='viridis_r', ori='horizontal', param_name='Norm Param. B')
+                            fig = simple_colorbar(vmin=np.nanquantile(p_r['Norm Param. B'][model][alpha[analysis][subj][model]>rsq_thresh],0.1), 
+                                            vmax=np.nanquantile(p_r['Norm Param. B'][model][alpha[analysis][subj][model]>rsq_thresh],0.9),
+                                            cmap_name=pycortex_cmap, ori='horizontal', param_name='Norm Param. B')
                             
                             if self.pycortex_image_path is not None and save_colorbars:
                                 fig.savefig(f"{self.pycortex_image_path}/{model}_paramB_cbar.pdf", dpi=600, bbox_inches='tight', transparent=True)  
                             
                                 
                             ds_norm_baselines[f'{subj} {model} Param. D'] = Vertex2D_fix(p_r['Norm Param. D'][model], alpha[analysis][subj][model], subject=pycortex_subj, 
-                                                                         vmin=1,#np.nanquantile(p_r['Norm Param. D'][model][alpha[analysis][subj][model]>rsq_thresh],0.01), 
-                                                                         vmax=100,#np.nanquantile(p_r['Norm Param. D'][model][alpha[analysis][subj][model]>rsq_thresh],0.99),
-                                                                         vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap='inferno_r', roi_borders=roi_borders)
+                                                                         vmin=np.nanquantile(p_r['Norm Param. D'][model][alpha[analysis][subj][model]>rsq_thresh],0.1), 
+                                                                         vmax=np.nanquantile(p_r['Norm Param. D'][model][alpha[analysis][subj][model]>rsq_thresh],0.9),
+                                                                         vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap=pycortex_cmap, roi_borders=roi_borders)
                             
-                            fig = simple_colorbar(vmin=1,#np.nanquantile(p_r['Norm Param. D'][model][alpha[analysis][subj][model]>rsq_thresh],0.01), 
-                                            vmax=100,#np.nanquantile(p_r['Norm Param. D'][model][alpha[analysis][subj][model]>rsq_thresh],0.99),
-                                            cmap_name='inferno_r', ori='horizontal', param_name='Norm Param. D')
+                            fig = simple_colorbar(vmin=np.nanquantile(p_r['Norm Param. D'][model][alpha[analysis][subj][model]>rsq_thresh],0.1), 
+                                            vmax=np.nanquantile(p_r['Norm Param. D'][model][alpha[analysis][subj][model]>rsq_thresh],0.9),
+                                            cmap_name=pycortex_cmap, ori='horizontal', param_name='Norm Param. D')
                             
                             if self.pycortex_image_path is not None and save_colorbars:
                                 fig.savefig(f"{self.pycortex_image_path}/{model}_paramD_cbar.pdf", dpi=600, bbox_inches='tight', transparent=True)                              

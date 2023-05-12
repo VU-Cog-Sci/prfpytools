@@ -565,20 +565,24 @@ if "abcd" in norm_model_variant:
     # neural_baseline_grid=np.array([0,1,10,100], dtype='float32')
     # surround_baseline_grid=np.array([0.1,1.0,10.0,100.0], dtype='float32')
 
+    dict_norm_model_variants['surround_amplitude_grid_abcd']=np.array([0.05,0.2,0.4,0.7,1,3], dtype='float32')
+    dict_norm_model_variants['surround_size_grid_abcd']=np.array([3,5,8,12,18], dtype='float32')
+    dict_norm_model_variants['neural_baseline_grid_abcd']=np.array([0,1,10,100], dtype='float32')
+    dict_norm_model_variants['surround_baseline_grid_abcd']=np.array([0.1,1.0,10.0,100.0], dtype='float32')
 
     #finer grid
-    dict_norm_model_variants['surround_amplitude_grid_abcd']=np.array([0.01,0.02,0.05,0.1,0.2,0.5,0.75,1,2,3], dtype='float32')
-    dict_norm_model_variants['surround_size_grid_abcd']=np.array([0.5,0.75,1,1.1,1.5,3,5,8,12], dtype='float32')
-    dict_norm_model_variants['neural_baseline_grid_abcd']=np.array([0,0.1,1,2,5,10,20,50,75,100], dtype='float32')
-    dict_norm_model_variants['surround_baseline_grid_abcd']=np.array([0.1,0.5,1.0,2,5,10.0,20,50,75,100.0], dtype='float32')
+    # dict_norm_model_variants['surround_amplitude_grid_abcd']=np.array([0.01,0.02,0.05,0.1,0.2,0.5,0.75,1,2,3], dtype='float32')
+    # dict_norm_model_variants['surround_size_grid_abcd']=np.array([3,5,8,12,18], dtype='float32')
+    # dict_norm_model_variants['neural_baseline_grid_abcd']=np.array([0,1,10,100], dtype='float32')
+    # dict_norm_model_variants['surround_baseline_grid_abcd']=np.array([0.1,0.5,1.0,2,5,10.0,20,50,75,100.0], dtype='float32')
 
 
 if "abc" in norm_model_variant:
     dict_norm_model_variants['norm_bounds_abc'] = np.copy(norm_bounds)
 
-    dict_norm_model_variants['surround_amplitude_grid_abc']=np.array([0.01,0.02,0.05,0.1,0.2,0.5,0.75,1,2,3], dtype='float32')
-    dict_norm_model_variants['surround_size_grid_abc']=np.array([0.5,0.75,1,1.1,1.5,3,5,8,12], dtype='float32')
-    dict_norm_model_variants['neural_baseline_grid_abc']=np.array([0,0.1,1,2,5,10,20,50,75,100], dtype='float32')
+    dict_norm_model_variants['surround_amplitude_grid_abc']=np.array([0.05,0.2,0.4,0.7,1,3], dtype='float32')
+    dict_norm_model_variants['surround_size_grid_abc']=np.array([3,5,8,12,18], dtype='float32')
+    dict_norm_model_variants['neural_baseline_grid_abc']=np.array([0,1,10,100], dtype='float32')
     dict_norm_model_variants['surround_baseline_grid_abc']=np.array([1], dtype='float32')
 
     dict_norm_model_variants['norm_bounds_abc'][8] = (1, 1)  # fix surround baseline
