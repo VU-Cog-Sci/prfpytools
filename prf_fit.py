@@ -14,9 +14,13 @@ from datetime import datetime
 import time
 from pathlib import Path
 
-
 subj = sys.argv[1]
-session = sys.argv[2]
+
+if sys.argv[2] == 'ses-all':
+    session = 'ses-*'
+else:
+    session = sys.argv[2]
+
 analysis_settings = sys.argv[3]
 chunk_nr = int(sys.argv[4])
 
