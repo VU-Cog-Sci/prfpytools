@@ -16,10 +16,7 @@ from pathlib import Path
 
 subj = sys.argv[1]
 
-if sys.argv[2] == 'ses-all':
-    session = 'ses-*'
-else:
-    session = sys.argv[2]
+session = sys.argv[2]
 
 analysis_settings = sys.argv[3]
 chunk_nr = int(sys.argv[4])
@@ -229,8 +226,13 @@ if 'sourcedata_path' in analysis_info:
         t_n = '*'
     else:
         t_n = task_names[0]
+    
+    if session == 'ses-all':
+        exp_files = sorted(Path(analysis_info['sourcedata_path']).glob(f"{subj}_ses-*_task-{t_n}_run-*_expsettings.yml"))
+    else:
+        exp_files = sorted(Path(analysis_info['sourcedata_path']).glob(f"{subj}_{session}_task-{t_n}_run-*_expsettings.yml"))
 
-    exp_files = sorted(Path(analysis_info['sourcedata_path']).glob(f"{subj}_{session}_task-{t_n}_run-*_expsettings.yml"))
+    
     if len(exp_files)>0:
         print("computing DM clipping from screen delims")
         sc_delims_top_prop = []

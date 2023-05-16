@@ -167,7 +167,7 @@ def prepare_data(subj,
                  fit_task,
                  save_noise_ceiling,
 
-                 session = 'ses-*',
+                 session = 'ses-all',
                  pybest = False):
 
     if fitting_space == 'fsaverage' or fitting_space == 'fsnative':
@@ -183,11 +183,16 @@ def prepare_data(subj,
             tc_task = []
             if fitting_space == 'fsaverage' or fitting_space == 'fsnative':
                 if pybest:
-                    tc_paths = sorted(Path(opj(data_path,'pybest',subj,'unzscored')).glob(f"{subj}_{session}_task-{task_name}*run-*_space-{fitting_space}_hemi-{hemi}*bold.npy"))
+                    tc_paths = sorted(Path(opj(data_path,'pybest',subj,'unzscored')).glob(f"{subj}_ses-*_task-{task_name}*run-*_space-{fitting_space}_hemi-{hemi}*bold.npy"))
                 else:                   
-                    tc_paths = sorted(Path(opj(data_path,'fmriprep',subj)).glob(opj('**',f"{subj}_{session}_task-{task_name}*run-*_space-{fitting_space}_hemi-{hemi}*.func.gii")))
+                    tc_paths = sorted(Path(opj(data_path,'fmriprep',subj)).glob(opj('**',f"{subj}_ses-*_task-{task_name}*run-*_space-{fitting_space}_hemi-{hemi}*.func.gii")))
+
+                if session != 'ses-all':
+                    tc_paths = [tp for tp in tc_paths if session in tp]
+
             elif fitting_space == 'HCP': 
                 tc_paths = sorted(Path(opj(data_path,subj)).glob(opj('**',f"tfMRI_RET{task_name}*_7T_*_Atlas_1.6mm_MSMAll_hp2000_clean.dtseries.nii")))
+
             
             print(f"For task {task_name}, session {session}, hemisphere {hemi}, of subject {subj}, a total of {len(tc_paths)} runs were found.")
             
@@ -238,16 +243,19 @@ def prepare_data(subj,
                                                axis=-1)
             
 
-        #this part needs updating
         if crossvalidate:
             for task_name in test_prf_stim.task_names:                          
                 tc_task = []
 
                 if fitting_space == 'fsaverage' or fitting_space == 'fsnative':
                     if pybest:
-                        tc_paths = sorted(Path(opj(data_path,'pybest',subj,'unzscored')).glob(f"{subj}_{session}_task-{task_name}*run-*_space-{fitting_space}_hemi-{hemi}*bold.npy"))
+                        tc_paths = sorted(Path(opj(data_path,'pybest',subj,'unzscored')).glob(f"{subj}_ses-*_task-{task_name}*run-*_space-{fitting_space}_hemi-{hemi}*bold.npy"))
                     else:                   
-                        tc_paths = sorted(Path(opj(data_path,'fmriprep',subj)).glob(opj('**',f"{subj}_{session}_task-{task_name}*run-*_space-{fitting_space}_hemi-{hemi}*.func.gii")))
+                        tc_paths = sorted(Path(opj(data_path,'fmriprep',subj)).glob(opj('**',f"{subj}_ses-*_task-{task_name}*run-*_space-{fitting_space}_hemi-{hemi}*.func.gii")))
+
+                    if session != 'ses-all':
+                        tc_paths = [tp for tp in tc_paths if session in tp]
+
                 elif fitting_space == 'HCP': 
                     tc_paths = sorted(Path(opj(data_path,subj)).glob(opj('**',f"tfMRI_RET{task_name}*_7T_*_Atlas_1.6mm_MSMAll_hp2000_clean.dtseries.nii")))
                 
