@@ -188,7 +188,7 @@ def prepare_data(subj,
                     tc_paths = sorted(Path(opj(data_path,'fmriprep',subj)).glob(opj('**',f"{subj}_ses-*_task-{task_name}*run-*_space-{fitting_space}_hemi-{hemi}*.func.gii")))
 
                 if session != 'ses-all':
-                    tc_paths = [tp for tp in tc_paths if session in tp]
+                    tc_paths = [tp for tp in list(tc_paths) if session in tp]
 
             elif fitting_space == 'HCP': 
                 tc_paths = sorted(Path(opj(data_path,subj)).glob(opj('**',f"tfMRI_RET{task_name}*_7T_*_Atlas_1.6mm_MSMAll_hp2000_clean.dtseries.nii")))
