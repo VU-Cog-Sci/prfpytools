@@ -523,15 +523,6 @@ class visualize_results(object):
                         
                         tc_runs.append([np.load(tc_path)[tc_run_idx] for tc_path in tc_paths if f"task-{task}_" in tc_path and f"run-{run}." in tc_path][0])
 
-                        # coeffs = sp.fft.dct(tc_runs[-1], norm='ortho')
-                        
-                        # last_modes_to_remove_percent = 50
-                        # if last_modes_to_remove_percent>0:
-                        #     last_modes_to_remove = int(len(tc_runs[-1])*last_modes_to_remove_percent/100)
-                        #     coeffs[-last_modes_to_remove:] = 0
-                    
-                        # tc_runs[-1] = sp.fft.idct(coeffs, norm='ortho')
-
 
                         tc_runs[-1] -= np.median(tc_runs[-1][...,self.prf_stims[task].late_iso_dict[task]], axis=-1)[...,np.newaxis]
                         #tc_runs[-1] -= np.median(tc_runs[-1][...,red_per], axis=-1)[...,np.newaxis]
@@ -666,9 +657,9 @@ class visualize_results(object):
     
                 if an_info['crossvalidate'] and 'fit_task' not in an_info:
                     
-                    print(np.std([tc_full_test,tc_full_fit],axis=0))
+                    #print(np.std([tc_full_test,tc_full_fit],axis=0))
                     for i,tc_run in enumerate(tc_runs):
-                        if i in fit_runs:
+                        if i in an_info['fit_runs']:
                             self.axes[0,0].plot(tseconds, tc_run, label=f'Run {i} (fit)', linestyle = ':', marker='^', markersize=3, color=cmap(5), linewidth=0.5, alpha=0.5)
                         else:
                             self.axes[0,0].plot(tseconds, tc_run, label=f'Run {i} (test)', linestyle = ':', marker='v', markersize=3, color=cmap(5), linewidth=0.5, alpha=0.5)
@@ -867,9 +858,19 @@ class visualize_results(object):
                         
                         
                         
-                        mean_ts_vert = Vertex2D_fix(tc_stats['Mean'], stats_mask, subject=pycortex_subj, cmap=pycortex_cmap, roi_borders=roi_borders)
-                        var_ts_vert = Vertex2D_fix(tc_stats['Variance'], stats_mask, subject=pycortex_subj, cmap=pycortex_cmap, roi_borders=roi_borders)
-                        tsnr_vert = Vertex2D_fix(tc_stats['TSNR'], stats_mask, subject=pycortex_subj, cmap=pycortex_cmap, roi_borders=roi_borders)
+                        mean_ts_vert = Vertex2D_fix(tc_stats['Mean'], stats_mask,
+                                                            vmin=np.nanquantile(tc_stats['Mean'][alpha[analysis][subj][model]>rsq_thresh],0.1), 
+                                                            vmax=np.nanquantile(tc_stats['Mean'][alpha[analysis][subj][model]>rsq_thresh],0.9),
+                                                            vmin2=rsq_thresh, vmax2=rsq_max_opacity, subject=pycortex_subj, cmap=pycortex_cmap, roi_borders=roi_borders)
+                        var_ts_vert = Vertex2D_fix(tc_stats['Variance'], stats_mask, 
+                                                   
+                                                            vmin=np.nanquantile(tc_stats['Variance'][alpha[analysis][subj][model]>rsq_thresh],0.1), 
+                                                            vmax=np.nanquantile(tc_stats['Variance'][alpha[analysis][subj][model]>rsq_thresh],0.9),
+                                                            vmin2=rsq_thresh, vmax2=rsq_max_opacity, subject=pycortex_subj, cmap=pycortex_cmap, roi_borders=roi_borders)
+                        tsnr_vert = Vertex2D_fix(tc_stats['TSNR'], stats_mask, 
+                                                 
+                                                            vmin=np.nanquantile(tc_stats['TSNR'][alpha[analysis][subj][model]>rsq_thresh],0.1), 
+                                                            vmax=np.nanquantile(tc_stats['TSNR'][alpha[analysis][subj][model]>rsq_thresh],0.9),vmin2=rsq_thresh, vmax2=rsq_max_opacity, subject=pycortex_subj, cmap=pycortex_cmap, roi_borders=roi_borders)
         
                         data_stats ={'mean':mean_ts_vert, 'var':var_ts_vert, 'tsnr':tsnr_vert}
         
@@ -993,15 +994,15 @@ class visualize_results(object):
                             for nc_type in p_r['Noise Ceiling']:
                                 #print(np.nanquantile(p_r['Noise Ceiling'][nc_type][alpha[analysis][subj][model]>rsq_thresh],0.1))
                                 #print(np.nanquantile(p_r['Noise Ceiling'][nc_type][alpha[analysis][subj][model]>rsq_thresh],0.9))
-                                ds_rsq['{subj} {nc_type}'] = Vertex2D_fix(p_r['Noise Ceiling'][nc_type],
+                                ds_rsq[f'{subj} {nc_type}'] = Vertex2D_fix(p_r['Noise Ceiling'][nc_type],
                                                                np.ones_like(alpha[analysis][subj][model]), subject=pycortex_subj, 
-                                                            vmin=-1.25,#np.nanquantile(p_r['Noise Ceiling'][nc_type][alpha[analysis][subj][model]>rsq_thresh],0.1), 
-                                                            vmax=-0.75,#np.nanquantile(p_r['Noise Ceiling'][nc_type][alpha[analysis][subj][model]>rsq_thresh],0.9),
+                                                            vmin=0,#np.nanquantile(p_r['Noise Ceiling'][nc_type][alpha[analysis][subj][model]>rsq_thresh],0.1), 
+                                                            vmax=np.nanquantile(p_r['Noise Ceiling'][nc_type][alpha[analysis][subj][model]>rsq_thresh],0.9),
                                                             vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap=pycortex_cmap, roi_borders=roi_borders)   
                                 
-                                fig = simple_colorbar(vmin=-1.25,#np.nanquantile(p_r['RSq'][model][alpha[analysis][subj][model]>rsq_thresh],0.1), 
-                                                vmax=-0.75,#np.nanquantile(p_r['RSq'][model][alpha[analysis][subj][model]>rsq_thresh],0.9),
-                                                cmap_name=pycortex_cmap, ori='horizontal', param_name='Inter-run $R^2$')
+                                fig = simple_colorbar(vmin=0,#np.nanquantile(p_r['Noise Ceiling'][nc_type][alpha[analysis][subj][model]>rsq_thresh],0.1), 
+                                                    vmax=np.nanquantile(p_r['Noise Ceiling'][nc_type][alpha[analysis][subj][model]>rsq_thresh],0.9),
+                                                cmap_name=pycortex_cmap, ori='horizontal', param_name=f'{subj} {nc_type}')
                                 
                                 if self.pycortex_image_path is not None and save_colorbars:
                                     fig.savefig(f"{self.pycortex_image_path}/nc_cbar.pdf", dpi=600, bbox_inches='tight', transparent=True)                                

@@ -164,6 +164,48 @@ if not param_bounds and norm_model_variant != "abcd":
           but param_bounds=False. param_bounds will be set to True.")
     param_bounds = True
 
+
+#DM masking based on screen delim if possible
+if 'sourcedata_path' in analysis_info:
+    if len(task_names)>1:
+        t_n = '*'
+    else:
+        t_n = task_names[0]
+    
+    if session == 'ses-all':
+        exp_files = sorted(Path(analysis_info['sourcedata_path']).glob(f"{subj}_ses-*_task-{t_n}_run-*_expsettings.yml"))
+    else:
+        exp_files = sorted(Path(analysis_info['sourcedata_path']).glob(f"{subj}_{session}_task-{t_n}_run-*_expsettings.yml"))
+
+    
+    if len(exp_files)>0:
+        print("computing DM clipping from screen delims")
+        sc_delims_top_prop = []
+        for exp_file in exp_files:
+            with open(str(exp_file)) as f:
+                exp_dict = yaml.safe_load(f)
+
+            if 'screen_delim' in exp_dict:    
+                sc_delims_top_prop.append(exp_dict['screen_delim']['top']/exp_dict['window']['size'][1])
+        
+        sc_delim_top_prop = np.max(sc_delims_top_prop)
+
+        if sc_delim_top_prop>0:
+            dm_edges_clipping = [int(sc_delim_top_prop*n_pix),0,0,0]
+            print(dm_edges_clipping)
+        else:
+            dm_edges_clipping = analysis_info["dm_edges_clipping"]
+
+    else:
+        dm_edges_clipping = analysis_info["dm_edges_clipping"]
+
+
+else:
+    dm_edges_clipping = analysis_info["dm_edges_clipping"]
+
+analysis_info["dm_edges_clipping"] = dm_edges_clipping
+
+
 if batch_submission_system is not None:
     if batch_submission_system.lower() == 'slurm':
         job_id = int(os.getenv('SLURM_ARRAY_JOB_ID'))
@@ -218,45 +260,6 @@ else:
     analysis_info["previous_analysis_refit_mode"] = ""
     with open(save_path+".yml", 'w+') as outfile:
         yaml.dump(analysis_info, outfile)
-
-
-#DM masking based on screen delim if possible
-if 'sourcedata_path' in analysis_info:
-    if len(task_names)>1:
-        t_n = '*'
-    else:
-        t_n = task_names[0]
-    
-    if session == 'ses-all':
-        exp_files = sorted(Path(analysis_info['sourcedata_path']).glob(f"{subj}_ses-*_task-{t_n}_run-*_expsettings.yml"))
-    else:
-        exp_files = sorted(Path(analysis_info['sourcedata_path']).glob(f"{subj}_{session}_task-{t_n}_run-*_expsettings.yml"))
-
-    
-    if len(exp_files)>0:
-        print("computing DM clipping from screen delims")
-        sc_delims_top_prop = []
-        for exp_file in exp_files:
-            with open(str(exp_file)) as f:
-                exp_dict = yaml.safe_load(f)
-
-            if 'screen_delim' in exp_dict:    
-                sc_delims_top_prop.append(exp_dict['screen_delim']['top']/exp_dict['window']['size'][1])
-        
-        sc_delim_top_prop = np.max(sc_delims_top_prop)
-
-        if sc_delim_top_prop>0:
-            dm_edges_clipping = [int(sc_delim_top_prop*n_pix),0,0,0]
-            print(dm_edges_clipping)
-        else:
-            dm_edges_clipping = analysis_info["dm_edges_clipping"]
-
-    else:
-        dm_edges_clipping = analysis_info["dm_edges_clipping"]
-
-
-else:
-    dm_edges_clipping = analysis_info["dm_edges_clipping"]
 
 
 

@@ -65,7 +65,7 @@ class results(object):
         unique_an_names = np.unique(np.array(an_names)).tolist()
         
         unique_an_results=dict()
-        prf_stims=dict()
+        self.prf_stims=dict()
         
         #this is to combine multiple iterations (max) and different models fit on the same fold
         for an_name in tqdm(unique_an_names):
@@ -155,15 +155,6 @@ class results(object):
             all_runs = np.unique(np.array([int(elem.replace('run-','').replace('.npy','')) for path in tc_paths for elem in path.split('_')  if 'run' in elem]))
             
             if merged_an_info["crossvalidate"] and calculate_noise_ceiling:
-                # prf_stim = create_full_stim(screenshot_paths=screenshot_paths,
-                #                 n_pix=merged_an_info['n_pix'],
-                #                 discard_volumes=merged_an_info['discard_volumes'],
-                #                 dm_edges_clipping=merged_an_info['dm_edges_clipping'],
-                #                 screen_size_cm=merged_an_info['screen_size_cm'],
-                #                 screen_distance_cm=merged_an_info['screen_distance_cm'],
-                #                 TR=merged_an_info['TR'],
-                #                 task_names=merged_an_info['task_names'],
-                #                 normalize_integral_dx=merged_an_info['normalize_integral_dx'])
                 
                 tc_test = dict()
                 tc_fit = dict()
@@ -171,6 +162,18 @@ class results(object):
                 
                 for task in merged_an_info['task_names']:
                     tc_runs=[]
+
+                    if task not in self.prf_stims:
+
+                        self.prf_stims[task] = create_full_stim(screenshot_paths=screenshot_paths,
+                                    n_pix=merged_an_info['n_pix'],
+                                    discard_volumes=merged_an_info['discard_volumes'],
+                                    dm_edges_clipping=merged_an_info['dm_edges_clipping'],
+                                    screen_size_cm=merged_an_info['screen_size_cm'],
+                                    screen_distance_cm=merged_an_info['screen_distance_cm'],
+                                    TR=merged_an_info['TR'],
+                                    task_names=[task],
+                                    normalize_integral_dx=merged_an_info['normalize_integral_dx'])
                     
                     for run in all_runs:
                         mask_run = [np.load(mask_path) for mask_path in mask_paths if f"task-{task}" in mask_path and f"run-{run}" in mask_path][0]
@@ -189,7 +192,8 @@ class results(object):
                             
                         tc_runs.append(tc_runs_unmasked)
                                            
-                    
+                        tc_runs[-1] -= np.median(tc_runs[-1][...,self.prf_stims[task].late_iso_dict[task]], axis=-1)[...,np.newaxis]
+                   
                     
                     tc_test[task] = np.mean([tc_runs[i] for i in all_runs if i not in merged_an_info['fit_runs']], axis=0)
                     tc_fit[task] = np.mean([tc_runs[i] for i in all_runs if i in merged_an_info['fit_runs']], axis=0)                
@@ -198,17 +202,19 @@ class results(object):
                 tc_all_test = np.concatenate(tuple([tc_test[task] for task in tc_test]), axis=-1)
                 tc_all_fit = np.concatenate(tuple([tc_fit[task] for task in tc_fit]), axis=-1)
                 
-                noise_ceiling = 1-np.sum((tc_all_test-tc_all_fit)**2, axis=-1)/(tc_all_test.shape[-1]*tc_all_test.var(-1))
+                #noise_ceiling = 1-np.sum((tc_all_test-tc_all_fit)**2, axis=-1)/(tc_all_test.shape[-1]*tc_all_test.var(-1))
+
+                noise_ceiling = np.array([np.corrcoef(tc_t,tc_f)[0,1] for tc_t,tc_f in zip(tc_all_test,tc_all_fit)])
                 
-                r_r_full[f"Noise Ceiling (RSq)"] = np.copy(noise_ceiling)
+                r_r_full[f"Noise Ceiling (CC)"] = np.copy(noise_ceiling)
                 
             
             #calculate cross-condition r-squared
             
             if not merged_an_info["crossvalidate"] and calculate_CCrsq:
                 for task in [tsk for tsk in all_task_names if tsk not in merged_an_info['task_names']]:
-                    if task not in prf_stims:
-                        prf_stims[task] = create_full_stim(screenshot_paths=[s_p for s_p in screenshot_paths if task in s_p],
+                    if task not in self.prf_stims:
+                        self.prf_stims[task] = create_full_stim(screenshot_paths=[s_p for s_p in screenshot_paths if task in s_p],
                                 n_pix=merged_an_info['n_pix'],
                                 discard_volumes=merged_an_info['discard_volumes'],
                                 dm_edges_clipping=merged_an_info['dm_edges_clipping'],
@@ -240,7 +246,7 @@ class results(object):
                     
                     for key in r_r:
                         gg = model_wrapper(key,
-                                           stimulus=prf_stims[task],
+                                           stimulus=self.prf_stims[task],
                                            hrf=merged_an_info['hrf'],
                                            filter_predictions=merged_an_info['filter_predictions'],
                                            filter_type=merged_an_info['filter_type'],
