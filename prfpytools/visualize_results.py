@@ -537,8 +537,8 @@ class visualize_results(object):
                     #tc[task] -= np.median(tc[task][...,red_per], axis=-1)[...,np.newaxis]
 
 
-                    if 'CVmean' in analysis or 'CVmedian' in analysis:
-                        vertex_info+=f"WARNING: predictions based on mean/median CV parameters are not usually meaningful\n"
+                    #if 'CVmean' in analysis or 'CVmedian' in analysis:
+                    #    vertex_info+=f"WARNING: predictions based on mean/median CV parameters are not usually meaningful\n"
 
                     vertex_info+=f"{task} late iso dict median (begin/end only): {np.median(tc[task][red_per])}\n"
 
@@ -572,7 +572,7 @@ class visualize_results(object):
                     tc_full_fit = np.concatenate(tuple([tc_fit[task] for task in tc_fit]), axis=0)   
                     #timecourse reliability stats
                     vertex_info+="CV timecourse reliability stats\n"
-                    vertex_info+=f"fit-test timecourses pearson R {pearsonr(tc_full_test,tc_full_fit)[0]:.4f}\n"
+                    vertex_info+=f"fit-test timecourses corrcoeff {np.corrcoef(tc_full_test,tc_full_fit)[0,1]:.4f}\n"
                     vertex_info+=f"fit-test timecourses R-squared {1-np.sum((tc_full_fit-tc_full_test)**2)/(tc_full_test.var(-1)*tc_full_test.shape[-1]):.4f}\n\n"
             
                 preds = dict()
@@ -597,6 +597,12 @@ class visualize_results(object):
                         internal_idx = index
                     else:
                         internal_idx = np.sum(subj_res['mask'][:index])
+
+                    
+                    if 'CVmean' in analysis or 'CVmedian' in analysis:
+                        #need to combine params/predictions from folds?
+                        pass
+
                     
                     params = np.copy(subj_res['Results'][model][internal_idx,:-1])
                     
@@ -655,7 +661,7 @@ class visualize_results(object):
         
                 
     
-                if an_info['crossvalidate'] and 'fit_task' not in an_info:
+                if an_info['crossvalidate'] and 'fit_task' not in an_info and 'fit_runs' in an_info:
                     
                     #print(np.std([tc_full_test,tc_full_fit],axis=0))
                     for i,tc_run in enumerate(tc_runs):
