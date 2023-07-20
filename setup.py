@@ -26,7 +26,7 @@ with open('requirements.txt', 'r') as f:
 
 # Setup function declaration
 setup(name="prfpytools",
-      version='dev0',
+      version='0.0.dev0',
       author="Marco Aqil",
       author_email='marco.aqil@gmail.com',
       description=("prfpytools: a toolbox and helper package for prfpy"),
