@@ -154,7 +154,7 @@ class results(object):
             all_task_names = np.unique(np.array([elem.replace('task-','') for path in tc_paths for elem in path.split('_')  if 'task' in elem]))
             all_runs = np.unique(np.array([int(elem.replace('run-','').replace('.npy','')) for path in tc_paths for elem in path.split('_')  if 'run' in elem]))
             
-            if merged_an_info["crossvalidate"] and calculate_noise_ceiling:
+            if calculate_noise_ceiling and 'all' not in merged_an_info['session']:
                 
                 tc_test = dict()
                 tc_fit = dict()
@@ -194,10 +194,12 @@ class results(object):
                                            
                         tc_runs[-1] -= np.median(tc_runs[-1][...,self.prf_stims[task].late_iso_dict[task]], axis=-1)[...,np.newaxis]
                    
-                    
-                    tc_test[task] = np.mean([tc_runs[i] for i in all_runs if i not in merged_an_info['fit_runs']], axis=0)
-                    tc_fit[task] = np.mean([tc_runs[i] for i in all_runs if i in merged_an_info['fit_runs']], axis=0)                
-
+                    if merged_an_info["crossvalidate"]:
+                        tc_test[task] = np.mean([tc_runs[i] for i in all_runs if i not in merged_an_info['fit_runs']], axis=0)
+                        tc_fit[task] = np.mean([tc_runs[i] for i in all_runs if i in merged_an_info['fit_runs']], axis=0)
+                    else:                
+                        tc_test[task] = np.mean([tc_runs[i] for i in all_runs if i not in np.arange(0,len(all_runs),2)], axis=0)
+                        tc_fit[task] = np.mean([tc_runs[i] for i in all_runs if i in np.arange(0,len(all_runs),2)], axis=0)
                 
                 tc_all_test = np.concatenate(tuple([tc_test[task] for task in tc_test]), axis=-1)
                 tc_all_fit = np.concatenate(tuple([tc_fit[task] for task in tc_fit]), axis=-1)
@@ -251,11 +253,11 @@ class results(object):
                                            filter_predictions=merged_an_info['filter_predictions'],
                                            filter_type=merged_an_info['filter_type'],
                                            filter_params={x:merged_an_info[x] for x in ["first_modes_to_remove",
-                                                                                              "last_modes_to_remove_percent",
-                                                                                              "window_length",
-                                                                                              "polyorder",
-                                                                                              "highpass",
-                                                                                              "add_mean"]},
+                                                                                        "last_modes_to_remove_percent",
+                                                                                        "window_length",
+                                                                                        "polyorder",
+                                                                                        "highpass",
+                                                                                        "add_mean"]},
                                            normalize_RFs=merged_an_info['normalize_RFs'])
                         
                         preds = gg.return_prediction(*list(r_r[key][:,:-1].T))
@@ -348,8 +350,12 @@ class results(object):
                 tc_raw = np.load(opj(timecourse_folder,f'999999_timecourse-raw_space-{space}.npy'))
                 mask = np.load(opj(timecourse_folder,f'999999_mask-raw_space-{space}.npy'))
             else:
-                tc_raw = np.load(opj(timecourse_folder,f'{subj}{ses_str}_timecourse-raw_space-{space}.npy'))
-                mask = np.load(opj(timecourse_folder,f'{subj}{ses_str}_mask-raw_space-{space}.npy'))   
+                try:
+                    tc_raw = np.load(opj(timecourse_folder,f'{subj}{ses_str}_timecourse-raw_space-{space}.npy'))
+                    mask = np.load(opj(timecourse_folder,f'{subj}{ses_str}_mask-raw_space-{space}.npy'))
+                except:
+                    tc_raw = np.load(opj(timecourse_folder,f'{subj}_ses-all_timecourse-raw_space-{space}.npy'))
+                    mask = np.load(opj(timecourse_folder,f'{subj}_ses-all_mask-raw_space-{space}.npy'))              
                 
             tc_mean = tc_raw.mean(-1)
             tc_mean_full = np.zeros(mask.shape)

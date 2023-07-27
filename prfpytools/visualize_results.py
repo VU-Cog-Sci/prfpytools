@@ -121,6 +121,100 @@ class visualize_results(object):
     def get_spaces(self):
         self.spaces = self.main_dict.keys()
         return
+    
+    def define_groups(self, groups_dict):
+        self.groups_dict = groups_dict
+        self.groups = groups_dict.keys()
+
+        # if 'placebo' in self.groups:
+        #     for subj_pla in self.groups_dict['placebo']:
+
+        #         gen_subj = subj_pla.split('_')[0]
+
+        #         all_ses_sj = [s for s in self.subjects if gen_subj in s]
+
+        #         for space in self.spaces:
+        #             if 'fs' in space or 'HCP' in space:
+        #                 space_res = self.main_dict[space]
+        #                 for analysis, analysis_res in space_res.items():
+        #                     if subj_pla in analysis_res:
+        #                         p_r_pla = analysis_res[subj_pla]['Processed Results']      
+        #                         for subj, subj_res in analysis_res.items():
+        #                             if subj in all_ses_sj:
+        #                                 p_r = subj_res['Processed Results']
+        #                                 p_r['Noise Ceiling']['Noise Ceiling (CC) (placebo)'] = np.copy(p_r_pla['Noise Ceiling']['Noise Ceiling (CC)'])
+
+        return
+                
+
+    def find_group(self, sj):
+        found=False
+        
+        for group in self.groups:
+            if sj in self.groups_dict[group]:
+                found = True
+                this_sj_group = group
+        if found:
+            return this_sj_group
+        else:
+            return None
+            
+    
+    def compute_diff(self, space_names = 'fsnative', analysis_names = 'all', subject_ids='all',parameter_names='all',base_group='placebo'):
+
+        if space_names == 'all':
+            spaces = [item for item in self.main_dict.items()]
+        else:
+            spaces = [item for item in self.main_dict.items() if item[0] in space_names] 
+
+        for space, space_res in spaces:                
+                                       
+            if analysis_names == 'all':
+                analyses = [item for item in space_res.items()]
+            else:
+                analyses = [item for item in space_res.items() if item[0] in analysis_names] 
+                         
+            for analysis, analysis_res in analyses:       
+                if subject_ids == 'all':
+                    subjects = [item for item in analysis_res.items()]
+                else:
+                    subjects = [item for item in analysis_res.items() if item[0] in subject_ids]
+
+                subjects_pla = [s[0] for s in subjects if s[0] in self.groups_dict[base_group]]
+                
+                for subj, subj_res in subjects:
+
+                    current_sj_group = self.find_group(subj)
+                    #print(subj)
+                    #print(current_sj_group)
+                    if current_sj_group != None and current_sj_group != base_group:
+
+                        gen_subj = subj.split('_')[0]
+                        
+                        subj_pla = [s for s in subjects_pla if gen_subj in s][0]
+                        #print(subj_pla)
+
+                        p_r = analysis_res[subj]['Processed Results']
+                        p_r_pla = analysis_res[subj_pla]['Processed Results'] 
+
+                        if parameter_names == 'all':
+                            parameters = [item for item in p_r.items()]
+                        else:
+                            parameters = [item for item in p_r.items() if item[0] in parameter_names]
+
+                        for param, param_res in parameters:
+                            if f'{current_sj_group}-{base_group}' not in param:
+                                models = [item for item in param_res.items()]
+                                for model, model_res in models:
+                                    p_r[f'{param} {current_sj_group}-{base_group}'][model] = p_r[param][model] - p_r_pla[param][model]
+
+    
+        return
+
+
+
+
+
         
     def define_rois_and_flatmaps(self, fs_dir, output_rois_path, import_flatmaps, output_rois, hcp_atlas_path = None):
         self.idx_rois = dd(dict)
@@ -140,6 +234,10 @@ class visualize_results(object):
                           whitematter_surf='smoothwm')")
                     cortex.freesurfer.import_subj(pycortex_subj, freesurfer_subject_dir=self.fs_dir, 
                           whitematter_surf='smoothwm')
+                    #force udate db
+                    cortex.db._subjects = None
+                    cortex.db.subjects
+                    
                 if import_flatmaps:
                     try:
                         print('importing flatmaps from freesurfer')
@@ -387,7 +485,8 @@ class visualize_results(object):
                         p_r['Alpha']['all'] = rsq.max(-1) * (ecc.min(-1)<self.ecc_max) * (ecc.max(-1)>self.ecc_min) * (rsq.min(-1)>0) #* (p_r['Noise Ceiling']['Noise Ceiling (RSq)']>0)
 
                         if 'Mean' in tc_stats:
-                            p_r['Alpha']['all'] *= (tc_stats['Mean']>self.tc_min[subj])                        
+                            p_r['Alpha']['all'] *= (tc_stats['Mean']>self.tc_min[subj])
+
                         
                         for model in models:
                             p_r['Alpha'][model] = p_r['RSq'][model] * (p_r['Eccentricity'][model]>self.ecc_min) * (p_r['Eccentricity'][model]<self.ecc_max)\
@@ -510,7 +609,7 @@ class visualize_results(object):
                         
                     tc_runs=[]
 
-                    red_per = self.prf_stims[task].late_iso_dict['periods'][(self.prf_stims[task].late_iso_dict['periods']<20) | (self.prf_stims[task].late_iso_dict['periods']>234)]
+                    #red_per = self.prf_stims[task].late_iso_dict['periods'][(self.prf_stims[task].late_iso_dict['periods']<20) | (self.prf_stims[task].late_iso_dict['periods']>234)]
 
                     
                     for run in all_runs:
@@ -540,7 +639,7 @@ class visualize_results(object):
                     #if 'CVmean' in analysis or 'CVmedian' in analysis:
                     #    vertex_info+=f"WARNING: predictions based on mean/median CV parameters are not usually meaningful\n"
 
-                    vertex_info+=f"{task} late iso dict median (begin/end only): {np.median(tc[task][red_per])}\n"
+                    vertex_info+=f"{task} late iso dict median: {np.median(tc[task][self.prf_stims[task].late_iso_dict[task]])}\n"
 
                     
                     #fit and test timecourses separately
@@ -787,6 +886,8 @@ class visualize_results(object):
          
                     if roi_borders_name is not None:
                         roi_borders = self.idx_rois_borders[subj][roi_borders_name]
+                    else:
+                        roi_borders = None
                     
                     curr_models = deepcopy(self.only_models)
                     if len(self.only_models)>1:
@@ -997,27 +1098,47 @@ class visualize_results(object):
                                 fig.savefig(f"{self.pycortex_image_path}/{model}_rsq_cbar.pdf", dpi=600, bbox_inches='tight', transparent=True)
                             
                         if 'Noise Ceiling' in p_r:
+
                             for nc_type in p_r['Noise Ceiling']:
-                                #print(np.nanquantile(p_r['Noise Ceiling'][nc_type][alpha[analysis][subj][model]>rsq_thresh],0.1))
-                                #print(np.nanquantile(p_r['Noise Ceiling'][nc_type][alpha[analysis][subj][model]>rsq_thresh],0.9))
-                                ds_rsq[f'{subj} {nc_type}'] = Vertex2D_fix(p_r['Noise Ceiling'][nc_type],
-                                                               np.ones_like(alpha[analysis][subj][model]), subject=pycortex_subj, 
-                                                            vmin=0,#np.nanquantile(p_r['Noise Ceiling'][nc_type][alpha[analysis][subj][model]>rsq_thresh],0.1), 
-                                                            vmax=np.nanquantile(p_r['Noise Ceiling'][nc_type][alpha[analysis][subj][model]>rsq_thresh],0.9),
-                                                            vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap=pycortex_cmap, roi_borders=roi_borders)   
-                                
-                                fig = simple_colorbar(vmin=0,#np.nanquantile(p_r['Noise Ceiling'][nc_type][alpha[analysis][subj][model]>rsq_thresh],0.1), 
-                                                    vmax=np.nanquantile(p_r['Noise Ceiling'][nc_type][alpha[analysis][subj][model]>rsq_thresh],0.9),
-                                                cmap_name=pycortex_cmap, ori='horizontal', param_name=f'{subj} {nc_type}')
-                                
-                                if self.pycortex_image_path is not None and save_colorbars:
-                                    fig.savefig(f"{self.pycortex_image_path}/nc_cbar.pdf", dpi=600, bbox_inches='tight', transparent=True)                                
- 
+
+                                if 'placebo' not in nc_type:
+
+                                    ds_rsq[f'{subj} {nc_type}'] = Vertex2D_fix(p_r['Noise Ceiling'][nc_type],
+                                                                np.ones_like(alpha[analysis][subj][model]), subject=pycortex_subj, 
+                                                                vmin=0,#np.nanquantile(p_r['Noise Ceiling'][nc_type][alpha[analysis][subj][model]>rsq_thresh],0.1), 
+                                                                vmax=0.5,#np.nanquantile(p_r['Noise Ceiling'][nc_type][alpha[analysis][subj][model]>rsq_thresh],0.9),
+                                                                vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap=pycortex_cmap, roi_borders=roi_borders)   
+                                    
+                                    fig = simple_colorbar(vmin=0,#np.nanquantile(p_r['Noise Ceiling'][nc_type][alpha[analysis][subj][model]>rsq_thresh],0.1), 
+                                                        vmax=0.5,#np.nanquantile(p_r['Noise Ceiling'][nc_type][alpha[analysis][subj][model]>rsq_thresh],0.9),
+                                                    cmap_name=pycortex_cmap, ori='horizontal', param_name=f'{subj} {nc_type}')
+                                    
+                                    if self.pycortex_image_path is not None and save_colorbars:
+                                        fig.savefig(f"{self.pycortex_image_path}/nc_cbar.pdf", dpi=600, bbox_inches='tight', transparent=True)                                
+    
+
+                                    if f'{nc_type} (placebo)' in p_r['Noise Ceiling'] and current_sj_group != 'placebo':
+                                        nc_pcb = p_r['Noise Ceiling'][f'{nc_type} (placebo)']
+                                        ncdiff = p_r['Noise Ceiling'][nc_type] - nc_pcb
+
+                                        ds_rsq[f'{subj} {current_sj_group}-placebo {nc_type}'] = Vertex2D_fix(ncdiff,
+                                                                nc_pcb, subject=pycortex_subj, 
+                                                                vmin=-0.2, #np.nanquantile(p_r['Noise Ceiling'][nc_type][alpha[analysis][subj][model]>rsq_thresh],0.1), 
+                                                                vmax=0.2, #np.nanquantile(p_r['Noise Ceiling'][nc_type][alpha[analysis][subj][model]>rsq_thresh],0.9),
+                                                                vmin2=0.0,#np.nanquantile(nc_pcb,0.25),
+                                                                vmax2=0.5,#np.nanquantile(nc_pcb,0.75),
+                                                                cmap=pycortex_cmap, roi_borders=roi_borders)   
+                                    
+                                        fig = simple_colorbar(vmin=-0.2,#np.nanquantile(p_r['Noise Ceiling'][nc_type][alpha[analysis][subj][model]>rsq_thresh],0.1), 
+                                                            vmax=0.2,#np.nanquantile(p_r['Noise Ceiling'][nc_type][alpha[analysis][subj][model]>rsq_thresh],0.9),
+                                                        cmap_name=pycortex_cmap, ori='horizontal', param_name=f'{subj} {nc_type} diff')
+                                        
+                                        if self.pycortex_image_path is not None and save_colorbars:
+                                            fig.savefig(f"{self.pycortex_image_path}/ncdiff_cbar.pdf", dpi=600, bbox_inches='tight', transparent=True)                                
+    
                             
                         if '#Subjects with CVRSq>0' in p_r:
                             for model in self.only_models:
-                                #print(np.nanquantile(p_r['Noise Ceiling'][nc_type][alpha[analysis][subj][model]>rsq_thresh],0.1))
-                                #print(np.nanquantile(p_r['Noise Ceiling'][nc_type][alpha[analysis][subj][model]>rsq_thresh],0.9))
                                 ds_rsq[f"#subj cvrsq>0 {subj} {model}"] = Vertex2D_fix(p_r['#Subjects with CVRSq>0'][model],
                                                                np.ones_like(alpha[analysis][subj][model]), subject=pycortex_subj, 
                                                             vmin=0,#np.nanquantile(p_r['Noise Ceiling'][nc_type][alpha[analysis][subj][model]>rsq_thresh],0.1), 
@@ -1488,8 +1609,9 @@ class visualize_results(object):
         if 'fsaverage' not in self.main_dict:
             self.main_dict['fsaverage'] = dd(lambda:dd(lambda:dd(lambda:dd(dict))))
         
-        if 'Noise Ceiling (RSq)' not in models and parameters[0] != 'RSq':
-            parameters.insert(0,'RSq')
+        if parameters[0] != 'RSq':
+            if parameters != ['Noise Ceiling']:
+                parameters.insert(0,'RSq')
             
         if 'Polar Angle' in parameters or 'Eccentricity' in parameters:
             print("Are you sure you want to resample polar angle and eccentricity? this can cause interpolation issues. better to use x_pos and y_pos instead.")
