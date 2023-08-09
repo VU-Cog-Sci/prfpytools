@@ -688,8 +688,8 @@ def Vertex2D_fix(data1, data2, subject, cmap, vmin, vmax, vmin2, vmax2, roi_bord
     display_data /= 255
 
 
-    print(display_data.min())
-    print(display_data.max())
+    #print(display_data.min())
+    #print(display_data.max())
     
     if roi_borders is not None:
         display_data[:,roi_borders.astype('bool')] = 0#255-display_data[:,roi_borders.astype('bool')]#0#255

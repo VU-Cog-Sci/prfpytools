@@ -198,7 +198,7 @@ class visualize_results(object):
                         p_r_pla = analysis_res[subj_pla]['Processed Results'] 
 
                         if parameter_names == 'all':
-                            parameters = [item for item in p_r.items()]
+                            parameters = [item for item in p_r.items() if 'Alpha' not in item[0]]
                         else:
                             parameters = [item for item in p_r.items() if item[0] in parameter_names]
 
@@ -206,7 +206,27 @@ class visualize_results(object):
                             if f'{current_sj_group}-{base_group}' not in param:
                                 models = [item for item in param_res.items()]
                                 for model, model_res in models:
+                                    if model in p_r['Alpha']:
+                                        this_alpha = p_r['Alpha'][model] * p_r_pla['Alpha'][model]
+                                    else:
+                                        this_alpha = np.ones_like(p_r[param][model])
+
                                     p_r[f'{param} {current_sj_group}-{base_group}'][model] = p_r[param][model] - p_r_pla[param][model]
+
+                                    p_r[f'{param} {current_sj_group}-{base_group}'][model][this_alpha<=0] = 0
+
+                        t_stats = analysis_res[subj]['Timecourse Stats']
+                        t_stats_pla = analysis_res[subj_pla]['Timecourse Stats'] 
+
+                        if parameter_names == 'all':
+                            parameters = [item for item in t_stats.items() if 'Alpha' not in item[0]]
+                        else:
+                            parameters = [item for item in t_stats.items() if item[0] in parameter_names]
+
+                        for param, param_res in parameters:
+                            if f'{current_sj_group}-{base_group}' not in param:
+ 
+                                t_stats[f'{param} {current_sj_group}-{base_group}'] = t_stats[param] - t_stats_pla[param]
 
     
         return
@@ -520,7 +540,7 @@ class visualize_results(object):
 
 
     def pycortex_plots(self, rois, rsq_thresh,
-                       space_names = 'fsnative', analysis_names = 'all', subject_ids='all',
+                       space_names = 'fsnative', analysis_names = 'all', subject_ids='all', param_diffs=[],
                        timecourse_folder = None, screenshot_paths = [], save_colorbars=False, pycortex_cmap = 'nipy_spectral',
                        rsq_max_opacity = 0.5, pycortex_image_path = None, roi_borders_name = None):        
         pl.rcParams.update({'font.size': 16})
@@ -737,15 +757,16 @@ class visualize_results(object):
                     prfs[model] = create_model_rf_wrapper(model,self.prf_stim,params,an_info['normalize_RFs'])
                     
                     for key in subj_res['Processed Results']:
-                        if model in subj_res['Processed Results'][key]:
-                            vertex_info+=f"{key} {model} {subj_res['Processed Results'][key][model][index]:.8f}\n"
+                        #if model in subj_res['Processed Results'][key]:
+                        for mm in subj_res['Processed Results'][key]:
+                            vertex_info+=f"{key} {mm} {subj_res['Processed Results'][key][mm][index]:.8f}\n"
                     
                     vertex_info+="\n"
                     
                 pl.ion()
     
                 if self.click==0:
-                    self.f, self.axes = pl.subplots(2,2,figsize=(18, 15),frameon=True, gridspec_kw={'width_ratios': [8, 2], 'height_ratios': [1,1]})
+                    self.f, self.axes = pl.subplots(2,2,figsize=(18, 25),frameon=True, gridspec_kw={'width_ratios': [8, 2], 'height_ratios': [1,1]})
                     self.f.set_tight_layout(True)
                 else:
                     self.cbar.remove()
@@ -881,6 +902,7 @@ class visualize_results(object):
                         tc_stats = subj_res['Timecourse Stats']
                         mask = subj_res['mask']
                     else:
+                        tc_stats = subj_res['Timecourse Stats']
                         mask = np.ones_like(p_r['RSq'][list(models)[0]])
 
          
@@ -1067,6 +1089,70 @@ class visualize_results(object):
                         plotted_rois[subj] = True 
                                                 
 
+
+                    if self.plot_diffs:
+                        ds_diffs = dict()
+                        diff_params = [item for item in p_r.items() if np.any([s in item[0] for s in param_diffs]) and '-' in item[0]]
+
+                        for param, param_res in diff_params:
+                            models = [item for item in param_res.items() if item[0] in self.only_models or 'Noise' in item[0]]
+                            for model, model_res in models:
+
+                                if model in alpha[analysis][subj]:
+                                    this_alpha = alpha[analysis][subj][model]
+                                elif 'Noise' in model:
+                                    if 'ses' in subj and space == 'fsnative':
+                                        gen_subj = subj.split('_')[0]
+                            
+                                        subj_pla = [s for s in self.groups_dict['placebo'] if gen_subj in s][0]
+                                        this_alpha = analysis_res[subj_pla]['Processed Results']['Noise Ceiling']['Noise Ceiling (CC)']
+                                        this_alpha[this_alpha<0] = 0
+                                    else:
+                                        this_alpha = np.ones_like(p_r[param][model])
+                                    
+                                else:
+                                    this_alpha = np.ones_like(p_r[param][model])
+
+                                ds_diffs[f'{subj} {param} {model}'] = Vertex2D_fix(p_r[param][model], 
+                                                                      this_alpha, 
+                                                                      subject=pycortex_subj, 
+                                                            vmin=np.nanquantile(p_r[param][model][this_alpha>rsq_thresh],0.1), 
+                                                            vmax=np.nanquantile(p_r[param][model][this_alpha>rsq_thresh],0.9),
+                                                                      vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap=pycortex_cmap, 
+                                                                      roi_borders=roi_borders)
+
+                                fig = simple_colorbar(vmin=np.nanquantile(p_r[param][model][this_alpha>rsq_thresh],0.1), 
+                                                vmax=np.nanquantile(p_r[param][model][this_alpha>rsq_thresh],0.9),
+                                                cmap_name=pycortex_cmap, ori='horizontal', param_name=param)
+                                
+                                if self.pycortex_image_path is not None and save_colorbars:
+                                    fig.savefig(f"{self.pycortex_image_path}/{model}_{param}_cbar.pdf", dpi=600, bbox_inches='tight', transparent=True)
+
+                        diff_params_stats = [item for item in tc_stats.items() if np.any([s in item[0] for s in param_diffs]) and '-' in item[0]]
+
+                        for param, param_res in diff_params_stats:
+                            this_alpha = np.ones_like(tc_stats[param])
+
+                            ds_diffs[f'{subj} {param}'] = Vertex2D_fix(tc_stats[param], 
+                                                                    this_alpha, 
+                                                                    subject=pycortex_subj, 
+                                                        vmin=np.nanquantile(tc_stats[param][this_alpha>rsq_thresh],0.1), 
+                                                        vmax=np.nanquantile(tc_stats[param][this_alpha>rsq_thresh],0.9),
+                                                                    vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap=pycortex_cmap, 
+                                                                    roi_borders=roi_borders)
+
+                            fig = simple_colorbar(vmin=np.nanquantile(tc_stats[param][this_alpha>rsq_thresh],0.1), 
+                                            vmax=np.nanquantile(tc_stats[param][this_alpha>rsq_thresh],0.9),
+                                            cmap_name=pycortex_cmap, ori='horizontal', param_name=param)
+                            
+                            if self.pycortex_image_path is not None and save_colorbars:
+                                fig.savefig(f"{self.pycortex_image_path}/{param}_cbar.pdf", dpi=600, bbox_inches='tight', transparent=True)
+
+                            
+                        self.js_handle_dict[space][analysis][subj]['Diffs'] = cortex.webgl.show(ds_diffs, pickerfun=clicker_function,  overlays_visible=[], labels_visible=[])  
+
+
+
                
         
                     if self.plot_rsq_cortex:              
@@ -1081,10 +1167,9 @@ class visualize_results(object):
 
 
                         for model in self.only_models:
-                            #print(np.nanquantile(p_r['RSq'][model][alpha[analysis][subj][model]>rsq_thresh],0.1))
-                            #print(np.nanquantile(p_r['RSq'][model][alpha[analysis][subj][model]>rsq_thresh],0.9))
+
                             ds_rsq[f"{subj} {model} rsq"] = Vertex2D_fix(p_r['RSq'][model], 
-                                                            np.ones_like(alpha[analysis][subj][model]), 
+                                                            np.ones_like(p_r['RSq'][model]), 
                                                             subject=pycortex_subj, 
                                                             vmin=rsq_thresh,#0,#np.nanquantile(p_r['RSq'][model][alpha[analysis][subj][model]>rsq_thresh],0.1), 
                                                             vmax=rsq_max_opacity,#0.15,#np.nanquantile(p_r['RSq'][model][alpha[analysis][subj][model]>rsq_thresh],0.9),
@@ -1097,26 +1182,46 @@ class visualize_results(object):
                             if self.pycortex_image_path is not None and save_colorbars:
                                 fig.savefig(f"{self.pycortex_image_path}/{model}_rsq_cbar.pdf", dpi=600, bbox_inches='tight', transparent=True)
                             
-                        if 'Noise Ceiling' in p_r:
+                        if 'Noise Ceiling' in p_r:  ## sorted([p for p in paths if os.path.isdir(p) and np.any(['Noise Ceiling' in p for s in groups_dict['5mg']])])
 
                             for nc_type in p_r['Noise Ceiling']:
 
-                                if 'placebo' not in nc_type:
-
-                                    ds_rsq[f'{subj} {nc_type}'] = Vertex2D_fix(p_r['Noise Ceiling'][nc_type],
-                                                                np.ones_like(alpha[analysis][subj][model]), subject=pycortex_subj, 
+                                ds_rsq[f'{subj} {nc_type}'] = Vertex2D_fix(p_r['Noise Ceiling'][nc_type],
+                                                                np.ones_like(p_r['Noise Ceiling'][nc_type]), subject=pycortex_subj, 
                                                                 vmin=0,#np.nanquantile(p_r['Noise Ceiling'][nc_type][alpha[analysis][subj][model]>rsq_thresh],0.1), 
                                                                 vmax=0.5,#np.nanquantile(p_r['Noise Ceiling'][nc_type][alpha[analysis][subj][model]>rsq_thresh],0.9),
                                                                 vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap=pycortex_cmap, roi_borders=roi_borders)   
                                     
-                                    fig = simple_colorbar(vmin=0,#np.nanquantile(p_r['Noise Ceiling'][nc_type][alpha[analysis][subj][model]>rsq_thresh],0.1), 
+                                fig = simple_colorbar(vmin=0,#np.nanquantile(p_r['Noise Ceiling'][nc_type][alpha[analysis][subj][model]>rsq_thresh],0.1), 
                                                         vmax=0.5,#np.nanquantile(p_r['Noise Ceiling'][nc_type][alpha[analysis][subj][model]>rsq_thresh],0.9),
                                                     cmap_name=pycortex_cmap, ori='horizontal', param_name=f'{subj} {nc_type}')
                                     
-                                    if self.pycortex_image_path is not None and save_colorbars:
-                                        fig.savefig(f"{self.pycortex_image_path}/nc_cbar.pdf", dpi=600, bbox_inches='tight', transparent=True)                                
+                                if self.pycortex_image_path is not None and save_colorbars:
+                                    fig.savefig(f"{self.pycortex_image_path}/nc_cbar.pdf", dpi=600, bbox_inches='tight', transparent=True)                                
     
 
+
+                                    if f'{nc_type} (placebo)' in p_r['Noise Ceiling'] and current_sj_group != 'placebo':
+                                        nc_pcb = p_r['Noise Ceiling'][f'{nc_type} (placebo)']
+                                        ncdiff = p_r['Noise Ceiling'][nc_type] - nc_pcb
+
+                                        ds_rsq[f'{subj} {current_sj_group}-placebo {nc_type}'] = Vertex2D_fix(ncdiff,
+                                                                nc_pcb, subject=pycortex_subj, 
+                                                                vmin=-0.2, #np.nanquantile(p_r['Noise Ceiling'][nc_type][alpha[analysis][subj][model]>rsq_thresh],0.1), 
+                                                                vmax=0.2, #np.nanquantile(p_r['Noise Ceiling'][nc_type][alpha[analysis][subj][model]>rsq_thresh],0.9),
+                                                                vmin2=0.0,#np.nanquantile(nc_pcb,0.25),
+                                                                vmax2=0.5,#np.nanquantile(nc_pcb,0.75),
+                                                                cmap=pycortex_cmap, roi_borders=roi_borders)   
+                                    
+                                        fig = simple_colorbar(vmin=-0.2,#np.nanquantile(p_r['Noise Ceiling'][nc_type][alpha[analysis][subj][model]>rsq_thresh],0.1), 
+                                                            vmax=0.2,#np.nanquantile(p_r['Noise Ceiling'][nc_type][alpha[analysis][subj][model]>rsq_thresh],0.9),
+                                                        cmap_name=pycortex_cmap, ori='horizontal', param_name=f'{subj} {nc_type} diff')
+                                        
+                                        if self.pycortex_image_path is not None and save_colorbars:
+                                            fig.savefig(f"{self.pycortex_image_path}/ncdiff_cbar.pdf", dpi=600, bbox_inches='tight', transparent=True)                                
+    
+                            
+                            
                                     if f'{nc_type} (placebo)' in p_r['Noise Ceiling'] and current_sj_group != 'placebo':
                                         nc_pcb = p_r['Noise Ceiling'][f'{nc_type} (placebo)']
                                         ncdiff = p_r['Noise Ceiling'][nc_type] - nc_pcb
@@ -1140,7 +1245,7 @@ class visualize_results(object):
                         if '#Subjects with CVRSq>0' in p_r:
                             for model in self.only_models:
                                 ds_rsq[f"#subj cvrsq>0 {subj} {model}"] = Vertex2D_fix(p_r['#Subjects with CVRSq>0'][model],
-                                                               np.ones_like(alpha[analysis][subj][model]), subject=pycortex_subj, 
+                                                               np.ones_like(p_r['#Subjects with CVRSq>0'][model]), subject=pycortex_subj, 
                                                             vmin=0,#np.nanquantile(p_r['Noise Ceiling'][nc_type][alpha[analysis][subj][model]>rsq_thresh],0.1), 
                                                             vmax=100,#np.nanquantile(p_r['Noise Ceiling'][nc_type][alpha[analysis][subj][model]>rsq_thresh],0.9),
                                                             vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap=pycortex_cmap, roi_borders=roi_borders)   
@@ -1610,7 +1715,7 @@ class visualize_results(object):
             self.main_dict['fsaverage'] = dd(lambda:dd(lambda:dd(lambda:dd(dict))))
         
         if parameters[0] != 'RSq':
-            if parameters != ['Noise Ceiling']:
+            if 'Noise Ceiling (CC)' not in models:
                 parameters.insert(0,'RSq')
             
         if 'Polar Angle' in parameters or 'Eccentricity' in parameters:
@@ -1643,116 +1748,125 @@ class visualize_results(object):
                         for subj, subj_res in tqdm(subjects):
                             print(space+" "+analysis+" "+subj)
                             p_r = subj_res['Processed Results']
+
+                            if parameter in p_r:
+                                if model in p_r[parameter]:
                             
-                            if space == 'fsnative':
-                            
-                                lh_c = read_morph_data(opj(self.fs_dir, f"{subj}/surf/lh.curv"))
-                                
-                                if parameter in p_r:
-                                    param = np.copy(p_r[parameter][model])
-                                else:
-                                    if parameter == 'x_pos':
-                                        param = p_r['Eccentricity'][model]*np.cos(p_r['Polar Angle'][model])
-                                    elif parameter == 'y_pos':
-                                        param = p_r['Eccentricity'][model]*np.sin(p_r['Polar Angle'][model])
-                                    else:
-                                        print(f"WARNING: unidentified parameter {parameter}")
-                                        raise IOError
+                                    if space == 'fsnative':
+                                        if 'ses' in subj:
+                                            fs_subj = subj.split('_')[0]
+                                        else:
+                                            fs_subj = subj
+                                    
+                                        lh_c = read_morph_data(opj(self.fs_dir, f"{fs_subj}/surf/lh.curv"))
                                         
-                                              
-                                
-                                lh_file_path = opj(self.fs_dir, f"{subj}/surf/lh.{''.join(filter(str.isalnum, parameter))}_{model}")
-                                rh_file_path = opj(self.fs_dir, f"{subj}/surf/rh.{''.join(filter(str.isalnum, parameter))}_{model}")
-    
-                                write_morph_data(lh_file_path, param[:lh_c.shape[0]])
-                                write_morph_data(rh_file_path, param[lh_c.shape[0]:])
-                                
-                                rh_fsaverage_path = f"{rh_file_path.replace(subj,'fsaverage')}_{subj}"
-                                lh_fsaverage_path = f"{lh_file_path.replace(subj,'fsaverage')}_{subj}"
-                                
-                                os.system("export FREESURFER_HOME=/Applications/freesurfer/7.2.0/")
-                                os.system("source $FREESURFER_HOME/SetUpFreeSurfer.sh")
-                                os.system(f"export SUBJECTS_DIR='{self.fs_dir}'")
-                                os.system(f"mri_surf2surf --srcsubject {subj} --srcsurfval '{lh_file_path}' --trgsubject fsaverage --trgsurfval '{lh_fsaverage_path}' --hemi lh --trg_type curv")
-                                os.system(f"mri_surf2surf --srcsubject {subj} --srcsurfval '{rh_file_path}' --trgsubject fsaverage --trgsurfval '{rh_fsaverage_path}' --hemi rh --trg_type curv")
-    
-                                lh_fsaverage_param = read_morph_data(lh_fsaverage_path)
-                                rh_fsaverage_param = read_morph_data(rh_fsaverage_path)
-                                
-                                
-                                if parameter == 'RSq':
-                                    fsaverage_rsq[subj] = np.nan_to_num(np.concatenate((lh_fsaverage_param,rh_fsaverage_param)))
-                                    fsaverage_rsq[subj][fsaverage_rsq[subj]<0] = 0
-                                    print(np.all(np.isfinite(fsaverage_rsq[subj])))
-                                    self.main_dict['fsaverage'][analysis][subj]['Processed Results'][parameter][model] = np.copy(fsaverage_rsq[subj])   
-                                else:
-                                    fsaverage_param[subj] = np.concatenate((lh_fsaverage_param,rh_fsaverage_param))
-                                    self.main_dict['fsaverage'][analysis][subj]['Processed Results'][parameter][model] = np.copy(fsaverage_param[subj])    
-                                    
-                            elif space == 'HCP':
-                                f=nb.load(hcp_atlas_mask_path[0])
-                                data_1 = np.array([arr.data for arr in f.darrays])[0].astype('bool')
-                        
-                                f=nb.load(hcp_atlas_mask_path[1])
-                                data_2 = np.array([arr.data for arr in f.darrays])[0].astype('bool')
-                                
-                                
-                                cifti_brain_model = cifti.read(hcp_cii_file_path)[1][1]
-                                
-                                output = np.zeros(len(cifti_brain_model))
-                                
-                                if parameter in p_r:                              
-                                    output[:np.sum(data_1)] = p_r[parameter][model][:len(data_1)][data_1]
-                                    output[np.sum(data_1):(np.sum(data_1) + np.sum(data_2))] = p_r[parameter][model][len(data_1):][data_2]
-                                else:
-                                    if parameter == 'x_pos':
-                                        output[:np.sum(data_1)] = p_r['Eccentricity'][model][:len(data_1)][data_1]*np.cos(p_r['Polar Angle'][model][:len(data_1)][data_1])
-                                        output[np.sum(data_1):(np.sum(data_1) + np.sum(data_2))] = p_r['Eccentricity'][model][len(data_1):][data_2]*np.cos(p_r['Polar Angle'][model][len(data_1):][data_2])                          
-                                    elif parameter == 'y_pos':
-                                        output[:np.sum(data_1)] = p_r['Eccentricity'][model][:len(data_1)][data_1]*np.sin(p_r['Polar Angle'][model][:len(data_1)][data_1])
-                                        output[np.sum(data_1):(np.sum(data_1) + np.sum(data_2))] = p_r['Eccentricity'][model][len(data_1):][data_2]*np.sin(p_r['Polar Angle'][model][len(data_1):][data_2])   
-                                    else:
-                                        print(f"WARNING: unidentified parameter {parameter}")              
-                                        raise IOError
-                                    
-                                temp_filenames = ['temp_cii.nii', 'temp_cii_subvol.nii.gz', 'temp_gii_L.func.gii',
-                                                  'temp_gii_R.func.gii', 'fsaverage_gii_L.func.gii', 'fsaverage_gii_R.func.gii']
-                                temp_paths = [opj(hcp_temp_folder, el) for el in temp_filenames]
-                                
-                                cifti.write(temp_paths[0], output.reshape(1,-1), 
-                                            (cifti.Scalar.from_names([parameter]), cifti_brain_model))
-                                
-                                os.system(f"wb_command -cifti-separate '{temp_paths[0]}' COLUMN -volume-all '{temp_paths[1]}' \
-                                          -metric CORTEX_LEFT '{temp_paths[2]}' -metric CORTEX_RIGHT '{temp_paths[3]}'")
-                                          
-                                os.system(f"wb_command -metric-resample '{temp_paths[2]}' '{hcp_old_sphere.replace('?','L')}' \
-                                          '{hcp_new_sphere.replace('?','L')}' ADAP_BARY_AREA '{temp_paths[4]}' \
-                                          -area-metrics '{hcp_old_area.replace('?','L')}' '{hcp_new_area.replace('?','L')}'")
+                                        if parameter in p_r:
+                                            param = np.copy(p_r[parameter][model])
+                                        else:
+                                            if parameter == 'x_pos':
+                                                param = p_r['Eccentricity'][model]*np.cos(p_r['Polar Angle'][model])
+                                            elif parameter == 'y_pos':
+                                                param = p_r['Eccentricity'][model]*np.sin(p_r['Polar Angle'][model])
+                                            else:
+                                                print(f"WARNING: unidentified parameter {parameter}")
+                                                raise IOError
+                                                
+                                                    
+                                        
+                                        lh_file_path = opj(self.fs_dir, f"{fs_subj}/surf/lh.{subj}_{''.join(filter(str.isalnum, parameter))}_{''.join(filter(str.isalnum, model))}")
+                                        rh_file_path = opj(self.fs_dir, f"{fs_subj}/surf/rh.{subj}_{''.join(filter(str.isalnum, parameter))}_{''.join(filter(str.isalnum, model))}")
+            
+                                        write_morph_data(lh_file_path, param[:lh_c.shape[0]])
+                                        write_morph_data(rh_file_path, param[lh_c.shape[0]:])
 
-                                os.system(f"wb_command -metric-resample '{temp_paths[3]}' '{hcp_old_sphere.replace('?','R')}' \
-                                          '{hcp_new_sphere.replace('?','R')}' ADAP_BARY_AREA '{temp_paths[5]}' \
-                                          -area-metrics '{hcp_old_area.replace('?','R')}' '{hcp_new_area.replace('?','R')}'")
+                                        lh_fsaverage_path =  opj(self.fs_dir, f"fsaverage/surf/lh.{subj}_{''.join(filter(str.isalnum, parameter))}_{''.join(filter(str.isalnum, model))}")
+                                        rh_fsaverage_path = opj(self.fs_dir, f"fsaverage/surf/rh.{subj}_{''.join(filter(str.isalnum, parameter))}_{''.join(filter(str.isalnum, model))}")
+                                        
+                                        os.system("export FREESURFER_HOME=/Applications/freesurfer/7.2.0/")
+                                        os.system("source $FREESURFER_HOME/SetUpFreeSurfer.sh")
+                                        os.system(f"export SUBJECTS_DIR='{self.fs_dir}'")
+                                        os.system(f"mri_surf2surf --srcsubject {fs_subj} --srcsurfval '{lh_file_path}' --trgsubject fsaverage --trgsurfval '{lh_fsaverage_path}' --hemi lh --trg_type curv")
+                                        os.system(f"mri_surf2surf --srcsubject {fs_subj} --srcsurfval '{rh_file_path}' --trgsubject fsaverage --trgsurfval '{rh_fsaverage_path}' --hemi rh --trg_type curv")
+            
+                                        lh_fsaverage_param = read_morph_data(lh_fsaverage_path)
+                                        rh_fsaverage_param = read_morph_data(rh_fsaverage_path)
+                                        
+                                        
+                                        if parameter == 'RSq':
+                                            fsaverage_rsq[subj] = np.nan_to_num(np.concatenate((lh_fsaverage_param,rh_fsaverage_param)))
+                                            fsaverage_rsq[subj][fsaverage_rsq[subj]<0] = 0
+                                            print(np.all(np.isfinite(fsaverage_rsq[subj])))
+                                            self.main_dict['fsaverage'][analysis][subj]['Processed Results'][parameter][model] = np.copy(fsaverage_rsq[subj])   
+                                        else:
+                                            fsaverage_param[subj] = np.concatenate((lh_fsaverage_param,rh_fsaverage_param))
+                                            self.main_dict['fsaverage'][analysis][subj]['Processed Results'][parameter][model] = np.copy(fsaverage_param[subj])    
+                                            
+                                    elif space == 'HCP':
+                                        f=nb.load(hcp_atlas_mask_path[0])
+                                        data_1 = np.array([arr.data for arr in f.darrays])[0].astype('bool')
                                 
-                                a = nb.load(temp_paths[4])
-                                b = nb.load(temp_paths[5])
+                                        f=nb.load(hcp_atlas_mask_path[1])
+                                        data_2 = np.array([arr.data for arr in f.darrays])[0].astype('bool')
+                                        
+                                        
+                                        cifti_brain_model = cifti.read(hcp_cii_file_path)[1][1]
+                                        
+                                        output = np.zeros(len(cifti_brain_model))
+                                        
+                                        if parameter in p_r:                              
+                                            output[:np.sum(data_1)] = p_r[parameter][model][:len(data_1)][data_1]
+                                            output[np.sum(data_1):(np.sum(data_1) + np.sum(data_2))] = p_r[parameter][model][len(data_1):][data_2]
+                                        else:
+                                            if parameter == 'x_pos':
+                                                output[:np.sum(data_1)] = p_r['Eccentricity'][model][:len(data_1)][data_1]*np.cos(p_r['Polar Angle'][model][:len(data_1)][data_1])
+                                                output[np.sum(data_1):(np.sum(data_1) + np.sum(data_2))] = p_r['Eccentricity'][model][len(data_1):][data_2]*np.cos(p_r['Polar Angle'][model][len(data_1):][data_2])                          
+                                            elif parameter == 'y_pos':
+                                                output[:np.sum(data_1)] = p_r['Eccentricity'][model][:len(data_1)][data_1]*np.sin(p_r['Polar Angle'][model][:len(data_1)][data_1])
+                                                output[np.sum(data_1):(np.sum(data_1) + np.sum(data_2))] = p_r['Eccentricity'][model][len(data_1):][data_2]*np.sin(p_r['Polar Angle'][model][len(data_1):][data_2])   
+                                            else:
+                                                print(f"WARNING: unidentified parameter {parameter}")              
+                                                raise IOError
+                                            
+                                        temp_filenames = ['temp_cii.nii', 'temp_cii_subvol.nii.gz', 'temp_gii_L.func.gii',
+                                                        'temp_gii_R.func.gii', 'fsaverage_gii_L.func.gii', 'fsaverage_gii_R.func.gii']
+                                        temp_paths = [opj(hcp_temp_folder, el) for el in temp_filenames]
+                                        
+                                        cifti.write(temp_paths[0], output.reshape(1,-1), 
+                                                    (cifti.Scalar.from_names([parameter]), cifti_brain_model))
+                                        
+                                        os.system(f"wb_command -cifti-separate '{temp_paths[0]}' COLUMN -volume-all '{temp_paths[1]}' \
+                                                -metric CORTEX_LEFT '{temp_paths[2]}' -metric CORTEX_RIGHT '{temp_paths[3]}'")
+                                                
+                                        os.system(f"wb_command -metric-resample '{temp_paths[2]}' '{hcp_old_sphere.replace('?','L')}' \
+                                                '{hcp_new_sphere.replace('?','L')}' ADAP_BARY_AREA '{temp_paths[4]}' \
+                                                -area-metrics '{hcp_old_area.replace('?','L')}' '{hcp_new_area.replace('?','L')}'")
 
-                                if 'rsq' in parameter.lower():
-                                    fsaverage_rsq[subj] = np.nan_to_num(np.concatenate((np.array([arr.data for arr in a.darrays])[0],np.array([arr.data for arr in b.darrays])[0])))
-                                    fsaverage_rsq[subj][fsaverage_rsq[subj]<0] = 0
-                                    print(np.any(np.isnan(fsaverage_rsq[subj])))
-                                    print(np.any(~np.isfinite(fsaverage_rsq[subj])))                                    
-                                    self.main_dict['fsaverage'][analysis][subj]['Processed Results'][parameter][model] = np.copy(fsaverage_rsq[subj])   
-                                else:           
-                                    fsaverage_param[subj] = np.concatenate((np.array([arr.data for arr in a.darrays])[0],np.array([arr.data for arr in b.darrays])[0]))
-                                    print(np.any(np.isnan(fsaverage_param[subj])))
-                                    print(np.any(~np.isfinite(fsaverage_param[subj])))
-                                    self.main_dict['fsaverage'][analysis][subj]['Processed Results'][parameter][model] = np.copy(fsaverage_param[subj])
-                                    
+                                        os.system(f"wb_command -metric-resample '{temp_paths[3]}' '{hcp_old_sphere.replace('?','R')}' \
+                                                '{hcp_new_sphere.replace('?','R')}' ADAP_BARY_AREA '{temp_paths[5]}' \
+                                                -area-metrics '{hcp_old_area.replace('?','R')}' '{hcp_new_area.replace('?','R')}'")
+                                        
+                                        a = nb.load(temp_paths[4])
+                                        b = nb.load(temp_paths[5])
+
+                                        if 'rsq' in parameter.lower():
+                                            fsaverage_rsq[subj] = np.nan_to_num(np.concatenate((np.array([arr.data for arr in a.darrays])[0],np.array([arr.data for arr in b.darrays])[0])))
+                                            fsaverage_rsq[subj][fsaverage_rsq[subj]<0] = 0
+                                            print(np.any(np.isnan(fsaverage_rsq[subj])))
+                                            print(np.any(~np.isfinite(fsaverage_rsq[subj])))                                    
+                                            self.main_dict['fsaverage'][analysis][subj]['Processed Results'][parameter][model] = np.copy(fsaverage_rsq[subj])   
+                                        else:           
+                                            fsaverage_param[subj] = np.concatenate((np.array([arr.data for arr in a.darrays])[0],np.array([arr.data for arr in b.darrays])[0]))
+                                            print(np.any(np.isnan(fsaverage_param[subj])))
+                                            print(np.any(~np.isfinite(fsaverage_param[subj])))
+                                            self.main_dict['fsaverage'][analysis][subj]['Processed Results'][parameter][model] = np.copy(fsaverage_param[subj])
+                                            
 
                         
                         if 'rsq' in parameter.lower():
                             fsaverage_group_average = np.nanmean([fsaverage_rsq[sid] for sid in fsaverage_rsq], axis=0)
-                        elif parameter == 'Noise Ceiling':
+                        elif 'Noise Ceiling' in parameter:
+                            fsaverage_group_average = np.nanmean([fsaverage_param[sid] for sid in fsaverage_param], axis=0)
+                        elif '-' in parameter:
                             fsaverage_group_average = np.nanmean([fsaverage_param[sid] for sid in fsaverage_param], axis=0)
                         else:
 
@@ -1789,7 +1903,7 @@ class visualize_results(object):
                     space_names = 'fsnative', analysis_names = 'all', subject_ids='all', 
                     x_parameter_toplevel=None, y_parameter_toplevel=None, 
                     ylim={}, xlim={}, log_yaxis=False, log_xaxis = False, nr_bins = 8, rsq_weights=True,
-                    x_param_model=None, violin=False, scatter=False, diff_gauss=False, diff_gauss_x=False,
+                    x_param_model=None, violin=False, scatter=False, diff_norm=False, diff_gauss=False, diff_gauss_x=False,
                     rois_on_plot = False, rsq_alpha_plot = False,
                     means_only=False, stats_on_plot=False, bin_by='size', zscore_ydata=False, zscore_xdata=False,
                     zconfint_err_alpha = None, fit = True,exp_fit = False, show_legend=False, each_subj_on_group=False,
@@ -1898,6 +2012,8 @@ class visualize_results(object):
                 rsq_x_stats = dd(lambda:dd(lambda:dd(lambda:dd(list))))
                 
                 bootstrap_fits = dd(lambda:dd(lambda:dd(lambda:dd(list))))
+
+                dict_lines = dd(lambda:dd(lambda:dd(lambda:dd(list))))
                 
                 
                 for analysis, analysis_res in analyses:       
@@ -2293,14 +2409,14 @@ class visualize_results(object):
                                                     fmt='s',  mec='k', color=model_colors[model], ecolor='k')
                                         
     
-                                        
-                                        
+                                                                               
                                         
                                         if stats_on_plot:
                                             if diff_gauss:
                                                 base_model = 'Gauss'
-                                            else:
+                                            elif diff_norm:
                                                 base_model = [m for m in self.only_models if 'Norm' in m][0]
+
     
                                             
                                             #do model comparison stats only once, at the last model
@@ -2330,7 +2446,7 @@ class visualize_results(object):
                                                 for mod in [m for m in self.only_models if base_model != m]:
                                                     
                                                     
-                                                    diff = y_par[analysis][subj][base_model][roi] - y_par[analysis][subj][mod][roi]
+                                                    diff = y_par[analysis][subj][mod][roi] - y_par[analysis][subj][base_model][roi]
                                                     
                                                     pvals = []
                                                     
@@ -2350,10 +2466,10 @@ class visualize_results(object):
                                                         
                                                         if diff_gauss:
                                                             #test whether other models improve on gauss
-                                                            pvals.append(null_distrib.mean() <= observ.mean())
-                                                        else:
-                                                            #test whether norm improves over other models
                                                             pvals.append(null_distrib.mean() >= observ.mean())
+                                                        elif diff_norm:
+                                                            #test whether norm improves over other models
+                                                            pvals.append(null_distrib.mean() <= observ.mean())
                                                             
                                                         #pvals.append(wilcoxon(observ, null_distrib, alternative='greater')[1])
                                                         #pvals.append(ks_2samp(observ, null_distrib, alternative='less')[1])
@@ -2370,7 +2486,7 @@ class visualize_results(object):
                                                     if pval<0.01:
                                                         if diff_gauss:
                                                             text_color = model_colors[mod]
-                                                        else:
+                                                        elif diff_norm:
                                                             text_color = model_colors[base_model]
                                                         pval_str+="*"
                                                         if pval<1e-4:
@@ -2380,8 +2496,8 @@ class visualize_results(object):
                                                     elif pval>0.99:
                                                         if diff_gauss:
                                                             text_color = model_colors[base_model]        
-                                                        else:
-                                                            text_color = model_colors[mod]                                                    
+                                                        elif diff_norm:
+                                                            text_color = model_colors[mod]        
                                                         pval_str+="*"
                                                         if pval>(1-1e-4):
                                                             pval_str+="*"
@@ -2497,21 +2613,102 @@ class visualize_results(object):
                                             pl.bar(bar_position, bar_height, width=bar_or_violin_width, yerr=bar_err, 
                                                    edgecolor=cmap_rois[i], color=cmap_rois[i])
                                             
+                                            if i == (len(rois)-1):
+                                                pl.plot(np.linspace(-bar_or_violin_width,bar_position+bar_or_violin_width,10),np.zeros(10),color='k',ls='--',alpha=1,lw=1)
+                                            
                                             if subj == 'Group' and each_subj_on_group:
                                                 ssj_datapoints_x = np.linspace(bar_position-0.15*bar_or_violin_width, bar_position+0.15*bar_or_violin_width, len(subjects)-1)
+
+                                                ssj_group_stats_roi_means = []
+                                                ssj_group_stats_roi_weights = []
+
                                                 for ssj_nr, ssj in enumerate(subjects[:-1]):
+                                                    if len(y_par[analysis][ssj[0]][model][roi])>10:
                                                     
-                                                    ssj_stats = weightstats.DescrStatsW(y_par[analysis][ssj[0]][model][roi],
-                                                                weights=rsq_y[analysis][ssj[0]][model][roi])
-                                                    
-                                                    if zconfint_err_alpha is not None:
-                                                        yerr_sj = (np.abs(ssj_stats.zconfint_mean(alpha=zconfint_err_alpha) - ssj_stats.mean)).reshape(2,1)*upsampling_corr_factor**0.5
-                                                    else:
-                                                        yerr_sj = ssj_stats.std_mean*upsampling_corr_factor**0.5
+                                                        ssj_stats = weightstats.DescrStatsW(y_par[analysis][ssj[0]][model][roi],
+                                                                    weights=rsq_y[analysis][ssj[0]][model][roi])
                                                         
-                                                    pl.errorbar(ssj_datapoints_x[ssj_nr], ssj_stats.mean,
-                                                    yerr=yerr_sj,  # alpha=np.nanmean(rsq_y[analysis][ssj[0]][model][roi]),
-                                                    fmt='s',  mec='k', color=cmap_rois[i], ecolor='k')                                        
+                                                        ssj_group_stats_roi_means.append(ssj_stats.mean)
+                                                        ssj_group_stats_roi_weights.append(rsq_y[analysis][ssj[0]][model][roi].mean())
+                                                        
+                                                        if zconfint_err_alpha is not None:
+                                                            yerr_sj = (np.abs(ssj_stats.zconfint_mean(alpha=zconfint_err_alpha) - ssj_stats.mean)).reshape(2,1)*upsampling_corr_factor**0.5
+                                                        else:
+                                                            yerr_sj = ssj_stats.std_mean*upsampling_corr_factor**0.5
+                                                            
+                                                        pl.errorbar(ssj_datapoints_x[ssj_nr], ssj_stats.mean,
+                                                        yerr=yerr_sj,  alpha=np.nanmax((0,np.nanmean(rsq_y[analysis][ssj[0]][model][roi]))),
+                                                        fmt='s',  mec='k', color=cmap_rois[i], ecolor='k')    
+
+                                                        #if i == 0:
+                                                        if  ssj_stats.mean<0:
+                                                            vanch_sj = 'top'
+                                                        else:
+                                                            vanch_sj = 'bottom'
+
+                                                        pl.text(ssj_datapoints_x[ssj_nr], ssj_stats.mean, ssj[0].split('_')[0][-1], fontsize=12, color='k', ha='center', va=vanch_sj)      
+
+                                                        dict_lines[analysis][ssj[0]][model]['xpos'].append(ssj_datapoints_x[ssj_nr])      
+                                                        dict_lines[analysis][ssj[0]][model]['ypos'].append(ssj_stats.mean)
+
+                                                        if i == (len(rois)-1):
+                                                            pl.plot(dict_lines[analysis][ssj[0]][model]['xpos'],dict_lines[analysis][ssj[0]][model]['ypos'],c='k',alpha=0.5)
+
+                                        if stats_on_plot:    
+                                            
+                                            if subj == 'Group':
+                                                diff = np.array(ssj_group_stats_roi_means)
+                                                diff_weights = np.array(ssj_group_stats_roi_weights)
+                                            else:
+                                                diff = y_par[analysis][subj][model][roi]
+                                                diff_weights = rsq_y[analysis][subj][model][roi]
+
+                                            pvals = []
+                                                
+                                            for ccc in range(100000):                                                                                                                                 
+                                                
+                                                #correct for upsampling
+                                                #ideally add rsq weighting, increase asterisks font size,
+
+                                                if subj == 'Group':
+                                                    samp_idx = np.arange(len(diff))
+                                                    
+                                                else: 
+                                                    samp_idx = np.random.randint(0, len(diff), int(len(diff)/upsampling_corr_factor))
+
+                                                observ = diff[samp_idx]
+                                                observ_weights = diff_weights[samp_idx]
+                                                
+                                                signs = np.sign(np.random.rand(len(observ))-0.5)
+
+                                                null_distrib = signs*observ
+
+                                                null_mean = (null_distrib * observ_weights).sum()/(observ_weights.sum())
+                                                observ_mean = (observ * observ_weights).sum()/(observ_weights.sum())
+                                                                                           
+                                                pvals.append(np.abs(null_mean) >= np.abs(observ_mean))
+
+                                                        
+                                                    
+                                            pval = np.mean(pvals) 
+                                            print(f'roi {pval}')
+                                            
+                                            pval_str = ""
+                                            
+                                            #compute p values
+                                            if pval<0.01:
+                                                pval_str+="*"
+                                                if pval<1e-3:
+                                                    pval_str+="*"
+                                                    if pval<1e-4:
+                                                        pval_str+="*"
+                                       
+                                            if bar_height<0:
+                                                vanch = 'top'
+                                            else:
+                                                vanch = 'bottom'
+                                            pl.text(bar_position, bar_height, pval_str, fontsize=16, color='k', weight = 'bold', ha='center', va=vanch)                                            
+                                                                 
                                     
                                     bar_position += (0.4*bar_or_violin_width)
     
