@@ -207,6 +207,11 @@ class results(object):
                 #noise_ceiling = 1-np.sum((tc_all_test-tc_all_fit)**2, axis=-1)/(tc_all_test.shape[-1]*tc_all_test.var(-1))
 
                 noise_ceiling = np.array([np.corrcoef(tc_t,tc_f)[0,1] for tc_t,tc_f in zip(tc_all_test,tc_all_fit)])
+
+                #mean of the variance of single run timecourses
+                r_r_full['Single run Variance'] = np.mean([np.var(tc,axis=-1) for tc in tc_runs],axis=0)
+                #variance of the mean timecourse
+                r_r_full['Variance of mean timecourse'] = np.var(np.mean(tc_runs,axis=0),axis=-1)
                 
                 r_r_full[f"Noise Ceiling (CC)"] = np.copy(noise_ceiling)
                 
@@ -343,7 +348,7 @@ class results(object):
                 
             
                        
-            raw_tc_stats = dict()
+            raw_tc_stats = dd(lambda:np.zeros(mask.shape))
 
             
             if '999999' in subj:
@@ -382,7 +387,8 @@ class results(object):
     
     def process_results(self, results_dict, compute_suppression_index = False, return_norm_profiles=False, compute_fwhmax_fwatmin = False):
         for k, v in tqdm(results_dict.items()):
-            if 'sub-' not in k and not k.isdecimal() and '999999' not in k:
+            if 'sub-' not in k and not k.isdecimal() and '999999' not in k and 'fsaverage' not in k:
+                print(k)
                 self.process_results(v, compute_suppression_index, return_norm_profiles)
             elif 'Results' in v and 'Processed Results' not in v:
                 mask = v['mask']
@@ -488,8 +494,8 @@ class results(object):
                     elif isinstance(v2, np.ndarray) and v2.ndim == 1 and 'Noise Ceiling' in k2:
                         processed_results['Noise Ceiling'][k2][mask] = np.copy(v2)
 
-
-                        
+                    elif isinstance(v2, np.ndarray) and v2.ndim == 1 and 'Variance' in k2:
+                        processed_results['Variance Stats'][k2][mask] = np.copy(v2)                        
     
                 v['Processed Results'] = deepcopy(processed_results)
         return

@@ -203,11 +203,16 @@ class visualize_results(object):
                             parameters = [item for item in p_r.items() if item[0] in parameter_names]
 
                         for param, param_res in parameters:
-                            if f'{current_sj_group}-{base_group}' not in param:
+                            if f'{current_sj_group}' not in param and f'{base_group}' not in param:
                                 models = [item for item in param_res.items()]
                                 for model, model_res in models:
                                     if model in p_r['Alpha']:
-                                        this_alpha = p_r['Alpha'][model] * p_r_pla['Alpha'][model]
+                                        this_alpha = (p_r['Alpha'][model] + p_r_pla['Alpha'][model])/2
+
+                                        this_alpha[p_r['Alpha'][model]<=0] = 0
+                                        this_alpha[p_r_pla['Alpha'][model]<=0] = 0
+
+                                        p_r[f'Mean Masked RSq {current_sj_group}-{base_group}'][model] = this_alpha
                                     else:
                                         this_alpha = np.ones_like(p_r[param][model])
 
@@ -215,23 +220,74 @@ class visualize_results(object):
 
                                     p_r[f'{param} {current_sj_group}-{base_group}'][model][this_alpha<=0] = 0
 
-                        t_stats = analysis_res[subj]['Timecourse Stats']
-                        t_stats_pla = analysis_res[subj_pla]['Timecourse Stats'] 
-
-                        if parameter_names == 'all':
-                            parameters = [item for item in t_stats.items() if 'Alpha' not in item[0]]
-                        else:
-                            parameters = [item for item in t_stats.items() if item[0] in parameter_names]
-
-                        for param, param_res in parameters:
-                            if f'{current_sj_group}-{base_group}' not in param:
- 
-                                t_stats[f'{param} {current_sj_group}-{base_group}'] = t_stats[param] - t_stats_pla[param]
 
     
         return
 
 
+    def compute_ratio(self, space_names = 'fsnative', analysis_names = 'all', subject_ids='all',parameter_names='all',base_group='placebo'):
+
+        if space_names == 'all':
+            spaces = [item for item in self.main_dict.items()]
+        else:
+            spaces = [item for item in self.main_dict.items() if item[0] in space_names] 
+
+        for space, space_res in spaces:                
+                                       
+            if analysis_names == 'all':
+                analyses = [item for item in space_res.items()]
+            else:
+                analyses = [item for item in space_res.items() if item[0] in analysis_names] 
+                         
+            for analysis, analysis_res in analyses:       
+                if subject_ids == 'all':
+                    subjects = [item for item in analysis_res.items()]
+                else:
+                    subjects = [item for item in analysis_res.items() if item[0] in subject_ids]
+
+                subjects_pla = [s[0] for s in subjects if s[0] in self.groups_dict[base_group]]
+                
+                for subj, subj_res in subjects:
+
+                    current_sj_group = self.find_group(subj)
+                    #print(subj)
+                    #print(current_sj_group)
+                    if current_sj_group != None and current_sj_group != base_group:
+
+                        gen_subj = subj.split('_')[0]
+                        
+                        subj_pla = [s for s in subjects_pla if gen_subj in s][0]
+                        #print(subj_pla)
+
+                        p_r = analysis_res[subj]['Processed Results']
+                        p_r_pla = analysis_res[subj_pla]['Processed Results'] 
+
+                        if parameter_names == 'all':
+                            parameters = [item for item in p_r.items() if 'Alpha' not in item[0]]
+                        else:
+                            parameters = [item for item in p_r.items() if item[0] in parameter_names]
+
+                        for param, param_res in parameters:
+                            if f'{current_sj_group}' not in param and f'{base_group}' not in param:
+                                models = [item for item in param_res.items()]
+                                for model, model_res in models:
+                                    if model in p_r['Alpha']:
+                                        this_alpha = (p_r['Alpha'][model] + p_r_pla['Alpha'][model])/2
+
+                                        this_alpha[p_r['Alpha'][model]<=0] = 0
+                                        this_alpha[p_r_pla['Alpha'][model]<=0] = 0
+
+                                        p_r[f'Mean Masked RSq {current_sj_group}-{base_group}'][model] = this_alpha
+                                    else:
+                                        this_alpha = np.ones_like(p_r[param][model])
+
+                                    p_r[f'{param} {current_sj_group}/{base_group}'][model] = p_r[param][model] / p_r_pla[param][model]
+
+                                    p_r[f'{param} {current_sj_group}/{base_group}'][model][this_alpha<=0] = 0
+
+
+    
+        return
 
 
 
@@ -457,7 +513,7 @@ class visualize_results(object):
                         
             
 
-    def set_alpha(self, space_names='all', only_models=None, ecc_min=0, ecc_max=5, threshold_li=True, excluded_rois=[], tc_min=dict()):
+    def set_alpha(self, space_names='all', only_models=None, ecc_min=0, ecc_max=5, alpha_weight='RSq', threshold_li=True, excluded_rois=[], tc_min=dict()):
         
         self.only_models=only_models
         self.tc_min = tc_min
@@ -474,13 +530,22 @@ class visualize_results(object):
                         print(space+" "+analysis+" "+subj)
                             
                         p_r = subj_res['Processed Results']
-                        models = p_r['RSq'].keys()
+
+                        if alpha_weight not in p_r:
+                            print("alpha weight not found, using rsq")
+                            alpha_weight = 'RSq'
+                        else:
+                            if len([model for model in only_models if model in p_r[alpha_weight]])==0:
+                                print("alpha weight not found, using rsq")
+                                alpha_weight = 'RSq'
+
+                        models = p_r[alpha_weight].keys()
                                                 
                         if space != 'fsaverage' and 'rsq' not in subj:
                             tc_stats = subj_res['Timecourse Stats']
                         else:
                             tc_stats=dict()
-                            tc_stats['Mean'] = np.ones_like(p_r['RSq'][only_models[0]])
+                            tc_stats['Mean'] = np.ones_like(p_r[alpha_weight][only_models[0]])
                        
                         #######Raw bold timecourse vein threshold
                         if subj not in self.tc_min:
@@ -493,11 +558,12 @@ class visualize_results(object):
               
                         #housekeeping
                         if only_models is None:
-                            rsq = np.vstack(tuple([elem for _,elem in p_r['RSq'].items()])).T
+                            rsq = np.vstack(tuple([elem for _,elem in p_r[alpha_weight].items()])).T
                             ecc = np.vstack(tuple([elem for _,elem in p_r['Eccentricity'].items()])).T
 
                         else:
-                            rsq = np.vstack(tuple([elem for k,elem in p_r['RSq'].items() if k in only_models])).T
+                            
+                            rsq = np.vstack(tuple([elem for k,elem in p_r[alpha_weight].items() if k in only_models])).T
                             ecc = np.vstack(tuple([elem for k,elem in p_r['Eccentricity'].items() if k in only_models])).T                            
             
                         #alpha dictionary
@@ -509,7 +575,7 @@ class visualize_results(object):
 
                         
                         for model in models:
-                            p_r['Alpha'][model] = p_r['RSq'][model] * (p_r['Eccentricity'][model]>self.ecc_min) * (p_r['Eccentricity'][model]<self.ecc_max)\
+                            p_r['Alpha'][model] = p_r[alpha_weight][model] * (p_r['Eccentricity'][model]>self.ecc_min) * (p_r['Eccentricity'][model]<self.ecc_max)\
                                  #* (p_r['Noise Ceiling']['Noise Ceiling (RSq)']!=0)
                             if 'Mean' in tc_stats:
                                 p_r['Alpha'][model] *= (tc_stats['Mean']>self.tc_min[subj])
@@ -579,7 +645,7 @@ class visualize_results(object):
                 #index = 87097 #(here dividind b and d for same value doesnt change timecure at all)
                 #index = 45089 #(here dividing b and d by same value changes timecourses greatly)
                 
-                #index = 136959
+                #index = 164215
                 
                 print('recovering data and model timecourses...')
                 
@@ -604,11 +670,23 @@ class visualize_results(object):
                                 task_names=an_info['task_names'],
                                 normalize_integral_dx=an_info['normalize_integral_dx'])
     
-                    
-                tc_paths = [str(path) for path in sorted(Path(timecourse_folder).glob(f"{subj}_timecourse_space-{an_info['fitting_space']}_task-*_run-*.npy"))]    
-                mask_paths = [tc_path.replace('timecourse_','mask_') for tc_path in tc_paths]
-                #all_task_names = np.unique(np.array([elem.replace('task-','') for path in tc_paths for elem in path.split('_')  if 'task' in elem]))
-                all_runs = np.unique(np.array([int(elem.replace('run-','').replace('.npy','')) for path in tc_paths for elem in path.split('_')  if 'run' in elem]))
+                if 'ses-all' in subj:
+
+                    tc_paths = [str(path) for path in sorted(Path(timecourse_folder).glob(f"{subj.split('_')[0]}_ses-*_timecourse_space-{an_info['fitting_space']}_task-*_run-*.npy"))]   
+
+                    mask_paths = [tc_path.replace('timecourse_','mask_') for tc_path in tc_paths]
+                    #all_task_names = np.unique(np.array([elem.replace('task-','') for path in tc_paths for elem in path.split('_')  if 'task' in elem]))
+                    all_runs = np.unique(np.array([int(elem.replace('run-','').replace('.npy','')) for path in tc_paths for elem in path.split('_')  if 'run-' in elem]))
+                    all_ses = np.unique(np.array([int(elem.replace('ses-','').replace('.npy','')) for path in tc_paths for elem in path.split('_')  if 'ses-' in elem]))
+
+    
+                else:    
+                    tc_paths = [str(path) for path in sorted(Path(timecourse_folder).glob(f"{subj}_timecourse_space-{an_info['fitting_space']}_task-*_run-*.npy"))]   
+
+                    mask_paths = [tc_path.replace('timecourse_','mask_') for tc_path in tc_paths]
+                    #all_task_names = np.unique(np.array([elem.replace('task-','') for path in tc_paths for elem in path.split('_')  if 'task' in elem]))
+                    all_runs = np.unique(np.array([int(elem.replace('run-','').replace('.npy','')) for path in tc_paths for elem in path.split('_')  if 'run-' in elem]))
+                    all_ses = []
     
                 tc = dict()
                 tc_err = dict()
@@ -633,18 +711,31 @@ class visualize_results(object):
 
                     
                     for run in all_runs:
-                        mask_run = [np.load(mask_path) for mask_path in mask_paths if f"task-{task}_" in mask_path and f"run-{run}." in mask_path][0]
-                        
-                        if space == 'HCP':
-                            tc_run_idx = np.sum(subj_res['mask'][:index])
+                        if len(all_ses)>0:
+                            for ses in all_ses:
+                                mask_run = [np.load(mask_path) for mask_path in mask_paths if f"task-{task}_" in mask_path and f"run-{run}." in mask_path and f"ses-{ses}" in mask_path][0]
+                                
+                                if space == 'HCP':
+                                    tc_run_idx = np.sum(subj_res['mask'][:index])
+                                else:
+                                    tc_run_idx = np.sum(mask_run[:index])
+                                
+                                tc_runs.append([np.load(tc_path)[tc_run_idx] for tc_path in tc_paths if f"task-{task}_" in tc_path and f"run-{run}." in tc_path and f"ses-{ses}" in tc_path][0])
+
+
+                                tc_runs[-1] -= np.median(tc_runs[-1][...,self.prf_stims[task].late_iso_dict[task]], axis=-1)[...,np.newaxis]
                         else:
-                            tc_run_idx = np.sum(mask_run[:index])
-                        
-                        tc_runs.append([np.load(tc_path)[tc_run_idx] for tc_path in tc_paths if f"task-{task}_" in tc_path and f"run-{run}." in tc_path][0])
+                            mask_run = [np.load(mask_path) for mask_path in mask_paths if f"task-{task}_" in mask_path and f"run-{run}." in mask_path][0]
+                            
+                            if space == 'HCP':
+                                tc_run_idx = np.sum(subj_res['mask'][:index])
+                            else:
+                                tc_run_idx = np.sum(mask_run[:index])
+                            
+                            tc_runs.append([np.load(tc_path)[tc_run_idx] for tc_path in tc_paths if f"task-{task}_" in tc_path and f"run-{run}." in tc_path][0])
 
 
-                        tc_runs[-1] -= np.median(tc_runs[-1][...,self.prf_stims[task].late_iso_dict[task]], axis=-1)[...,np.newaxis]
-                        #tc_runs[-1] -= np.median(tc_runs[-1][...,red_per], axis=-1)[...,np.newaxis]
+                            tc_runs[-1] -= np.median(tc_runs[-1][...,self.prf_stims[task].late_iso_dict[task]], axis=-1)[...,np.newaxis]
 
                         
                       
@@ -897,12 +988,13 @@ class visualize_results(object):
 
                     p_r = subj_res['Processed Results']
                     models = p_r['RSq'].keys()
-                    
+
+                    tc_stats = subj_res['Timecourse Stats']
                     if space != 'fsaverage':
-                        tc_stats = subj_res['Timecourse Stats']
+                        
                         mask = subj_res['mask']
                     else:
-                        tc_stats = subj_res['Timecourse Stats']
+                        
                         mask = np.ones_like(p_r['RSq'][list(models)[0]])
 
          
@@ -1010,7 +1102,7 @@ class visualize_results(object):
                     if self.plot_rois_cortex and not plotted_rois[subj]:
                         
                         plot_single_rois = False
-                        use_alpha_rois = True
+                        use_alpha_rois = False
                         plot_my_vx = False
                         
                         ds_rois = {}
@@ -1092,14 +1184,15 @@ class visualize_results(object):
 
                     if self.plot_diffs:
                         ds_diffs = dict()
-                        diff_params = [item for item in p_r.items() if np.any([s in item[0] for s in param_diffs]) and '-' in item[0]]
+                        diff_params = [item for item in p_r.items() if np.any([s in item[0] for s in param_diffs]) and ('-' in item[0] or '/' in item[0])]
 
                         for param, param_res in diff_params:
-                            models = [item for item in param_res.items() if item[0] in self.only_models or 'Noise' in item[0]]
+                            models = [item for item in param_res.items() if item[0] in self.only_models or 'Noise' in item[0] or 'Variance' in item[0]]
+                            groupcomp = param.split(' ')[-1].replace('/','-')
                             for model, model_res in models:
 
-                                if model in alpha[analysis][subj]:
-                                    this_alpha = alpha[analysis][subj][model]
+                                if model in p_r[f'Mean Masked RSq {groupcomp}']:
+                                    this_alpha = p_r[f'Mean Masked RSq {groupcomp}'][model]
                                 elif 'Noise' in model:
                                     if 'ses' in subj and space == 'fsnative':
                                         gen_subj = subj.split('_')[0]
@@ -1112,41 +1205,33 @@ class visualize_results(object):
                                     
                                 else:
                                     this_alpha = np.ones_like(p_r[param][model])
+                                
+
+                                if '-' in param:
+                                    vmaxdiff = np.max((np.abs(np.nanquantile(p_r[param][model][this_alpha>rsq_thresh],0.1)),np.abs(np.nanquantile(p_r[param][model][this_alpha>rsq_thresh],0.9))))
+                                    vmindiff = -vmaxdiff
+                                else:
+                                    vmindiff = np.nanquantile(p_r[param][model][this_alpha>rsq_thresh],0.1)
+                                    if vmindiff<1:
+                                        vmaxdiff = 1 + (1-vmindiff)
+                                    else:
+                                        vmaxdiff = np.nanquantile(p_r[param][model][this_alpha>rsq_thresh],0.9)
+                                    print(f'{param} {vmindiff} {vmaxdiff}')
 
                                 ds_diffs[f'{subj} {param} {model}'] = Vertex2D_fix(p_r[param][model], 
                                                                       this_alpha, 
                                                                       subject=pycortex_subj, 
-                                                            vmin=np.nanquantile(p_r[param][model][this_alpha>rsq_thresh],0.1), 
-                                                            vmax=np.nanquantile(p_r[param][model][this_alpha>rsq_thresh],0.9),
+                                                            vmin=vmindiff, 
+                                                            vmax=vmaxdiff,
                                                                       vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap=pycortex_cmap, 
                                                                       roi_borders=roi_borders)
 
-                                fig = simple_colorbar(vmin=np.nanquantile(p_r[param][model][this_alpha>rsq_thresh],0.1), 
-                                                vmax=np.nanquantile(p_r[param][model][this_alpha>rsq_thresh],0.9),
+                                fig = simple_colorbar(vmin=vmindiff, 
+                                                vmax=vmaxdiff,
                                                 cmap_name=pycortex_cmap, ori='horizontal', param_name=param)
                                 
                                 if self.pycortex_image_path is not None and save_colorbars:
                                     fig.savefig(f"{self.pycortex_image_path}/{model}_{param}_cbar.pdf", dpi=600, bbox_inches='tight', transparent=True)
-
-                        diff_params_stats = [item for item in tc_stats.items() if np.any([s in item[0] for s in param_diffs]) and '-' in item[0]]
-
-                        for param, param_res in diff_params_stats:
-                            this_alpha = np.ones_like(tc_stats[param])
-
-                            ds_diffs[f'{subj} {param}'] = Vertex2D_fix(tc_stats[param], 
-                                                                    this_alpha, 
-                                                                    subject=pycortex_subj, 
-                                                        vmin=np.nanquantile(tc_stats[param][this_alpha>rsq_thresh],0.1), 
-                                                        vmax=np.nanquantile(tc_stats[param][this_alpha>rsq_thresh],0.9),
-                                                                    vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap=pycortex_cmap, 
-                                                                    roi_borders=roi_borders)
-
-                            fig = simple_colorbar(vmin=np.nanquantile(tc_stats[param][this_alpha>rsq_thresh],0.1), 
-                                            vmax=np.nanquantile(tc_stats[param][this_alpha>rsq_thresh],0.9),
-                                            cmap_name=pycortex_cmap, ori='horizontal', param_name=param)
-                            
-                            if self.pycortex_image_path is not None and save_colorbars:
-                                fig.savefig(f"{self.pycortex_image_path}/{param}_cbar.pdf", dpi=600, bbox_inches='tight', transparent=True)
 
                             
                         self.js_handle_dict[space][analysis][subj]['Diffs'] = cortex.webgl.show(ds_diffs, pickerfun=clicker_function,  overlays_visible=[], labels_visible=[])  
@@ -1198,48 +1283,7 @@ class visualize_results(object):
                                     
                                 if self.pycortex_image_path is not None and save_colorbars:
                                     fig.savefig(f"{self.pycortex_image_path}/nc_cbar.pdf", dpi=600, bbox_inches='tight', transparent=True)                                
-    
-
-
-                                    if f'{nc_type} (placebo)' in p_r['Noise Ceiling'] and current_sj_group != 'placebo':
-                                        nc_pcb = p_r['Noise Ceiling'][f'{nc_type} (placebo)']
-                                        ncdiff = p_r['Noise Ceiling'][nc_type] - nc_pcb
-
-                                        ds_rsq[f'{subj} {current_sj_group}-placebo {nc_type}'] = Vertex2D_fix(ncdiff,
-                                                                nc_pcb, subject=pycortex_subj, 
-                                                                vmin=-0.2, #np.nanquantile(p_r['Noise Ceiling'][nc_type][alpha[analysis][subj][model]>rsq_thresh],0.1), 
-                                                                vmax=0.2, #np.nanquantile(p_r['Noise Ceiling'][nc_type][alpha[analysis][subj][model]>rsq_thresh],0.9),
-                                                                vmin2=0.0,#np.nanquantile(nc_pcb,0.25),
-                                                                vmax2=0.5,#np.nanquantile(nc_pcb,0.75),
-                                                                cmap=pycortex_cmap, roi_borders=roi_borders)   
-                                    
-                                        fig = simple_colorbar(vmin=-0.2,#np.nanquantile(p_r['Noise Ceiling'][nc_type][alpha[analysis][subj][model]>rsq_thresh],0.1), 
-                                                            vmax=0.2,#np.nanquantile(p_r['Noise Ceiling'][nc_type][alpha[analysis][subj][model]>rsq_thresh],0.9),
-                                                        cmap_name=pycortex_cmap, ori='horizontal', param_name=f'{subj} {nc_type} diff')
-                                        
-                                        if self.pycortex_image_path is not None and save_colorbars:
-                                            fig.savefig(f"{self.pycortex_image_path}/ncdiff_cbar.pdf", dpi=600, bbox_inches='tight', transparent=True)                                
-    
-                            
-                            
-                                    if f'{nc_type} (placebo)' in p_r['Noise Ceiling'] and current_sj_group != 'placebo':
-                                        nc_pcb = p_r['Noise Ceiling'][f'{nc_type} (placebo)']
-                                        ncdiff = p_r['Noise Ceiling'][nc_type] - nc_pcb
-
-                                        ds_rsq[f'{subj} {current_sj_group}-placebo {nc_type}'] = Vertex2D_fix(ncdiff,
-                                                                nc_pcb, subject=pycortex_subj, 
-                                                                vmin=-0.2, #np.nanquantile(p_r['Noise Ceiling'][nc_type][alpha[analysis][subj][model]>rsq_thresh],0.1), 
-                                                                vmax=0.2, #np.nanquantile(p_r['Noise Ceiling'][nc_type][alpha[analysis][subj][model]>rsq_thresh],0.9),
-                                                                vmin2=0.0,#np.nanquantile(nc_pcb,0.25),
-                                                                vmax2=0.5,#np.nanquantile(nc_pcb,0.75),
-                                                                cmap=pycortex_cmap, roi_borders=roi_borders)   
-                                    
-                                        fig = simple_colorbar(vmin=-0.2,#np.nanquantile(p_r['Noise Ceiling'][nc_type][alpha[analysis][subj][model]>rsq_thresh],0.1), 
-                                                            vmax=0.2,#np.nanquantile(p_r['Noise Ceiling'][nc_type][alpha[analysis][subj][model]>rsq_thresh],0.9),
-                                                        cmap_name=pycortex_cmap, ori='horizontal', param_name=f'{subj} {nc_type} diff')
-                                        
-                                        if self.pycortex_image_path is not None and save_colorbars:
-                                            fig.savefig(f"{self.pycortex_image_path}/ncdiff_cbar.pdf", dpi=600, bbox_inches='tight', transparent=True)                                
+                              
     
                             
                         if '#Subjects with CVRSq>0' in p_r:
@@ -1708,15 +1752,16 @@ class visualize_results(object):
                 pass
                 
     def project_to_fsaverage(self, models, parameters, space_names = 'all', analysis_names = 'all', subject_ids='all',
-                             hcp_atlas_mask_path = None,
+                             weight = 'RSq', groupname = '',
+                             hcp_atlas_mask_path = None, 
                              hcp_cii_file_path = None, hcp_old_sphere = None, hcp_new_sphere = None, hcp_old_area = None, hcp_new_area = None,
                              hcp_temp_folder = None):
         if 'fsaverage' not in self.main_dict:
             self.main_dict['fsaverage'] = dd(lambda:dd(lambda:dd(lambda:dd(dict))))
         
-        if parameters[0] != 'RSq':
-            if 'Noise Ceiling (CC)' not in models:
-                parameters.insert(0,'RSq')
+        if parameters[0] != weight:
+            if 'Noise Ceiling (CC)' not in models and 'Single run Variance' not in models:
+                parameters.insert(0,weight)
             
         if 'Polar Angle' in parameters or 'Eccentricity' in parameters:
             print("Are you sure you want to resample polar angle and eccentricity? this can cause interpolation issues. better to use x_pos and y_pos instead.")
@@ -1746,128 +1791,127 @@ class visualize_results(object):
                         fsaverage_param = dict()
                         
                         for subj, subj_res in tqdm(subjects):
-                            print(space+" "+analysis+" "+subj)
+                            print(f"{space} {analysis} {subj} {parameter} {model}")
                             p_r = subj_res['Processed Results']
 
-                            if parameter in p_r:
-                                if model in p_r[parameter]:
+                    
+                            if space == 'fsnative':
+                                if 'ses' in subj:
+                                    fs_subj = subj.split('_')[0]
+                                else:
+                                    fs_subj = subj
                             
-                                    if space == 'fsnative':
-                                        if 'ses' in subj:
-                                            fs_subj = subj.split('_')[0]
-                                        else:
-                                            fs_subj = subj
-                                    
-                                        lh_c = read_morph_data(opj(self.fs_dir, f"{fs_subj}/surf/lh.curv"))
-                                        
-                                        if parameter in p_r:
-                                            param = np.copy(p_r[parameter][model])
-                                        else:
-                                            if parameter == 'x_pos':
-                                                param = p_r['Eccentricity'][model]*np.cos(p_r['Polar Angle'][model])
-                                            elif parameter == 'y_pos':
-                                                param = p_r['Eccentricity'][model]*np.sin(p_r['Polar Angle'][model])
-                                            else:
-                                                print(f"WARNING: unidentified parameter {parameter}")
-                                                raise IOError
-                                                
-                                                    
-                                        
-                                        lh_file_path = opj(self.fs_dir, f"{fs_subj}/surf/lh.{subj}_{''.join(filter(str.isalnum, parameter))}_{''.join(filter(str.isalnum, model))}")
-                                        rh_file_path = opj(self.fs_dir, f"{fs_subj}/surf/rh.{subj}_{''.join(filter(str.isalnum, parameter))}_{''.join(filter(str.isalnum, model))}")
-            
-                                        write_morph_data(lh_file_path, param[:lh_c.shape[0]])
-                                        write_morph_data(rh_file_path, param[lh_c.shape[0]:])
-
-                                        lh_fsaverage_path =  opj(self.fs_dir, f"fsaverage/surf/lh.{subj}_{''.join(filter(str.isalnum, parameter))}_{''.join(filter(str.isalnum, model))}")
-                                        rh_fsaverage_path = opj(self.fs_dir, f"fsaverage/surf/rh.{subj}_{''.join(filter(str.isalnum, parameter))}_{''.join(filter(str.isalnum, model))}")
-                                        
-                                        os.system("export FREESURFER_HOME=/Applications/freesurfer/7.2.0/")
-                                        os.system("source $FREESURFER_HOME/SetUpFreeSurfer.sh")
-                                        os.system(f"export SUBJECTS_DIR='{self.fs_dir}'")
-                                        os.system(f"mri_surf2surf --srcsubject {fs_subj} --srcsurfval '{lh_file_path}' --trgsubject fsaverage --trgsurfval '{lh_fsaverage_path}' --hemi lh --trg_type curv")
-                                        os.system(f"mri_surf2surf --srcsubject {fs_subj} --srcsurfval '{rh_file_path}' --trgsubject fsaverage --trgsurfval '{rh_fsaverage_path}' --hemi rh --trg_type curv")
-            
-                                        lh_fsaverage_param = read_morph_data(lh_fsaverage_path)
-                                        rh_fsaverage_param = read_morph_data(rh_fsaverage_path)
-                                        
-                                        
-                                        if parameter == 'RSq':
-                                            fsaverage_rsq[subj] = np.nan_to_num(np.concatenate((lh_fsaverage_param,rh_fsaverage_param)))
-                                            fsaverage_rsq[subj][fsaverage_rsq[subj]<0] = 0
-                                            print(np.all(np.isfinite(fsaverage_rsq[subj])))
-                                            self.main_dict['fsaverage'][analysis][subj]['Processed Results'][parameter][model] = np.copy(fsaverage_rsq[subj])   
-                                        else:
-                                            fsaverage_param[subj] = np.concatenate((lh_fsaverage_param,rh_fsaverage_param))
-                                            self.main_dict['fsaverage'][analysis][subj]['Processed Results'][parameter][model] = np.copy(fsaverage_param[subj])    
-                                            
-                                    elif space == 'HCP':
-                                        f=nb.load(hcp_atlas_mask_path[0])
-                                        data_1 = np.array([arr.data for arr in f.darrays])[0].astype('bool')
+                                lh_c = read_morph_data(opj(self.fs_dir, f"{fs_subj}/surf/lh.curv"))
                                 
-                                        f=nb.load(hcp_atlas_mask_path[1])
-                                        data_2 = np.array([arr.data for arr in f.darrays])[0].astype('bool')
+                                if parameter in p_r:
+                                    if model in p_r[parameter]:
+                                        param = np.copy(p_r[parameter][model])
+                                else:
+                                    if parameter == 'x_pos':
+                                        param = p_r['Eccentricity'][model]*np.cos(p_r['Polar Angle'][model])
+                                    elif parameter == 'y_pos':
+                                        param = p_r['Eccentricity'][model]*np.sin(p_r['Polar Angle'][model])
+                                    else:
+                                        print('parameter not found')
+                                        continue
                                         
-                                        
-                                        cifti_brain_model = cifti.read(hcp_cii_file_path)[1][1]
-                                        
-                                        output = np.zeros(len(cifti_brain_model))
-                                        
-                                        if parameter in p_r:                              
-                                            output[:np.sum(data_1)] = p_r[parameter][model][:len(data_1)][data_1]
-                                            output[np.sum(data_1):(np.sum(data_1) + np.sum(data_2))] = p_r[parameter][model][len(data_1):][data_2]
-                                        else:
-                                            if parameter == 'x_pos':
-                                                output[:np.sum(data_1)] = p_r['Eccentricity'][model][:len(data_1)][data_1]*np.cos(p_r['Polar Angle'][model][:len(data_1)][data_1])
-                                                output[np.sum(data_1):(np.sum(data_1) + np.sum(data_2))] = p_r['Eccentricity'][model][len(data_1):][data_2]*np.cos(p_r['Polar Angle'][model][len(data_1):][data_2])                          
-                                            elif parameter == 'y_pos':
-                                                output[:np.sum(data_1)] = p_r['Eccentricity'][model][:len(data_1)][data_1]*np.sin(p_r['Polar Angle'][model][:len(data_1)][data_1])
-                                                output[np.sum(data_1):(np.sum(data_1) + np.sum(data_2))] = p_r['Eccentricity'][model][len(data_1):][data_2]*np.sin(p_r['Polar Angle'][model][len(data_1):][data_2])   
-                                            else:
-                                                print(f"WARNING: unidentified parameter {parameter}")              
-                                                raise IOError
                                             
-                                        temp_filenames = ['temp_cii.nii', 'temp_cii_subvol.nii.gz', 'temp_gii_L.func.gii',
-                                                        'temp_gii_R.func.gii', 'fsaverage_gii_L.func.gii', 'fsaverage_gii_R.func.gii']
-                                        temp_paths = [opj(hcp_temp_folder, el) for el in temp_filenames]
-                                        
-                                        cifti.write(temp_paths[0], output.reshape(1,-1), 
-                                                    (cifti.Scalar.from_names([parameter]), cifti_brain_model))
-                                        
-                                        os.system(f"wb_command -cifti-separate '{temp_paths[0]}' COLUMN -volume-all '{temp_paths[1]}' \
-                                                -metric CORTEX_LEFT '{temp_paths[2]}' -metric CORTEX_RIGHT '{temp_paths[3]}'")
-                                                
-                                        os.system(f"wb_command -metric-resample '{temp_paths[2]}' '{hcp_old_sphere.replace('?','L')}' \
-                                                '{hcp_new_sphere.replace('?','L')}' ADAP_BARY_AREA '{temp_paths[4]}' \
-                                                -area-metrics '{hcp_old_area.replace('?','L')}' '{hcp_new_area.replace('?','L')}'")
+                                
+                                lh_file_path = opj(self.fs_dir, f"{fs_subj}/surf/lh.{subj}_{''.join(filter(str.isalnum, parameter))}_{''.join(filter(str.isalnum, model))}")
+                                rh_file_path = opj(self.fs_dir, f"{fs_subj}/surf/rh.{subj}_{''.join(filter(str.isalnum, parameter))}_{''.join(filter(str.isalnum, model))}")
+    
+                                write_morph_data(lh_file_path, param[:lh_c.shape[0]])
+                                write_morph_data(rh_file_path, param[lh_c.shape[0]:])
 
-                                        os.system(f"wb_command -metric-resample '{temp_paths[3]}' '{hcp_old_sphere.replace('?','R')}' \
-                                                '{hcp_new_sphere.replace('?','R')}' ADAP_BARY_AREA '{temp_paths[5]}' \
-                                                -area-metrics '{hcp_old_area.replace('?','R')}' '{hcp_new_area.replace('?','R')}'")
+                                lh_fsaverage_path =  opj(self.fs_dir, f"fsaverage/surf/lh.{subj}_{''.join(filter(str.isalnum, parameter))}_{''.join(filter(str.isalnum, model))}")
+                                rh_fsaverage_path = opj(self.fs_dir, f"fsaverage/surf/rh.{subj}_{''.join(filter(str.isalnum, parameter))}_{''.join(filter(str.isalnum, model))}")
+                                
+                                os.system("export FREESURFER_HOME=/Applications/freesurfer/7.2.0/")
+                                os.system("source $FREESURFER_HOME/SetUpFreeSurfer.sh")
+                                os.system(f"export SUBJECTS_DIR='{self.fs_dir}'")
+                                os.system(f"mri_surf2surf --srcsubject {fs_subj} --srcsurfval '{lh_file_path}' --trgsubject fsaverage --trgsurfval '{lh_fsaverage_path}' --hemi lh --trg_type curv")
+                                os.system(f"mri_surf2surf --srcsubject {fs_subj} --srcsurfval '{rh_file_path}' --trgsubject fsaverage --trgsurfval '{rh_fsaverage_path}' --hemi rh --trg_type curv")
+    
+                                lh_fsaverage_param = read_morph_data(lh_fsaverage_path)
+                                rh_fsaverage_param = read_morph_data(rh_fsaverage_path)
+                                
+                                
+                                if parameter == weight:
+                                    fsaverage_rsq[subj] = np.nan_to_num(np.concatenate((lh_fsaverage_param,rh_fsaverage_param)))
+                                    fsaverage_rsq[subj][fsaverage_rsq[subj]<0] = 0
+                                    print(np.all(np.isfinite(fsaverage_rsq[subj])))
+                                    self.main_dict['fsaverage'][analysis][subj]['Processed Results'][parameter][model] = np.copy(fsaverage_rsq[subj])   
+                                else:
+                                    fsaverage_param[subj] = np.concatenate((lh_fsaverage_param,rh_fsaverage_param))
+                                    self.main_dict['fsaverage'][analysis][subj]['Processed Results'][parameter][model] = np.copy(fsaverage_param[subj])    
+                                    
+                            elif space == 'HCP':
+                                f=nb.load(hcp_atlas_mask_path[0])
+                                data_1 = np.array([arr.data for arr in f.darrays])[0].astype('bool')
+                        
+                                f=nb.load(hcp_atlas_mask_path[1])
+                                data_2 = np.array([arr.data for arr in f.darrays])[0].astype('bool')
+                                
+                                
+                                cifti_brain_model = cifti.read(hcp_cii_file_path)[1][1]
+                                
+                                output = np.zeros(len(cifti_brain_model))
+                                
+                                if parameter in p_r:                              
+                                    output[:np.sum(data_1)] = p_r[parameter][model][:len(data_1)][data_1]
+                                    output[np.sum(data_1):(np.sum(data_1) + np.sum(data_2))] = p_r[parameter][model][len(data_1):][data_2]
+                                else:
+                                    if parameter == 'x_pos':
+                                        output[:np.sum(data_1)] = p_r['Eccentricity'][model][:len(data_1)][data_1]*np.cos(p_r['Polar Angle'][model][:len(data_1)][data_1])
+                                        output[np.sum(data_1):(np.sum(data_1) + np.sum(data_2))] = p_r['Eccentricity'][model][len(data_1):][data_2]*np.cos(p_r['Polar Angle'][model][len(data_1):][data_2])                          
+                                    elif parameter == 'y_pos':
+                                        output[:np.sum(data_1)] = p_r['Eccentricity'][model][:len(data_1)][data_1]*np.sin(p_r['Polar Angle'][model][:len(data_1)][data_1])
+                                        output[np.sum(data_1):(np.sum(data_1) + np.sum(data_2))] = p_r['Eccentricity'][model][len(data_1):][data_2]*np.sin(p_r['Polar Angle'][model][len(data_1):][data_2])   
+                                    else:
+                                        print(f"WARNING: unidentified parameter {parameter}")              
+                                        raise IOError
+                                    
+                                temp_filenames = ['temp_cii.nii', 'temp_cii_subvol.nii.gz', 'temp_gii_L.func.gii',
+                                                'temp_gii_R.func.gii', 'fsaverage_gii_L.func.gii', 'fsaverage_gii_R.func.gii']
+                                temp_paths = [opj(hcp_temp_folder, el) for el in temp_filenames]
+                                
+                                cifti.write(temp_paths[0], output.reshape(1,-1), 
+                                            (cifti.Scalar.from_names([parameter]), cifti_brain_model))
+                                
+                                os.system(f"wb_command -cifti-separate '{temp_paths[0]}' COLUMN -volume-all '{temp_paths[1]}' \
+                                        -metric CORTEX_LEFT '{temp_paths[2]}' -metric CORTEX_RIGHT '{temp_paths[3]}'")
                                         
-                                        a = nb.load(temp_paths[4])
-                                        b = nb.load(temp_paths[5])
+                                os.system(f"wb_command -metric-resample '{temp_paths[2]}' '{hcp_old_sphere.replace('?','L')}' \
+                                        '{hcp_new_sphere.replace('?','L')}' ADAP_BARY_AREA '{temp_paths[4]}' \
+                                        -area-metrics '{hcp_old_area.replace('?','L')}' '{hcp_new_area.replace('?','L')}'")
 
-                                        if 'rsq' in parameter.lower():
-                                            fsaverage_rsq[subj] = np.nan_to_num(np.concatenate((np.array([arr.data for arr in a.darrays])[0],np.array([arr.data for arr in b.darrays])[0])))
-                                            fsaverage_rsq[subj][fsaverage_rsq[subj]<0] = 0
-                                            print(np.any(np.isnan(fsaverage_rsq[subj])))
-                                            print(np.any(~np.isfinite(fsaverage_rsq[subj])))                                    
-                                            self.main_dict['fsaverage'][analysis][subj]['Processed Results'][parameter][model] = np.copy(fsaverage_rsq[subj])   
-                                        else:           
-                                            fsaverage_param[subj] = np.concatenate((np.array([arr.data for arr in a.darrays])[0],np.array([arr.data for arr in b.darrays])[0]))
-                                            print(np.any(np.isnan(fsaverage_param[subj])))
-                                            print(np.any(~np.isfinite(fsaverage_param[subj])))
-                                            self.main_dict['fsaverage'][analysis][subj]['Processed Results'][parameter][model] = np.copy(fsaverage_param[subj])
-                                            
+                                os.system(f"wb_command -metric-resample '{temp_paths[3]}' '{hcp_old_sphere.replace('?','R')}' \
+                                        '{hcp_new_sphere.replace('?','R')}' ADAP_BARY_AREA '{temp_paths[5]}' \
+                                        -area-metrics '{hcp_old_area.replace('?','R')}' '{hcp_new_area.replace('?','R')}'")
+                                
+                                a = nb.load(temp_paths[4])
+                                b = nb.load(temp_paths[5])
+
+                                if parameter == weight:
+                                    fsaverage_rsq[subj] = np.nan_to_num(np.concatenate((np.array([arr.data for arr in a.darrays])[0],np.array([arr.data for arr in b.darrays])[0])))
+                                    fsaverage_rsq[subj][fsaverage_rsq[subj]<0] = 0
+                                    print(np.any(np.isnan(fsaverage_rsq[subj])))
+                                    print(np.any(~np.isfinite(fsaverage_rsq[subj])))                                    
+                                    self.main_dict['fsaverage'][analysis][subj]['Processed Results'][parameter][model] = np.copy(fsaverage_rsq[subj])   
+                                else:           
+                                    fsaverage_param[subj] = np.concatenate((np.array([arr.data for arr in a.darrays])[0],np.array([arr.data for arr in b.darrays])[0]))
+                                    print(np.any(np.isnan(fsaverage_param[subj])))
+                                    print(np.any(~np.isfinite(fsaverage_param[subj])))
+                                    self.main_dict['fsaverage'][analysis][subj]['Processed Results'][parameter][model] = np.copy(fsaverage_param[subj])
+                                    
 
                         
-                        if 'rsq' in parameter.lower():
+                        if parameter == weight:
                             fsaverage_group_average = np.nanmean([fsaverage_rsq[sid] for sid in fsaverage_rsq], axis=0)
-                        elif 'Noise Ceiling' in parameter:
+                        elif 'Noise Ceiling' in parameter or 'Variance' in parameter:
                             fsaverage_group_average = np.nanmean([fsaverage_param[sid] for sid in fsaverage_param], axis=0)
-                        elif '-' in parameter:
-                            fsaverage_group_average = np.nanmean([fsaverage_param[sid] for sid in fsaverage_param], axis=0)
+                        # elif '-' in parameter:
+                        #     fsaverage_group_average = np.nanmean([fsaverage_param[sid] for sid in fsaverage_param], axis=0)
                         else:
 
                             data = np.array([fsaverage_param[sid] for sid in fsaverage_param])
@@ -1875,26 +1919,30 @@ class visualize_results(object):
                             
                             fsaverage_group_average = (data*weights).sum(0)/weights.sum(0)
                         
-                        self.main_dict['fsaverage'][analysis]['fsaverage']['Processed Results'][parameter][model] = np.copy(np.array(fsaverage_group_average))
+                        self.main_dict['fsaverage'][analysis][f'fsaverage{groupname}']['Processed Results'][parameter][model] = np.copy(np.array(fsaverage_group_average))
  
 
+            if len(analyses)>1:            
+                for model in models:
+                    for parameter in parameters:
+                        self.main_dict['fsaverage']['Mean analysis'][f'fsaverage{groupname}']['Processed Results'][parameter][model] = np.nanmean([self.main_dict['fsaverage'][an[0]][f'fsaverage{groupname}']['Processed Results'][parameter][model] for an in analyses], axis=0)
                         
-            for model in models:
-                for parameter in parameters:
-                    self.main_dict['fsaverage']['Mean analysis']['fsaverage']['Processed Results'][parameter][model] = np.nanmean([self.main_dict['fsaverage'][an[0]]['fsaverage']['Processed Results'][parameter][model] for an in analyses], axis=0)
-                    
                         
         for analysis, analysis_res in self.main_dict['fsaverage'].items():
             for subj, subj_res in analysis_res.items():
                 for model in models:
+                    
                     if 'x_pos' in parameters and 'y_pos' in parameters:
-                        subj_res['Processed Results']['Polar Angle'][model] = np.arctan2(subj_res['Processed Results']['y_pos'][model],subj_res['Processed Results']['x_pos'][model])
-                        subj_res['Processed Results']['Eccentricity'][model] = np.sqrt(subj_res['Processed Results']['y_pos'][model]**2+subj_res['Processed Results']['x_pos'][model]**2)
+                        if model in subj_res['Processed Results']['y_pos'] and model in subj_res['Processed Results']['x_pos']:
+                            subj_res['Processed Results']['Polar Angle'][model] = np.arctan2(subj_res['Processed Results']['y_pos'][model],subj_res['Processed Results']['x_pos'][model])
+                            subj_res['Processed Results']['Eccentricity'][model] = np.sqrt(subj_res['Processed Results']['y_pos'][model]**2+subj_res['Processed Results']['x_pos'][model]**2)
                     if 'Size (sigma_1)' in parameters and 'Size (sigma_2)' in parameters:
-                        subj_res['Processed Results']['Size ratio (sigma_2/sigma_1)'][model] = subj_res['Processed Results']['Size (sigma_2)'][model]/subj_res['Processed Results']['Size (sigma_1)'][model]
+                        if model in subj_res['Processed Results']['Size (sigma_1)'] and model in subj_res['Processed Results']['Size (sigma_2)']:
+                            subj_res['Processed Results']['Size ratio (sigma_2/sigma_1)'][model] = subj_res['Processed Results']['Size (sigma_2)'][model]/subj_res['Processed Results']['Size (sigma_1)'][model]
 
                     if 'Norm Param. B' in parameters and 'Norm Param. D' in parameters:
-                        subj_res['Processed Results']['Ratio (B/D)'][model] = subj_res['Processed Results']['Norm Param. B'][model]/subj_res['Processed Results']['Norm Param. D'][model]
+                        if model in subj_res['Processed Results']['Norm Param. B'] and model in subj_res['Processed Results']['Norm Param. D']:
+                            subj_res['Processed Results']['Ratio (B/D)'][model] = subj_res['Processed Results']['Norm Param. B'][model]/subj_res['Processed Results']['Norm Param. D'][model]
        
         return
     
@@ -1902,7 +1950,7 @@ class visualize_results(object):
     def quant_plots(self, x_parameter, y_parameter, rois, rsq_thresh, save_figures, figure_path,
                     space_names = 'fsnative', analysis_names = 'all', subject_ids='all', 
                     x_parameter_toplevel=None, y_parameter_toplevel=None, 
-                    ylim={}, xlim={}, log_yaxis=False, log_xaxis = False, nr_bins = 8, rsq_weights=True,
+                    ylim={}, xlim={}, log_yaxis=False, log_xaxis = False, nr_bins = 8, weights='RSq',
                     x_param_model=None, violin=False, scatter=False, diff_norm=False, diff_gauss=False, diff_gauss_x=False,
                     rois_on_plot = False, rsq_alpha_plot = False,
                     means_only=False, stats_on_plot=False, bin_by='size', zscore_ydata=False, zscore_xdata=False,
@@ -2219,8 +2267,8 @@ class visualize_results(object):
                  
     
                                         #r - squared weighting
-                                        rsq_x[analysis][subj][model][roi] = np.copy(subj_res['Processed Results']['RSq'][model][alpha[analysis][subj][model][roi]>rsq_thresh])
-                                        rsq_y[analysis][subj][model][roi] = np.copy(subj_res['Processed Results']['RSq'][model][alpha[analysis][subj][model][roi]>rsq_thresh])
+                                        rsq_x[analysis][subj][model][roi] = np.copy(subj_res['Processed Results'][weights][model][alpha[analysis][subj][model][roi]>rsq_thresh])
+                                        rsq_y[analysis][subj][model][roi] = np.copy(subj_res['Processed Results'][weights][model][alpha[analysis][subj][model][roi]>rsq_thresh])
 
                                         #no need for rsq-weighting if plotting rsq
                                         if 'rsq' in y_parameter.lower():
@@ -2228,32 +2276,19 @@ class visualize_results(object):
                                         if 'rsq' in x_parameter.lower():
                                             rsq_x[analysis][subj][model][roi] = np.ones_like(x_par[analysis][subj][model][roi])      
 
-                                            #rsq[analysis][subj][model][roi] = np.copy(subj_res['Processed Results']['Noise Ceiling']['Noise Ceiling (RSq)'][alpha[analysis][subj][model][roi]])
-                                            #rsq[analysis][subj][model][roi][~np.isfinite(subj_res['Processed Results']['Noise Ceiling']['Noise Ceiling (RSq)'][alpha[analysis][subj][model][roi]])] = 0
-                                            #rsq[analysis][subj][model][roi][subj_res['Processed Results']['Noise Ceiling']['Noise Ceiling (RSq)'][alpha[analysis][subj][model][roi]]<0] = 0
-                                            
-                                            #rsq[analysis][subj][model][roi] = np.mean([subj_res['Processed Results']['RSq'][mod][alpha[analysis][subj][model][roi]] for mod in self.only_models],axis=0)
+
 
                                         #if plotting different model parameters
-                                        if x_param_model is not None and x_param_model in subj_res['Processed Results']['RSq']:
-                                            rsq_x = np.copy(subj_res['Processed Results']['RSq'][x_param_model][alpha[analysis][subj][model][roi]>rsq_thresh])
+                                        if x_param_model is not None and x_param_model in subj_res['Processed Results'][weights]:
+                                            rsq_x = np.copy(subj_res['Processed Results'][weights][x_param_model][alpha[analysis][subj][model][roi]>rsq_thresh])
                                         
      
-                                        #if plotting non-model stuff like receptors
+                                        #if plotting non-model stuff like receptors and noise ceiling and variance
                                         if x_parameter_toplevel is not None:
                                             rsq_x[analysis][subj][model][roi] = np.ones_like(x_par[analysis][subj][model][roi])
                                             
                                         if y_parameter_toplevel is not None:
                                             rsq_y[analysis][subj][model][roi] = np.ones_like(y_par[analysis][subj][model][roi])
-                                            #rsq_x_param[subj_res['Processed Results']['RSq'][x_param_model][alpha[analysis][subj][model][roi]]<0] = 0
-                                            
-                                            #rsq[analysis][subj][model][roi] += rsq_x_param
-                                            #rsq[analysis][subj][model][roi] /= 2
-                                        
-                                        #x_par[analysis][subj][model][roi] =  zscore(x_par[analysis][subj][model][roi])
-                                        #y_par[analysis][subj][model][roi] = zscore(y_par[analysis][subj][model][roi])
-                                        #rsq[analysis][subj][model][roi]
-                                                
                                         
                                         
         
@@ -2288,7 +2323,7 @@ class visualize_results(object):
                                     y_par[analysis][subj][model][roi] = zscore(y_par[analysis][subj][model][roi])
                                 
         
-                                if not rsq_weights:
+                                if weights is None:
                                     rsq_x[analysis][subj][model][roi] = np.ones_like(rsq_x[analysis][subj][model][roi])
                                     rsq_y[analysis][subj][model][roi] = np.ones_like(rsq_y[analysis][subj][model][roi])
                             
@@ -2648,11 +2683,13 @@ class visualize_results(object):
 
                                                         pl.text(ssj_datapoints_x[ssj_nr], ssj_stats.mean, ssj[0].split('_')[0][-1], fontsize=12, color='k', ha='center', va=vanch_sj)      
 
-                                                        dict_lines[analysis][ssj[0]][model]['xpos'].append(ssj_datapoints_x[ssj_nr])      
-                                                        dict_lines[analysis][ssj[0]][model]['ypos'].append(ssj_stats.mean)
+                                                        plot_lines = False
+                                                        if plot_lines:
+                                                            dict_lines[analysis][ssj[0]][model]['xpos'].append(ssj_datapoints_x[ssj_nr])      
+                                                            dict_lines[analysis][ssj[0]][model]['ypos'].append(ssj_stats.mean)
 
-                                                        if i == (len(rois)-1):
-                                                            pl.plot(dict_lines[analysis][ssj[0]][model]['xpos'],dict_lines[analysis][ssj[0]][model]['ypos'],c='k',alpha=0.5)
+                                                            if i == (len(rois)-1):
+                                                                pl.plot(dict_lines[analysis][ssj[0]][model]['xpos'],dict_lines[analysis][ssj[0]][model]['ypos'],c='k',alpha=0.5)
 
                                         if stats_on_plot:    
                                             
@@ -2665,7 +2702,7 @@ class visualize_results(object):
 
                                             pvals = []
                                                 
-                                            for ccc in range(100000):                                                                                                                                 
+                                            for ccc in range(1000):                                                                                                                                 
                                                 
                                                 #correct for upsampling
                                                 #ideally add rsq weighting, increase asterisks font size,
