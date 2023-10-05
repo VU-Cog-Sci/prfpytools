@@ -185,12 +185,12 @@ def prepare_data(subj,
 
                 if session == 'ses-all':
                     if pybest:
-                        tc_paths = sorted(Path(opj(data_path,'pybest',subj,'unzscored')).glob(f"{subj}_ses-*_task-{task_name}*run-*_space-{fitting_space}_hemi-{hemi}*bold.npy"))
+                        tc_paths = sorted(Path(opj(data_path,'pybest',subj)).glob(opj('**',f"{subj}_ses-*_task-{task_name}*run-*_space-{fitting_space}_hemi-{hemi}*bold.npy")))
                     else:                   
                         tc_paths = sorted(Path(opj(data_path,'fmriprep',subj)).glob(opj('**',f"{subj}_ses-*_task-{task_name}*run-*_space-{fitting_space}_hemi-{hemi}*.func.gii")))
                 else:
                     if pybest:
-                        tc_paths = sorted(Path(opj(data_path,'pybest',subj,'unzscored')).glob(f"{subj}_{session}_task-{task_name}*run-*_space-{fitting_space}_hemi-{hemi}*bold.npy"))
+                        tc_paths = sorted(Path(opj(data_path,'pybest',subj)).glob(opj('**',f"{subj}_{session}_task-{task_name}*run-*_space-{fitting_space}_hemi-{hemi}*bold.npy")))
                     else:                   
                         tc_paths = sorted(Path(opj(data_path,'fmriprep',subj)).glob(opj('**',f"{subj}_{session}_task-{task_name}*run-*_space-{fitting_space}_hemi-{hemi}*.func.gii")))
                 
@@ -255,12 +255,12 @@ def prepare_data(subj,
                 if fitting_space == 'fsaverage' or fitting_space == 'fsnative':
                     if session == 'ses-all':
                         if pybest:
-                            tc_paths = sorted(Path(opj(data_path,'pybest',subj,'unzscored')).glob(f"{subj}_ses-*_task-{task_name}*run-*_space-{fitting_space}_hemi-{hemi}*bold.npy"))
+                            tc_paths = sorted(Path(opj(data_path,'pybest',subj)).glob(opj('**',f"{subj}_ses-*_task-{task_name}*run-*_space-{fitting_space}_hemi-{hemi}*bold.npy")))
                         else:                   
                             tc_paths = sorted(Path(opj(data_path,'fmriprep',subj)).glob(opj('**',f"{subj}_ses-*_task-{task_name}*run-*_space-{fitting_space}_hemi-{hemi}*.func.gii")))
                     else:
                         if pybest:
-                            tc_paths = sorted(Path(opj(data_path,'pybest',subj,'unzscored')).glob(f"{subj}_{session}_task-{task_name}*run-*_space-{fitting_space}_hemi-{hemi}*bold.npy"))
+                            tc_paths = sorted(Path(opj(data_path,'pybest',subj)).glob(opj('**',f"{subj}_{session}_task-{task_name}*run-*_space-{fitting_space}_hemi-{hemi}*bold.npy")))
                         else:                   
                             tc_paths = sorted(Path(opj(data_path,'fmriprep',subj)).glob(opj('**',f"{subj}_{session}_task-{task_name}*run-*_space-{fitting_space}_hemi-{hemi}*.func.gii")))
                     
