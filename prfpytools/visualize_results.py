@@ -281,7 +281,7 @@ class visualize_results(object):
                                     else:
                                         this_alpha = np.ones_like(p_r[param][model])
 
-                                    p_r[f'{param} {current_sj_group}/{base_group}'][model] = p_r[param][model] / p_r_pla[param][model]
+                                    p_r[f'{param} {current_sj_group}/{base_group}'][model] = (p_r[param][model] - p_r_pla[param][model])/p_r_pla[param][model]
 
                                     p_r[f'{param} {current_sj_group}/{base_group}'][model][this_alpha<=0] = 0
 
@@ -545,7 +545,7 @@ class visualize_results(object):
                             tc_stats = subj_res['Timecourse Stats']
                         else:
                             tc_stats=dict()
-                            tc_stats['Mean'] = np.ones_like(p_r[alpha_weight][only_models[0]])
+                            tc_stats['Mean'] = np.ones_like(p_r[alpha_weight][[mod for mod in self.only_models if mod in p_r[alpha_weight]][0]])
                        
                         #######Raw bold timecourse vein threshold
                         if subj not in self.tc_min:
@@ -1949,9 +1949,9 @@ class visualize_results(object):
     
     def quant_plots(self, x_parameter, y_parameter, rois, rsq_thresh, save_figures, figure_path,
                     space_names = 'fsnative', analysis_names = 'all', subject_ids='all', 
-                    x_parameter_toplevel=None, y_parameter_toplevel=None, 
+                    x_parameter_toplevel='', y_parameter_toplevel='', 
                     ylim={}, xlim={}, log_yaxis=False, log_xaxis = False, nr_bins = 8, weights='RSq',
-                    x_param_model=None, violin=False, scatter=False, diff_norm=False, diff_gauss=False, diff_gauss_x=False,
+                    x_param_model='', violin=False, scatter=False, diff_norm=False, diff_gauss=False, diff_gauss_x=False,
                     rois_on_plot = False, rsq_alpha_plot = False,
                     means_only=False, stats_on_plot=False, bin_by='size', zscore_ydata=False, zscore_xdata=False,
                     zconfint_err_alpha = None, fit = True,exp_fit = False, show_legend=False, each_subj_on_group=False,
@@ -2034,7 +2034,10 @@ class visualize_results(object):
                     #max b and d
                     bd_max=1000
                 #bar or violin width
-                bar_or_violin_width = 1.5
+                if len(self.only_models)>1:
+                    bar_or_violin_width = 0.3
+                else:
+                    bar_or_violin_width = 1.5
 
                 
                         
@@ -2142,6 +2145,11 @@ class visualize_results(object):
                                 
                                 if 'mean an' not in analysis or 'fsaverage' in subj:
                                     if 'sub' in subj or 'fsaverage' in subj or subj.isdecimal():
+                                        if space == 'fsaverage':
+                                            roi_subj = 'fsaverage'
+                                        else:
+                                            roi_subj = subj
+
                                         if 'rsq' in y_parameter.lower():
                                             #comparing same vertices for model performance
                                             curr_alpha = subj_res['Processed Results']['Alpha']['all']
@@ -2149,9 +2157,9 @@ class visualize_results(object):
                                             #otherwise model-specific alpha
                                             curr_alpha = (subj_res['Processed Results']['Alpha'][model])
                                             
-                                        if roi in self.idx_rois[subj]:
+                                        if roi in self.idx_rois[roi_subj]:
     
-                                            alpha[analysis][subj][model][roi] = (roi_mask(self.idx_rois[subj][roi], curr_alpha)) 
+                                            alpha[analysis][subj][model][roi] = (roi_mask(self.idx_rois[roi_subj][roi], curr_alpha)) 
        
                                         else:
                                             #if ROI is not defined
@@ -2159,11 +2167,11 @@ class visualize_results(object):
                                             if roi == 'Brain':
                                                 alpha[analysis][subj][model][roi] = curr_alpha
                                             elif roi == 'combined':
-                                                alpha[analysis][subj][model][roi] = (roi_mask(np.concatenate(tuple([self.idx_rois[subj][r] for r in rois if ('combined' not in r and 'Brain' not in r and r in self.idx_rois[subj])])), curr_alpha))    
+                                                alpha[analysis][subj][model][roi] = (roi_mask(np.concatenate(tuple([self.idx_rois[roi_subj][r] for r in rois if ('combined' not in r and 'Brain' not in r and r in self.idx_rois[roi_subj])])), curr_alpha))    
                                             elif roi == 'all_custom':
-                                                alpha[analysis][subj][model][roi] = (roi_mask(np.concatenate(tuple([self.idx_rois[subj][r] for r in self.idx_rois[subj] if 'custom' in r])), curr_alpha))    
-                                            elif space == 'fsaverage' and roi in self.idx_rois['fsaverage']:
-                                                alpha[analysis][subj][model][roi] = (roi_mask(self.idx_rois['fsaverage'][roi], curr_alpha))
+                                                alpha[analysis][subj][model][roi] = (roi_mask(np.concatenate(tuple([self.idx_rois[roi_subj][r] for r in self.idx_rois[roi_subj] if 'custom' in r])), curr_alpha))    
+                                            # elif space == 'fsaverage' and roi in self.idx_rois['fsaverage']:
+                                            #     alpha[analysis][subj][model][roi] = (roi_mask(self.idx_rois['fsaverage'][roi], curr_alpha))
                                             else:
                                                 #, otherwise none
                                                 print(f"{roi}: undefined ROI")
@@ -2176,13 +2184,13 @@ class visualize_results(object):
                                             if y_parameter == 'Surround Size (fwatmin)' or x_parameter == 'Surround Size (fwatmin)':# and model == 'DoG':
                                                 #exclude too large surround (no surround)
                                                 alpha[analysis][subj][model][roi] *= (subj_res['Processed Results']['Surround Size (fwatmin)'][model]<w_max)
-                                                if x_param_model!=None:
+                                                if x_param_model is not '':
                                                     alpha[analysis][subj][model][roi] *= (subj_res['Processed Results']['Surround Size (fwatmin)'][x_param_model]<w_max)
     
                                             
                                             if y_parameter == 'Surround/Centre Amplitude'  or x_parameter == 'Surround/Centre Amplitude' :# and model == 'DoG':
                                                 #exclude too large surround (no surround)
-                                                if x_param_model is not None:
+                                                if x_param_model is not '':
                                                     alpha[analysis][subj][model][roi] *= (subj_res['Processed Results']['Surround/Centre Amplitude'][x_param_model]<w_max)
                                                 else:
                                                     alpha[analysis][subj][model][roi] *= (subj_res['Processed Results']['Surround/Centre Amplitude'][model]<w_max)
@@ -2194,7 +2202,7 @@ class visualize_results(object):
                                             if 'Suppression' in x_parameter:
                                                 #exclude nonsensical suppression index values
                                                 alpha[analysis][subj][model][roi] *= (subj_res['Processed Results'][x_parameter][model]<supp_max)
-                                                if x_param_model is not None:
+                                                if x_param_model is not '':
                                                     alpha[analysis][subj][model][roi] *= (subj_res['Processed Results'][x_parameter][x_param_model]<supp_max)
                                                     
                                             if 'CSS Exponent' in x_parameter:
@@ -2204,18 +2212,18 @@ class visualize_results(object):
                                                 alpha[analysis][subj][model][roi] *= (subj_res['Processed Results'][y_parameter][model]<bd_max)                                            
                                             if 'Norm Param.' in x_parameter:
                                                 alpha[analysis][subj][model][roi] *= (subj_res['Processed Results'][x_parameter][model]<bd_max)                                            
-                                                if x_param_model is not None:
+                                                if x_param_model is not '':
                                                     alpha[analysis][subj][model][roi] *= (subj_res['Processed Results'][x_parameter][x_param_model]<bd_max)
                                         
                                         else:
-                                            if y_parameter_toplevel is None:    
+                                            if y_parameter_toplevel is '':    
                                                 alpha[analysis][subj][model][roi] *= (subj_res['Processed Results'][y_parameter][model]<np.nanquantile(subj_res['Processed Results'][y_parameter][model],quantile_exclusion))*(subj_res['Processed Results'][y_parameter][model]>np.nanquantile(subj_res['Processed Results'][y_parameter][model],1-quantile_exclusion))  
 
-                                            if x_param_model is not None:
+                                            if x_param_model is not '':
                                                 #nanquantile handles nans but will not work if there are infs
                                                 alpha[analysis][subj][model][roi] *= (subj_res['Processed Results'][x_parameter][x_param_model]<np.nanquantile(subj_res['Processed Results'][x_parameter][x_param_model],quantile_exclusion))*(subj_res['Processed Results'][x_parameter][x_param_model]>np.nanquantile(subj_res['Processed Results'][x_parameter][x_param_model],1-quantile_exclusion))  
 
-                                            if x_parameter_toplevel is None:
+                                            if x_parameter_toplevel is '':
                                                 alpha[analysis][subj][model][roi] *= (subj_res['Processed Results'][x_parameter][model]<np.nanquantile(subj_res['Processed Results'][x_parameter][model],quantile_exclusion))*(subj_res['Processed Results'][x_parameter][model]>np.nanquantile(subj_res['Processed Results'][x_parameter][model],1-quantile_exclusion))  
 
                                             
@@ -2223,19 +2231,19 @@ class visualize_results(object):
          
                                         #if 'ccrsq' in y_parameter.lower():
                                         #    alpha[analysis][subj][model][roi] *= (subj_res['Processed Results'][y_parameter][model]>0)
-                                        if y_parameter_toplevel is None:
+                                        if y_parameter_toplevel is '':
                                             alpha[analysis][subj][model][roi] *= np.isfinite(subj_res['Processed Results'][y_parameter][model])
                                         else:
                                             alpha[analysis][subj][model][roi] *= np.isfinite(subj_res['Processed Results'][y_parameter_toplevel][y_parameter])
                                        
-                                        if x_param_model is not None:
+                                        if x_param_model is not '':
                                             
                                             alpha[analysis][subj][model][roi] *= np.isfinite(subj_res['Processed Results'][x_parameter][x_param_model])
                                             
                                             x_par[analysis][subj][model][roi] = subj_res['Processed Results'][x_parameter][x_param_model][alpha[analysis][subj][model][roi]>rsq_thresh]                                          
                                         
                                         
-                                        elif x_parameter_toplevel is not None:
+                                        elif x_parameter_toplevel is not '':
                                             alpha[analysis][subj][model][roi] *= np.isfinite(subj_res['Processed Results'][x_parameter_toplevel][x_parameter])
                                             x_par[analysis][subj][model][roi] = (subj_res['Processed Results'][x_parameter_toplevel][x_parameter][alpha[analysis][subj][model][roi]>rsq_thresh])
                                             
@@ -2246,7 +2254,7 @@ class visualize_results(object):
                                             x_par[analysis][subj][model][roi] = subj_res['Processed Results'][x_parameter][model][alpha[analysis][subj][model][roi]>rsq_thresh]
                                             
                                         #handling special case of plotting receptors as y-parameter, since they are not part of any model
-                                        if y_parameter_toplevel is None:
+                                        if y_parameter_toplevel is '':
                                             y_par[analysis][subj][model][roi] = (subj_res['Processed Results'][y_parameter][model][alpha[analysis][subj][model][roi]>rsq_thresh])
                                         else:
                                             y_par[analysis][subj][model][roi] = (subj_res['Processed Results'][y_parameter_toplevel][y_parameter][alpha[analysis][subj][model][roi]>rsq_thresh])
@@ -2279,15 +2287,15 @@ class visualize_results(object):
 
 
                                         #if plotting different model parameters
-                                        if x_param_model is not None and x_param_model in subj_res['Processed Results'][weights]:
+                                        if x_param_model is not '' and x_param_model in subj_res['Processed Results'][weights]:
                                             rsq_x = np.copy(subj_res['Processed Results'][weights][x_param_model][alpha[analysis][subj][model][roi]>rsq_thresh])
                                         
      
                                         #if plotting non-model stuff like receptors and noise ceiling and variance
-                                        if x_parameter_toplevel is not None:
+                                        if x_parameter_toplevel is not '':
                                             rsq_x[analysis][subj][model][roi] = np.ones_like(x_par[analysis][subj][model][roi])
                                             
-                                        if y_parameter_toplevel is not None:
+                                        if y_parameter_toplevel is not '':
                                             rsq_y[analysis][subj][model][roi] = np.ones_like(y_par[analysis][subj][model][roi])
                                         
                                         
@@ -2358,7 +2366,7 @@ class visualize_results(object):
                                         pl.ylabel(f"{subj} Mean {y_parameter} (°)")
                                     elif 'B/D' in y_parameter:
                                         pl.ylabel(f"{subj} Mean {y_parameter} (% signal change)")
-                                    elif y_parameter_toplevel is not None and 'Receptor' in y_parameter_toplevel:
+                                    elif y_parameter_toplevel is not '' and 'Receptor' in y_parameter_toplevel:
                                         pl.ylabel(f"{subj} Mean {y_parameter} (pmol/ml)")                                        
                                     else:
                                         pl.ylabel(f"{subj} Mean {y_parameter}")
@@ -2451,8 +2459,7 @@ class visualize_results(object):
                                                 base_model = 'Gauss'
                                             elif diff_norm:
                                                 base_model = [m for m in self.only_models if 'Norm' in m][0]
-
-    
+                                                
                                             
                                             #do model comparison stats only once, at the last model
                                             if self.only_models.index(model) == (len(self.only_models)-1):
@@ -2590,7 +2597,8 @@ class visualize_results(object):
                                                     elif mod == 'Gauss' or 'Norm' in mod:
                                                         c_left = 'blue'
                                                         c_right = 'red'
-                                                        lx, ly = bar_position-3*bar_or_violin_width, text_height+3*text_distance  
+                                                        #used to be bar_position-3*bar_or_violin_width
+                                                        lx, ly = bar_position-bar_or_violin_width, text_height+3*text_distance  
                                                         rx, ry = bar_position, text_height+3*text_distance                                                    
                                                         
                                                     mid = plot_comparison_bracket()
@@ -2681,9 +2689,13 @@ class visualize_results(object):
                                                         else:
                                                             vanch_sj = 'bottom'
 
-                                                        pl.text(ssj_datapoints_x[ssj_nr], ssj_stats.mean, ssj[0].split('_')[0][-1], fontsize=12, color='k', ha='center', va=vanch_sj)      
+                                                        #sj number on plot
+                                                        #if space == 'fsnative'
+                                                        sj_number_on_plot = False
+                                                        if sj_number_on_plot:
+                                                            pl.text(ssj_datapoints_x[ssj_nr], ssj_stats.mean, int(ssj[0].split('_')[0].split('-')[1]), fontsize=12, color='k', ha='center', va=vanch_sj)      
 
-                                                        plot_lines = False
+                                                        plot_lines = True
                                                         if plot_lines:
                                                             dict_lines[analysis][ssj[0]][model]['xpos'].append(ssj_datapoints_x[ssj_nr])      
                                                             dict_lines[analysis][ssj[0]][model]['ypos'].append(ssj_stats.mean)
@@ -2702,7 +2714,7 @@ class visualize_results(object):
 
                                             pvals = []
                                                 
-                                            for ccc in range(1000):                                                                                                                                 
+                                            for ccc in range(10000):                                                                                                                                 
                                                 
                                                 #correct for upsampling
                                                 #ideally add rsq weighting, increase asterisks font size,
@@ -2746,8 +2758,11 @@ class visualize_results(object):
                                                 vanch = 'bottom'
                                             pl.text(bar_position, bar_height, pval_str, fontsize=16, color='k', weight = 'bold', ha='center', va=vanch)                                            
                                                                  
-                                    
-                                    bar_position += (0.4*bar_or_violin_width)
+                                    #before was 0.4* bar_or_violin_width
+                                    if len(self.only_models)>1:
+                                        bar_position += (bar_or_violin_width)
+                                    else:
+                                        bar_position += (0.4*bar_or_violin_width)
     
                                     pl.xticks(x_ticks,x_labels)
                                     
@@ -2758,7 +2773,7 @@ class visualize_results(object):
                                         
                                     if save_figures:
     
-                                        pl.savefig(opj(figure_path, f"{subj} {model} Mean {y_parameter.replace('/','')}.pdf"), dpi=600, bbox_inches='tight')
+                                        pl.savefig(opj(figure_path, f"{subj} {model} Mean {y_parameter_toplevel} {y_parameter.replace('/','')}.pdf"), dpi=600, bbox_inches='tight')
                                                               
 
                         
@@ -2796,19 +2811,19 @@ class visualize_results(object):
     
                                             else:
     
-                                                if y_parameter_toplevel is not None:
+                                                if y_parameter_toplevel is not '':
                                                     rsq_regr_weight[analysis][subj][model][roi] = rsq_x[analysis][subj][model][roi]
                                                     
                                                     if rsq_alpha_plot:
                                                         rsq_alpha_plots_all_rois = np.nan_to_num(np.array([np.nanmean(rsq_x[analysis][subj][model][r]) for r in rois if 'all' not in r and 'combined' not in r and 'Brain' not in r and len(y_par[analysis][subj][model][r])>10]))
 
-                                                if x_parameter_toplevel is not None:
+                                                if x_parameter_toplevel is not '':
                                                     rsq_regr_weight[analysis][subj][model][roi] = rsq_y[analysis][subj][model][roi]
                                                     
                                                     if rsq_alpha_plot:
                                                         rsq_alpha_plots_all_rois = np.nan_to_num(np.array([np.nanmean(rsq_y[analysis][subj][model][r]) for r in rois if 'all' not in r and 'combined' not in r and 'Brain' not in r and len(y_par[analysis][subj][model][r])>10]))
     
-                                                elif x_param_model is not None:
+                                                elif x_param_model is not '':
                                                     rsq_regr_weight[analysis][subj][model][roi] = (rsq_y[analysis][subj][model][roi]+rsq_x[analysis][subj][model][roi])/2
                                                     if rsq_alpha_plot:
                                                         rsq_alpha_plots_all_rois = np.nan_to_num(np.array([np.nanmean((rsq_y[analysis][subj][model][roi]+rsq_x[analysis][subj][model][roi])/2) for r in rois if 'all' not in r and 'combined' not in r and 'Brain' not in r and len(y_par[analysis][subj][model][r])>10]))
@@ -2970,19 +2985,19 @@ class visualize_results(object):
                                     pl.xlabel(f"{x_parameter} (°)")
                                 elif 'B/D' in x_parameter:
                                     pl.xlabel(f"{x_parameter} (% signal change)")  
-                                elif x_parameter_toplevel is not None and 'Receptor' in x_parameter_toplevel:
+                                elif x_parameter_toplevel is not '' and 'Receptor' in x_parameter_toplevel:
                                     pl.xlabel(f"{x_parameter} (pmol/ml)")                                                 
                                 else:
                                     pl.xlabel(f"{x_parameter}")  
         
-                                if x_param_model != None:
+                                if x_param_model is not '':
                                     pl.xlabel(f"{x_param_model} {pl.gca().get_xlabel()}")
                                 
                                 if 'Eccentricity' in y_parameter or 'Size' in y_parameter:
                                     pl.ylabel(f"{subj} {roi.replace('custom.','').replace('HCPQ1Q6.','').replace('glasser_','')} {y_parameter} (°)")
                                 elif 'B/D' in y_parameter:
                                     pl.ylabel(f"{subj} {roi.replace('custom.','').replace('HCPQ1Q6.','').replace('glasser_','')} {y_parameter} (% signal change)")
-                                elif y_parameter_toplevel is not None and 'Receptor' in y_parameter_toplevel:
+                                elif y_parameter_toplevel is not '' and 'Receptor' in y_parameter_toplevel:
                                     pl.ylabel(f"{subj} {roi.replace('custom.','').replace('HCPQ1Q6.','').replace('glasser_','')} {y_parameter} (pmol/ml)")                                                                   
                                 else:
                                     pl.ylabel(f"{subj} {roi.replace('custom.','').replace('HCPQ1Q6.','').replace('glasser_','')} {y_parameter}")
@@ -3004,12 +3019,8 @@ class visualize_results(object):
                                     
                                 if save_figures:
                                     
-                                    if x_param_model != None:
-                                        pl.savefig(opj(figure_path, f"{subj} {roi.replace('custom.','').replace('HCPQ1Q6.','').replace('glasser_','')} {y_parameter.replace('/','')} VS {x_param_model} {x_parameter.replace('/','')}.pdf"), dpi=600, bbox_inches='tight')
+                                    pl.savefig(opj(figure_path, f"{subj} {roi.replace('custom.','').replace('HCPQ1Q6.','').replace('glasser_','')} {y_parameter_toplevel} {y_parameter.replace('/','')} VS {x_parameter_toplevel} {x_param_model} {x_parameter.replace('/','')}.pdf"), dpi=600, bbox_inches='tight')
                                     
-                                    else:      
-                                        pl.savefig(opj(figure_path, f"{subj} {roi.replace('custom.','').replace('HCPQ1Q6.','').replace('glasser_','')} {y_parameter.replace('/','')} VS {x_parameter.replace('/','')}.pdf"), dpi=600, bbox_inches='tight')
-
 
                         ########params by model (all rois)
                         if not means_only:        
@@ -3119,12 +3130,20 @@ class visualize_results(object):
                                             else:
                                                 roi_fill_color = current_color
                                                 roi_border_color = 'k'
+
+                                            if nr_bins == 1:
+                                                ms=16
+                                                mew=2
+                                            else:
+                                                ms=5
+                                                mew=1
+
                                                 
                                             pl.errorbar(curr_x_bins,
                                                 curr_y_bins,
                                                 yerr=0,#curr_yerr,
                                                 xerr=0,#curr_xerr,
-                                            fmt='s ', mec=roi_border_color, color=roi_fill_color, label=current_label, alpha=alpha_plot, ms=16, mew=2)#color=current_color, ###mfc=roi_colors[roi], ecolor=roi_colors[roi])
+                                            fmt='s ', mec=roi_border_color, color=roi_fill_color, label=current_label, alpha=alpha_plot, ms=ms, mew=mew)#color=current_color, ###mfc=roi_colors[roi], ecolor=roi_colors[roi])
                                             
                                             if rois_on_plot: 
                                                 roi_name_txt = pl.text(curr_x_bins[-1], curr_y_bins[-1], current_label, fontsize=25, alpha=alpha_plot, color=roi_fill_color,  ha='left', va='bottom') #color=current_color,
@@ -3159,11 +3178,12 @@ class visualize_results(object):
                                     
                                     all_rois_alpha = np.concatenate(all_rois_alpha)
                                     
+                                    
                                     normalize_rsq = False
                                     use_roi_means = True
+                                    #NOTE if doing full_data: set plot hexbins to true. has been moved above to manage roi datapoints color
                                     use_full_data = False
                                     perm_yw = False
-                                    #NOTE: plot hexbins has been moved above to manage roi datapoints color
                                     
                                     n_perm = 1000000
                                     
@@ -3319,7 +3339,7 @@ class visualize_results(object):
                                         WLS_comb_full_data_prediction = WLS_comb_full_data.predict(all_rois_x.reshape(-1, 1))    
                                         pl.plot(all_rois_x[np.argsort(all_rois_x)],
                                             WLS_comb_full_data_prediction[np.argsort(all_rois_x)],
-                                            color='w', zorder=1000)                                         
+                                            color='k', zorder=1000)                                         
 
                                  
                                     #bootstrap conf intervals
@@ -3365,27 +3385,27 @@ class visualize_results(object):
                                         conf_max_full_data = np.nanquantile(comb_boot_fits_full_data,0.95,axis=0)#WLS_comb_prediction + sem(comb_boot_fits,axis=0)#
                                         conf_min_full_data = np.nanquantile(comb_boot_fits_full_data,0.05,axis=0)#WLS_comb_prediction - sem(comb_boot_fits,axis=0)#                                        
                                         
-                                        pl.plot(all_rois_x[np.argsort(all_rois_x)],conf_max_full_data[np.argsort(all_rois_x)], color='w', ls = '--', zorder=1001)
-                                        pl.plot(all_rois_x[np.argsort(all_rois_x)],conf_min_full_data[np.argsort(all_rois_x)], color='w', ls = '--', zorder=1002)                                    
+                                        pl.plot(all_rois_x[np.argsort(all_rois_x)],conf_max_full_data[np.argsort(all_rois_x)], color='k', ls = '--', zorder=1001)
+                                        pl.plot(all_rois_x[np.argsort(all_rois_x)],conf_min_full_data[np.argsort(all_rois_x)], color='k', ls = '--', zorder=1002)                                    
 
                                 
                                 if 'Eccentricity' in x_parameter or 'Size' in x_parameter:
                                     pl.xlabel(f"{x_parameter} (°)")
                                 elif 'B/D' in x_parameter:
                                     pl.xlabel(f"{x_parameter} (% signal change)")   
-                                elif x_parameter_toplevel is not None and 'Receptor' in x_parameter_toplevel:
+                                elif x_parameter_toplevel is not '' and 'Receptor' in x_parameter_toplevel:
                                     pl.xlabel(f"{x_parameter} (pmol/ml)")                                                 
                                 else:
                                     pl.xlabel(f"{x_parameter}")
                                     
-                                if x_param_model != None:
+                                if x_param_model is not '':
                                     pl.xlabel(f"{x_param_model} {pl.gca().get_xlabel()}")                                    
                                 
                                 if 'Eccentricity' in y_parameter or 'Size' in y_parameter:
                                     pl.ylabel(f"{subj} {model} {y_parameter} (°)")
                                 elif 'B/D' in y_parameter:
                                     pl.ylabel(f"{subj} {model} {y_parameter} (% signal change)")  
-                                elif y_parameter_toplevel is not None and 'Receptor' in y_parameter_toplevel:
+                                elif y_parameter_toplevel is not '' and 'Receptor' in y_parameter_toplevel:
                                     pl.ylabel(f"{subj} {model} {y_parameter} (pmol/ml)")                                                 
                                 else:
                                     pl.ylabel(f"{subj} {model} {y_parameter}")
@@ -3404,10 +3424,8 @@ class visualize_results(object):
     
                                 if save_figures:
 
-                                    if x_param_model is not None:
-                                        pl.savefig(opj(figure_path, f"{subj} {model} {y_parameter.replace('/','')} VS {x_param_model} {x_parameter.replace('/','')}.pdf"), dpi=600, bbox_inches='tight')
-                                    else:
-                                        pl.savefig(opj(figure_path,  f"{subj} {model} {y_parameter.replace('/','')} VS {x_parameter.replace('/','')}.pdf"), dpi=600, bbox_inches='tight')
+                                    pl.savefig(opj(figure_path, f"{subj} {model} {y_parameter_toplevel} {y_parameter.replace('/','')} VS {x_parameter_toplevel} {x_param_model} {x_parameter.replace('/','')}.pdf"), dpi=600, bbox_inches='tight')
+
 
         return
     
