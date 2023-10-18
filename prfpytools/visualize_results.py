@@ -203,7 +203,7 @@ class visualize_results(object):
                             parameters = [item for item in p_r.items() if item[0] in parameter_names]
 
                         for param, param_res in parameters:
-                            if f'{current_sj_group}' not in param and f'{base_group}' not in param:
+                            if f'{current_sj_group}' not in param and f'{base_group}' not in param and param in p_r_pla:
                                 models = [item for item in param_res.items()]
                                 for model, model_res in models:
                                     if model in p_r['Alpha']:
@@ -216,9 +216,11 @@ class visualize_results(object):
                                     else:
                                         this_alpha = np.ones_like(p_r[param][model])
 
-                                    p_r[f'{param} {current_sj_group}-{base_group}'][model] = p_r[param][model] - p_r_pla[param][model]
+                                    if model in p_r_pla[param]:
 
-                                    p_r[f'{param} {current_sj_group}-{base_group}'][model][this_alpha<=0] = 0
+                                        p_r[f'{param} {current_sj_group}-{base_group}'][model] = p_r[param][model] - p_r_pla[param][model]
+
+                                        p_r[f'{param} {current_sj_group}-{base_group}'][model][this_alpha<=0] = 0
 
 
     
@@ -473,7 +475,7 @@ class visualize_results(object):
 
             pycortex_subj = subj.split('_')[0]
             
-            if previous_borders_path is None:
+            if previous_borders_path == None:
             
                 left, right = getattr(cortex.db,pycortex_subj).surfaces.inflated.get()
     
@@ -541,8 +543,8 @@ class visualize_results(object):
 
                         models = p_r[alpha_weight].keys()
                                                 
-                        if space != 'fsaverage' and 'rsq' not in subj:
-                            tc_stats = subj_res['Timecourse Stats']
+                        if 'Timecourse Stats' in p_r.keys(): #space != 'fsaverage' and 'rsq' not in subj:
+                            tc_stats = p_r['Timecourse Stats']
                         else:
                             tc_stats=dict()
                             tc_stats['Mean'] = np.ones_like(p_r[alpha_weight][[mod for mod in self.only_models if mod in p_r[alpha_weight]][0]])
@@ -557,7 +559,7 @@ class visualize_results(object):
                      
               
                         #housekeeping
-                        if only_models is None:
+                        if only_models == None:
                             rsq = np.vstack(tuple([elem for _,elem in p_r[alpha_weight].items()])).T
                             ecc = np.vstack(tuple([elem for _,elem in p_r['Eccentricity'].items()])).T
 
@@ -569,6 +571,7 @@ class visualize_results(object):
                         #alpha dictionary
                         p_r['Alpha'] = {}          
                         p_r['Alpha']['all'] = rsq.max(-1) * (ecc.min(-1)<self.ecc_max) * (ecc.max(-1)>self.ecc_min) * (rsq.min(-1)>0) #* (p_r['Noise Ceiling']['Noise Ceiling (RSq)']>0)
+                        
 
                         if 'Mean' in tc_stats:
                             p_r['Alpha']['all'] *= (tc_stats['Mean']>self.tc_min[subj])
@@ -601,6 +604,7 @@ class visualize_results(object):
                                     p_r['Alpha']['all'] = (inverse_roi_mask(np.concatenate(tuple([self.idx_rois[roi_subj][r] for r in excluded_rois])), p_r['Alpha']['all']))   
                                 else:
                                     print("WARNING: excluded_rois contains undefined rois. roi exclusion not performed.")
+                        
                        
         return
 
@@ -612,7 +616,7 @@ class visualize_results(object):
         pl.rcParams.update({'font.size': 16})
         pl.rcParams.update({'pdf.fonttype':42})        
         self.click=0
-        if pycortex_image_path is not None:
+        if pycortex_image_path != None:
             if not os.path.exists(pycortex_image_path):
                 os.makedirs(pycortex_image_path)
         self.pycortex_image_path = pycortex_image_path
@@ -989,7 +993,7 @@ class visualize_results(object):
                     p_r = subj_res['Processed Results']
                     models = p_r['RSq'].keys()
 
-                    tc_stats = subj_res['Timecourse Stats']
+                    tc_stats = p_r['Timecourse Stats']
                     if space != 'fsaverage':
                         
                         mask = subj_res['mask']
@@ -998,16 +1002,13 @@ class visualize_results(object):
                         mask = np.ones_like(p_r['RSq'][list(models)[0]])
 
          
-                    if roi_borders_name is not None:
+                    if roi_borders_name != None:
                         roi_borders = self.idx_rois_borders[subj][roi_borders_name]
                     else:
                         roi_borders = None
                     
-                    curr_models = deepcopy(self.only_models)
-                    if len(self.only_models)>1:
-                        curr_models.append('all')
                     
-                    for model in curr_models:
+                    for model in self.only_models+['all']:
                         curr_alpha = np.copy(p_r['Alpha'][model])
                     
                         if all(roi in self.idx_rois[subj] for roi in rois):
@@ -1015,7 +1016,7 @@ class visualize_results(object):
                             alpha[analysis][subj][model] = (roi_mask(np.concatenate(tuple([self.idx_rois[subj][r] for r in rois])), curr_alpha)) 
        
                         else:
-                            #if ROI is not defined
+                            #if ROI != defined
                             #if Brain use all available vertices
                             if rois == 'Brain':
                                 alpha[analysis][subj][model] = curr_alpha
@@ -1071,33 +1072,40 @@ class visualize_results(object):
                         
                     ##START PYCORTEX VISUALIZATIONS                            
                     #data quality/stats cortex visualization 
-                    if self.plot_stats_cortex and not plotted_stats[subj] :
-                        
-                        stats_mask = mask*(tc_stats['Mean']>self.tc_min[subj])
-                        if all(roi in self.idx_rois[subj] for roi in rois):
-                            stats_mask = roi_mask(np.concatenate(tuple([self.idx_rois[subj][r] for r in rois])), stats_mask)
-                        
-                        
-                        
-                        mean_ts_vert = Vertex2D_fix(tc_stats['Mean'], stats_mask,
-                                                            vmin=np.nanquantile(tc_stats['Mean'][alpha[analysis][subj][model]>rsq_thresh],0.1), 
-                                                            vmax=np.nanquantile(tc_stats['Mean'][alpha[analysis][subj][model]>rsq_thresh],0.9),
+                    if self.plot_stats_cortex: # and not plotted_stats[subj] :
+                        ds_stats = dict()
+
+                        for stat in tc_stats.keys():
+
+                            if 'Mean' in stat:
+                                vmin_stat = np.nanquantile(tc_stats['Mean'][alpha[analysis][subj][model]>rsq_thresh],0.1)
+                                vmax_stat = np.nanquantile(tc_stats['Mean'][alpha[analysis][subj][model]>rsq_thresh],0.9)
+                            elif 'TSNR' in stat:
+                                vmin_stat = np.nanquantile(tc_stats['TSNR'][alpha[analysis][subj][model]>rsq_thresh],0.1)
+                                vmax_stat = np.nanquantile(tc_stats['TSNR'][alpha[analysis][subj][model]>rsq_thresh],0.9)
+                            elif 'Variance' in stat and 'psc' not in stat:
+                                vmin_stat = np.nanquantile(tc_stats['Variance'][alpha[analysis][subj][model]>rsq_thresh],0.1)
+                                vmax_stat = np.nanquantile(tc_stats['Variance'][alpha[analysis][subj][model]>rsq_thresh],0.9)
+                            else:
+                                vmin_stat = np.nanquantile(tc_stats[stat][alpha[analysis][subj][model]>rsq_thresh],0.1)
+                                vmax_stat = np.nanquantile(tc_stats[stat][alpha[analysis][subj][model]>rsq_thresh],0.9)
+
+                            ds_stats[f"{subj} {stat}"] = Vertex2D_fix(tc_stats[stat], alpha[analysis][subj]['all'], #np.ones_like(alpha[analysis][subj]['all']),
+                                                            vmin=vmin_stat, 
+                                                            vmax=vmax_stat,
                                                             vmin2=rsq_thresh, vmax2=rsq_max_opacity, subject=pycortex_subj, cmap=pycortex_cmap, roi_borders=roi_borders)
-                        var_ts_vert = Vertex2D_fix(tc_stats['Variance'], stats_mask, 
-                                                   
-                                                            vmin=np.nanquantile(tc_stats['Variance'][alpha[analysis][subj][model]>rsq_thresh],0.1), 
-                                                            vmax=np.nanquantile(tc_stats['Variance'][alpha[analysis][subj][model]>rsq_thresh],0.9),
-                                                            vmin2=rsq_thresh, vmax2=rsq_max_opacity, subject=pycortex_subj, cmap=pycortex_cmap, roi_borders=roi_borders)
-                        tsnr_vert = Vertex2D_fix(tc_stats['TSNR'], stats_mask, 
-                                                 
-                                                            vmin=np.nanquantile(tc_stats['TSNR'][alpha[analysis][subj][model]>rsq_thresh],0.1), 
-                                                            vmax=np.nanquantile(tc_stats['TSNR'][alpha[analysis][subj][model]>rsq_thresh],0.9),vmin2=rsq_thresh, vmax2=rsq_max_opacity, subject=pycortex_subj, cmap=pycortex_cmap, roi_borders=roi_borders)
+                            
+                            fig = simple_colorbar(vmin=vmin_stat, 
+                                                    vmax=vmax_stat,
+                                                cmap_name=pycortex_cmap, ori='horizontal', param_name=f'{subj} {stat}')
+                                
+                            if self.pycortex_image_path != None and save_colorbars:
+                                fig.savefig(f"{self.pycortex_image_path}/{subj}_{stat}_cbar.pdf", dpi=600, bbox_inches='tight', transparent=True)    
+
         
-                        data_stats ={'mean':mean_ts_vert, 'var':var_ts_vert, 'tsnr':tsnr_vert}
+                        self.js_handle_dict[space][analysis][subj]['Timecourse Stats'] = cortex.webgl.show(ds_stats, pickerfun=clicker_function,  overlays_visible=[], labels_visible=[]) 
         
-                        self.js_handle_dict[space][analysis][subj]['stats'] = cortex.webgl.show(data_stats, pickerfun=clicker_function,  overlays_visible=[], labels_visible=[]) 
-        
-                        plotted_stats[subj] = True
+                        ##plotted_stats[subj] = True
                     
                     if self.plot_rois_cortex and not plotted_rois[subj]:
                         
@@ -1187,36 +1195,41 @@ class visualize_results(object):
                         diff_params = [item for item in p_r.items() if np.any([s in item[0] for s in param_diffs]) and ('-' in item[0] or '/' in item[0])]
 
                         for param, param_res in diff_params:
-                            models = [item for item in param_res.items() if item[0] in self.only_models or 'Noise' in item[0] or 'Variance' in item[0]]
+                            if 'Timecourse Stats' not in param:
+                                models = [item for item in param_res.items() if item[0] in self.only_models]
+                            else:
+                                models = [item for item in param_res.items()]
+
                             groupcomp = param.split(' ')[-1].replace('/','-')
                             for model, model_res in models:
 
                                 if model in p_r[f'Mean Masked RSq {groupcomp}']:
                                     this_alpha = p_r[f'Mean Masked RSq {groupcomp}'][model]
-                                elif 'Noise' in model:
-                                    if 'ses' in subj and space == 'fsnative':
-                                        gen_subj = subj.split('_')[0]
+
+                                # elif 'Noise' in model:
+                                #     if 'ses' in subj and space == 'fsnative':
+                                #         gen_subj = subj.split('_')[0]
                             
-                                        subj_pla = [s for s in self.groups_dict['placebo'] if gen_subj in s][0]
-                                        this_alpha = analysis_res[subj_pla]['Processed Results']['Noise Ceiling']['Noise Ceiling (CC)']
-                                        this_alpha[this_alpha<0] = 0
-                                    else:
-                                        this_alpha = np.ones_like(p_r[param][model])
+                                #         subj_pla = [s for s in self.groups_dict['placebo'] if gen_subj in s][0]
+                                #         this_alpha = analysis_res[subj_pla]['Processed Results']['Noise Ceiling']['Noise Ceiling (CC)']
+                                #         this_alpha[this_alpha<0] = 0
+                                #     else:
+                                #         this_alpha = np.ones_like(p_r[param][model])
                                     
                                 else:
                                     this_alpha = np.ones_like(p_r[param][model])
                                 
 
-                                if '-' in param:
-                                    vmaxdiff = np.max((np.abs(np.nanquantile(p_r[param][model][this_alpha>rsq_thresh],0.1)),np.abs(np.nanquantile(p_r[param][model][this_alpha>rsq_thresh],0.9))))
-                                    vmindiff = -vmaxdiff
-                                else:
-                                    vmindiff = np.nanquantile(p_r[param][model][this_alpha>rsq_thresh],0.1)
-                                    if vmindiff<1:
-                                        vmaxdiff = 1 + (1-vmindiff)
-                                    else:
-                                        vmaxdiff = np.nanquantile(p_r[param][model][this_alpha>rsq_thresh],0.9)
-                                    print(f'{param} {vmindiff} {vmaxdiff}')
+                                #if '-' in param:
+                                vmaxdiff = np.max((np.abs(np.nanquantile(p_r[param][model][this_alpha>rsq_thresh],0.1)),np.abs(np.nanquantile(p_r[param][model][this_alpha>rsq_thresh],0.9))))
+                                vmindiff = -vmaxdiff
+                                # else:
+                                #     vmindiff = np.nanquantile(p_r[param][model][this_alpha>rsq_thresh],0.1)
+                                #     if vmindiff<1:
+                                #         vmaxdiff = 1 + (1-vmindiff)
+                                #     else:
+                                #         vmaxdiff = np.nanquantile(p_r[param][model][this_alpha>rsq_thresh],0.9)
+                                #     print(f'{param} {vmindiff} {vmaxdiff}')
 
                                 ds_diffs[f'{subj} {param} {model}'] = Vertex2D_fix(p_r[param][model], 
                                                                       this_alpha, 
@@ -1228,9 +1241,9 @@ class visualize_results(object):
 
                                 fig = simple_colorbar(vmin=vmindiff, 
                                                 vmax=vmaxdiff,
-                                                cmap_name=pycortex_cmap, ori='horizontal', param_name=param)
+                                                cmap_name=pycortex_cmap, ori='horizontal', param_name=f"{model}_{param}")
                                 
-                                if self.pycortex_image_path is not None and save_colorbars:
+                                if self.pycortex_image_path != None and save_colorbars:
                                     fig.savefig(f"{self.pycortex_image_path}/{model}_{param}_cbar.pdf", dpi=600, bbox_inches='tight', transparent=True)
 
                             
@@ -1264,25 +1277,25 @@ class visualize_results(object):
                                             vmax=rsq_max_opacity,#0.15,#np.nanquantile(p_r['RSq'][model][alpha[analysis][subj][model]>rsq_thresh],0.9),
                                             cmap_name=pycortex_cmap, ori='horizontal', param_name='$R^2$')
                             
-                            if self.pycortex_image_path is not None and save_colorbars:
+                            if self.pycortex_image_path != None and save_colorbars:
                                 fig.savefig(f"{self.pycortex_image_path}/{model}_rsq_cbar.pdf", dpi=600, bbox_inches='tight', transparent=True)
                             
-                        if 'Noise Ceiling' in p_r:  ## sorted([p for p in paths if os.path.isdir(p) and np.any(['Noise Ceiling' in p for s in groups_dict['5mg']])])
+                        # if 'Noise Ceiling' in p_r:  ## sorted([p for p in paths if os.path.isdir(p) and np.any(['Noise Ceiling' in p for s in groups_dict['5mg']])])
 
-                            for nc_type in p_r['Noise Ceiling']:
+                        #     for nc_type in p_r['Noise Ceiling']:
 
-                                ds_rsq[f'{subj} {nc_type}'] = Vertex2D_fix(p_r['Noise Ceiling'][nc_type],
-                                                                np.ones_like(p_r['Noise Ceiling'][nc_type]), subject=pycortex_subj, 
-                                                                vmin=0,#np.nanquantile(p_r['Noise Ceiling'][nc_type][alpha[analysis][subj][model]>rsq_thresh],0.1), 
-                                                                vmax=0.5,#np.nanquantile(p_r['Noise Ceiling'][nc_type][alpha[analysis][subj][model]>rsq_thresh],0.9),
-                                                                vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap=pycortex_cmap, roi_borders=roi_borders)   
+                        #         ds_rsq[f'{subj} {nc_type}'] = Vertex2D_fix(p_r['Noise Ceiling'][nc_type],
+                        #                                         np.ones_like(p_r['Noise Ceiling'][nc_type]), subject=pycortex_subj, 
+                        #                                         vmin=0,#np.nanquantile(p_r['Noise Ceiling'][nc_type][alpha[analysis][subj][model]>rsq_thresh],0.1), 
+                        #                                         vmax=0.5,#np.nanquantile(p_r['Noise Ceiling'][nc_type][alpha[analysis][subj][model]>rsq_thresh],0.9),
+                        #                                         vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap=pycortex_cmap, roi_borders=roi_borders)   
                                     
-                                fig = simple_colorbar(vmin=0,#np.nanquantile(p_r['Noise Ceiling'][nc_type][alpha[analysis][subj][model]>rsq_thresh],0.1), 
-                                                        vmax=0.5,#np.nanquantile(p_r['Noise Ceiling'][nc_type][alpha[analysis][subj][model]>rsq_thresh],0.9),
-                                                    cmap_name=pycortex_cmap, ori='horizontal', param_name=f'{subj} {nc_type}')
+                        #         fig = simple_colorbar(vmin=0,#np.nanquantile(p_r['Noise Ceiling'][nc_type][alpha[analysis][subj][model]>rsq_thresh],0.1), 
+                        #                                 vmax=0.5,#np.nanquantile(p_r['Noise Ceiling'][nc_type][alpha[analysis][subj][model]>rsq_thresh],0.9),
+                        #                             cmap_name=pycortex_cmap, ori='horizontal', param_name=f'{subj} {nc_type}')
                                     
-                                if self.pycortex_image_path is not None and save_colorbars:
-                                    fig.savefig(f"{self.pycortex_image_path}/nc_cbar.pdf", dpi=600, bbox_inches='tight', transparent=True)                                
+                        #         if self.pycortex_image_path != None and save_colorbars:
+                        #             fig.savefig(f"{self.pycortex_image_path}/nc_cbar.pdf", dpi=600, bbox_inches='tight', transparent=True)                                
                               
     
                             
@@ -1298,9 +1311,11 @@ class visualize_results(object):
                                                 vmax=100,#np.nanquantile(p_r['RSq'][model][alpha[analysis][subj][model]>rsq_thresh],0.9),
                                                 cmap_name=pycortex_cmap, ori='horizontal', param_name='#Subjects with cv$R^2$>0')
                                 
-                                if self.pycortex_image_path is not None and save_colorbars:
+                                if self.pycortex_image_path != None and save_colorbars:
                                     fig.savefig(f"{self.pycortex_image_path}/{model}_nsubj_cbar.pdf", dpi=600, bbox_inches='tight', transparent=True)     
-                        mdiff=False            
+
+                        mdiff=False           
+
                         if 'CSS' in models and p_r['RSq']['CSS'].sum()>0:
                             mdiff=True
                             ds_rsq[f'{subj} CSS - Gauss'] = Vertex2D_fix(p_r['RSq']['CSS']-p_r['RSq']['Gauss'], alpha[analysis][subj]['all'], subject=pycortex_subj,
@@ -1335,7 +1350,7 @@ class visualize_results(object):
                                             vmax=0.1,
                                             cmap_name=pycortex_cmap, ori='horizontal', param_name='$R^2$ difference')
                             
-                            if self.pycortex_image_path is not None and save_colorbars:
+                            if self.pycortex_image_path != None and save_colorbars:
                                 fig.savefig(f"{self.pycortex_image_path}/rsqdiff_cbar.pdf", dpi=600, bbox_inches='tight', transparent=True)   
 
                         if 'Processed Results' in self.main_dict['T1w'][analysis][subj] and self.compare_volume_surface:
@@ -1372,7 +1387,7 @@ class visualize_results(object):
                                             vmax=0.75*self.ecc_max,#np.nanquantile(p_r['Eccentricity'][model][alpha[analysis][subj][model]>rsq_thresh],0.9),
                                             cmap_name=pycortex_cmap, ori='polar', param_name='Eccentricity (°)')
                             
-                            if self.pycortex_image_path is not None and save_colorbars:
+                            if self.pycortex_image_path != None and save_colorbars:
                                 fig.savefig(f"{self.pycortex_image_path}/{model}_ecc_cbar.pdf", dpi=600, bbox_inches='tight', transparent=True)
                         
                         self.js_handle_dict[space][analysis][subj]['ecc'] = cortex.webgl.show(ds_ecc, pickerfun=clicker_function,  overlays_visible=[], labels_visible=[]) 
@@ -1389,7 +1404,7 @@ class visualize_results(object):
                             fig = simple_colorbar(vmin=-3.1415, vmax=3.1415,
                                             cmap_name='hsvx2', ori='polar', param_name='Polar Angle (°)')                                     
                             
-                            if self.pycortex_image_path is not None and save_colorbars:
+                            if self.pycortex_image_path != None and save_colorbars:
                                 fig.savefig(f"{self.pycortex_image_path}/{model}_polar_hsvx2cbar.pdf", dpi=600, bbox_inches='tight', transparent=True)
 
                             ds_polar[f"{subj} {model} polar angle HSV1"] = Vertex2D_fix(p_r['Polar Angle'][model], alpha[analysis][subj][model], subject=pycortex_subj, 
@@ -1399,7 +1414,7 @@ class visualize_results(object):
                             fig = simple_colorbar(vmin=-3.1415, vmax=3.1415,
                                             cmap_name='hsv', ori='polar', param_name='Polar Angle (°)')                                     
                             
-                            if self.pycortex_image_path is not None and save_colorbars:
+                            if self.pycortex_image_path != None and save_colorbars:
                                 fig.savefig(f"{self.pycortex_image_path}/{model}_polar_hsvcbar.pdf", dpi=600, bbox_inches='tight', transparent=True)                            
                         
                         if 'Processed Results' in self.main_dict['T1w'][analysis][subj] and self.compare_volume_surface:
@@ -1441,7 +1456,7 @@ class visualize_results(object):
                                             vmax=4.4,#np.nanquantile(p_r['Size (sigma_1)'][model][alpha[analysis][subj][model]>rsq_thresh],0.9),
                                             cmap_name=pycortex_cmap, ori='horizontal', param_name='$\sigma_1$ (°)')
                             
-                            if self.pycortex_image_path is not None and save_colorbars:
+                            if self.pycortex_image_path != None and save_colorbars:
                                 fig.savefig(f"{self.pycortex_image_path}/{model}_sigma1_cbar.pdf", dpi=600, bbox_inches='tight', transparent=True)                            
                             
                         self.js_handle_dict[space][analysis][subj]['size'] = cortex.webgl.show(ds_size, pickerfun=clicker_function,  overlays_visible=[], labels_visible=[]) 
@@ -1459,7 +1474,7 @@ class visualize_results(object):
                                             vmax=np.nanquantile(p_r['Amplitude'][model][alpha[analysis][subj][model]>rsq_thresh],0.9),
                                             cmap_name=pycortex_cmap, ori='horizontal', param_name='Amplitude')
                             
-                            if self.pycortex_image_path is not None and save_colorbars:
+                            if self.pycortex_image_path != None and save_colorbars:
                                 fig.savefig(f"{self.pycortex_image_path}/{model}_amplitude_cbar.pdf", dpi=600, bbox_inches='tight', transparent=True)  
                             
                             if model == 'DoG' or 'Norm' in model:
@@ -1471,7 +1486,7 @@ class visualize_results(object):
                                                 vmax=np.nanquantile(p_r['Surround Amplitude'][model][alpha[analysis][subj][model]>rsq_thresh],0.9),
                                                 cmap_name=pycortex_cmap, ori='horizontal', param_name='Surround Amplitude')
                                 
-                                if self.pycortex_image_path is not None and save_colorbars:
+                                if self.pycortex_image_path != None and save_colorbars:
                                     fig.savefig(f"{self.pycortex_image_path}/{model}_surround_amplitude_cbar.pdf", dpi=600, bbox_inches='tight', transparent=True)  
 
                         
@@ -1506,7 +1521,7 @@ class visualize_results(object):
                                                 vmax=np.nanquantile(p_r['Size (sigma_2)'][model][alpha[analysis][subj][model]>rsq_thresh],0.9),
                                                 cmap_name=pycortex_cmap, ori='horizontal', param_name='$\sigma_2$ (°)')
                                 
-                                if self.pycortex_image_path is not None and save_colorbars:
+                                if self.pycortex_image_path != None and save_colorbars:
                                     fig.savefig(f"{self.pycortex_image_path}/{model}_sigma2_cbar.pdf", dpi=600, bbox_inches='tight', transparent=True)   
                                 
                                 
@@ -1542,7 +1557,7 @@ class visualize_results(object):
                                                 vmax=np.nanquantile(p_r['Size ratio (sigma_2/sigma_1)'][model][alpha[analysis][subj][model]>rsq_thresh],0.9),
                                                 cmap_name=pycortex_cmap, ori='horizontal', param_name='Size ratio ($\sigma_2/\sigma_1$)')
                                 
-                                if self.pycortex_image_path is not None and save_colorbars:
+                                if self.pycortex_image_path != None and save_colorbars:
                                     fig.savefig(f"{self.pycortex_image_path}/{model}_sizeratio_cbar.pdf", dpi=600, bbox_inches='tight', transparent=True)  
 
                         self.js_handle_dict[space][analysis][subj]['size_ratio'] = cortex.webgl.show(ds_size_ratio, pickerfun=clicker_function,  overlays_visible=[], labels_visible=[])     
@@ -1560,7 +1575,7 @@ class visualize_results(object):
                                                     vmax=np.nanquantile(p_r[key][model][alpha[analysis][subj][model]>rsq_thresh],0.9),
                                                     cmap_name=pycortex_cmap, ori='horizontal', param_name=key)
                                     
-                                    if self.pycortex_image_path is not None and save_colorbars:
+                                    if self.pycortex_image_path != None and save_colorbars:
                                         fig.savefig(f"{self.pycortex_image_path}/{model}_sizeratio_cbar.pdf", dpi=600, bbox_inches='tight', transparent=True)  
 
                         self.js_handle_dict[space][analysis][subj]['hrf_params'] = cortex.webgl.show(ds_hrf, pickerfun=clicker_function,  overlays_visible=[], labels_visible=[])     
@@ -1584,7 +1599,7 @@ class visualize_results(object):
                                                 vmax=np.nanquantile(p_r['Receptor Maps'][receptor][alpha[analysis][subj][rec_mod_alpha]>rsq_thresh],0.9), 
                                                 cmap_name=pycortex_cmap, ori='horizontal', param_name=f'{receptor} (pmol/ml)')
                                 
-                                if self.pycortex_image_path is not None and save_colorbars:
+                                if self.pycortex_image_path != None and save_colorbars:
                                     fig.savefig(f"{self.pycortex_image_path}/{receptor}_cbar.pdf", dpi=600, bbox_inches='tight', transparent=True)                                                    
             
                             self.js_handle_dict[space][analysis][subj]['receptors'] = cortex.webgl.show(ds_receptors, pickerfun=clicker_function,  overlays_visible=[], labels_visible=[])     
@@ -1606,7 +1621,7 @@ class visualize_results(object):
                                             vmax=np.nanquantile(p_r['Norm Param. B'][model][alpha[analysis][subj][model]>rsq_thresh],0.9),
                                             cmap_name=pycortex_cmap, ori='horizontal', param_name='Norm Param. B')
                             
-                            if self.pycortex_image_path is not None and save_colorbars:
+                            if self.pycortex_image_path != None and save_colorbars:
                                 fig.savefig(f"{self.pycortex_image_path}/{model}_paramB_cbar.pdf", dpi=600, bbox_inches='tight', transparent=True)  
                             
                                 
@@ -1619,7 +1634,7 @@ class visualize_results(object):
                                             vmax=np.nanquantile(p_r['Norm Param. D'][model][alpha[analysis][subj][model]>rsq_thresh],0.9),
                                             cmap_name=pycortex_cmap, ori='horizontal', param_name='Norm Param. D')
                             
-                            if self.pycortex_image_path is not None and save_colorbars:
+                            if self.pycortex_image_path != None and save_colorbars:
                                 fig.savefig(f"{self.pycortex_image_path}/{model}_paramD_cbar.pdf", dpi=600, bbox_inches='tight', transparent=True)                              
                             
                             if 'Ratio (B/D)' in p_r:
@@ -1631,12 +1646,12 @@ class visualize_results(object):
                                                 vmax=np.nanquantile(p_r['Ratio (B/D)'][model][alpha[analysis][subj][model]>rsq_thresh],0.9),
                                                 cmap_name=pycortex_cmap, ori='horizontal', param_name='Ratio (B/D)')
                                 
-                                if self.pycortex_image_path is not None and save_colorbars:
+                                if self.pycortex_image_path != None and save_colorbars:
                                     fig.savefig(f"{self.pycortex_image_path}/{model}_BDratio_cbar.pdf", dpi=600, bbox_inches='tight', transparent=True)   
                             
                         self.js_handle_dict[space][analysis][subj]['norm_baselines'] = cortex.webgl.show(ds_norm_baselines, pickerfun=clicker_function,  overlays_visible=[], labels_visible=[]) 
 
-                    if self.plot_correlations_per_roi is not None:
+                    if self.plot_correlations_per_roi != None:
                         ds_correlations = dict()
 
                         for x_param_topl in self.plot_correlations_per_roi['x_params_topl']:
@@ -1677,7 +1692,7 @@ class visualize_results(object):
 
                         self.js_handle_dict[space][analysis][subj]['correlations_per_roi'] = cortex.webgl.show(ds_correlations, pickerfun=clicker_function,  overlays_visible=[], labels_visible=[])     
                     
-                    if self.plot_means_per_roi is not None:
+                    if self.plot_means_per_roi != None:
                         ds_means = dict()
                         
                         for y_param_topl in self.plot_means_per_roi['y_params_topl']:
@@ -1717,24 +1732,27 @@ class visualize_results(object):
         print('-----')                              
         return    
         
-    def save_pycortex_views(self, space, analysis, subj, js_handle, param_to_save, views_dict, image_path = '/Crucial X8/marcoaqil/PRFMapping/Figures/'):
+    def save_pycortex_views(self, space, analysis, subj, js_handle, param_to_save, views_dict, set_views=True, image_path = '/Crucial X8/marcoaqil/PRFMapping/Figures/'):
 
-
+        time.sleep(0.3)
         self.js_handle_dict[space][analysis][subj][js_handle].setData([param_to_save])
-        time.sleep(1)
-        
-        base_str = f"{subj}_{param_to_save}".replace('/','')
+        time.sleep(0.3)
+        if subj in param_to_save:
+            base_str = f"{param_to_save}".replace('/','')
+        else:
+            base_str = f"{subj}_{param_to_save}".replace('/','')
  
         # Save images by iterating over the different views and surfaces
         for view, view_params in views_dict.items():
             filename = f"{base_str}_{view}.png"
             output_path = os.path.join(image_path, filename)
             #print(view)
-            for param_name, param_value in view_params.items():
-                #print(param_name)
-                #print(param_value)
-                time.sleep(1)
-                self.js_handle_dict[space][analysis][subj][js_handle].ui.set(param_name, param_value)
+            if set_views:
+                for param_name, param_value in view_params.items():
+                    #print(param_name)
+                    #print(param_value)
+                    time.sleep(0.3)
+                    self.js_handle_dict[space][analysis][subj][js_handle].ui.set(param_name, param_value)
                 
                 
             # Save image           
@@ -1744,7 +1762,7 @@ class visualize_results(object):
             # wait for image to be written
             while not os.path.exists(output_path):
                 pass
-            time.sleep(1)
+            time.sleep(0.3)
             try:
                 import subprocess
                 subprocess.call(["convert", "-trim", output_path, output_path])
@@ -1760,7 +1778,7 @@ class visualize_results(object):
             self.main_dict['fsaverage'] = dd(lambda:dd(lambda:dd(lambda:dd(dict))))
         
         if parameters[0] != weight:
-            if 'Noise Ceiling (CC)' not in models and 'Single run Variance' not in models:
+            if 'Timecourse Stats' not in parameters[0]:
                 parameters.insert(0,weight)
             
         if 'Polar Angle' in parameters or 'Eccentricity' in parameters:
@@ -1908,7 +1926,7 @@ class visualize_results(object):
                         
                         if parameter == weight:
                             fsaverage_group_average = np.nanmean([fsaverage_rsq[sid] for sid in fsaverage_rsq], axis=0)
-                        elif 'Noise Ceiling' in parameter or 'Variance' in parameter:
+                        elif 'Timecourse Stats' in parameter:
                             fsaverage_group_average = np.nanmean([fsaverage_param[sid] for sid in fsaverage_param], axis=0)
                         # elif '-' in parameter:
                         #     fsaverage_group_average = np.nanmean([fsaverage_param[sid] for sid in fsaverage_param], axis=0)
@@ -1976,9 +1994,9 @@ class visualize_results(object):
         subject_ids : TYPE, optional
             DESCRIPTION. The default is 'all'.
         ylim : TYPE, optional
-            DESCRIPTION. The default is None.
+            DESCRIPTION. The default == None.
         x_param_model : TYPE, optional
-            DESCRIPTION. The default is None.
+            DESCRIPTION. The default == None.
         violin : TYPE, optional
             DESCRIPTION. The default is False.
         scatter : TYPE, optional
@@ -2024,7 +2042,7 @@ class visualize_results(object):
         for space, space_res in spaces:
             if 'fs' in space or 'HCP' in space:
                 
-                if quantile_exclusion is None:
+                if quantile_exclusion == None:
                     #surrounds larger than this are excluded from surround size calculations
                     w_max=60
                     #remove absurd suppression index values
@@ -2093,7 +2111,7 @@ class visualize_results(object):
                          
                         #upsampling correction: fsnative has approximately 3 times as many datapoints as original
                         if subj != 'Group':
-                            if bold_voxel_volume is not None:
+                            if bold_voxel_volume != None:
                                 
                                 print("Make sure bold_voxel_volume is specified in mm^3")
                                 
@@ -2162,7 +2180,7 @@ class visualize_results(object):
                                             alpha[analysis][subj][model][roi] = (roi_mask(self.idx_rois[roi_subj][roi], curr_alpha)) 
        
                                         else:
-                                            #if ROI is not defined
+                                            #if ROI != defined
                                             #if Brain use all available vertices
                                             if roi == 'Brain':
                                                 alpha[analysis][subj][model][roi] = curr_alpha
@@ -2179,18 +2197,18 @@ class visualize_results(object):
                                         
                                         
                                         #manual exclusion of outliers
-                                        if quantile_exclusion is None:
+                                        if quantile_exclusion == None:
                                             print("Using manual exclusion, see quant_plots function. Set quantile_exclusion=1 for no exclusion.")
                                             if y_parameter == 'Surround Size (fwatmin)' or x_parameter == 'Surround Size (fwatmin)':# and model == 'DoG':
                                                 #exclude too large surround (no surround)
                                                 alpha[analysis][subj][model][roi] *= (subj_res['Processed Results']['Surround Size (fwatmin)'][model]<w_max)
-                                                if x_param_model is not '':
+                                                if x_param_model != '':
                                                     alpha[analysis][subj][model][roi] *= (subj_res['Processed Results']['Surround Size (fwatmin)'][x_param_model]<w_max)
     
                                             
                                             if y_parameter == 'Surround/Centre Amplitude'  or x_parameter == 'Surround/Centre Amplitude' :# and model == 'DoG':
                                                 #exclude too large surround (no surround)
-                                                if x_param_model is not '':
+                                                if x_param_model != '':
                                                     alpha[analysis][subj][model][roi] *= (subj_res['Processed Results']['Surround/Centre Amplitude'][x_param_model]<w_max)
                                                 else:
                                                     alpha[analysis][subj][model][roi] *= (subj_res['Processed Results']['Surround/Centre Amplitude'][model]<w_max)
@@ -2202,7 +2220,7 @@ class visualize_results(object):
                                             if 'Suppression' in x_parameter:
                                                 #exclude nonsensical suppression index values
                                                 alpha[analysis][subj][model][roi] *= (subj_res['Processed Results'][x_parameter][model]<supp_max)
-                                                if x_param_model is not '':
+                                                if x_param_model != '':
                                                     alpha[analysis][subj][model][roi] *= (subj_res['Processed Results'][x_parameter][x_param_model]<supp_max)
                                                     
                                             if 'CSS Exponent' in x_parameter:
@@ -2212,18 +2230,18 @@ class visualize_results(object):
                                                 alpha[analysis][subj][model][roi] *= (subj_res['Processed Results'][y_parameter][model]<bd_max)                                            
                                             if 'Norm Param.' in x_parameter:
                                                 alpha[analysis][subj][model][roi] *= (subj_res['Processed Results'][x_parameter][model]<bd_max)                                            
-                                                if x_param_model is not '':
+                                                if x_param_model != '':
                                                     alpha[analysis][subj][model][roi] *= (subj_res['Processed Results'][x_parameter][x_param_model]<bd_max)
                                         
                                         else:
-                                            if y_parameter_toplevel is '':    
+                                            if y_parameter_toplevel == '':    
                                                 alpha[analysis][subj][model][roi] *= (subj_res['Processed Results'][y_parameter][model]<np.nanquantile(subj_res['Processed Results'][y_parameter][model],quantile_exclusion))*(subj_res['Processed Results'][y_parameter][model]>np.nanquantile(subj_res['Processed Results'][y_parameter][model],1-quantile_exclusion))  
 
-                                            if x_param_model is not '':
+                                            if x_param_model != '':
                                                 #nanquantile handles nans but will not work if there are infs
                                                 alpha[analysis][subj][model][roi] *= (subj_res['Processed Results'][x_parameter][x_param_model]<np.nanquantile(subj_res['Processed Results'][x_parameter][x_param_model],quantile_exclusion))*(subj_res['Processed Results'][x_parameter][x_param_model]>np.nanquantile(subj_res['Processed Results'][x_parameter][x_param_model],1-quantile_exclusion))  
 
-                                            if x_parameter_toplevel is '':
+                                            if x_parameter_toplevel == '':
                                                 alpha[analysis][subj][model][roi] *= (subj_res['Processed Results'][x_parameter][model]<np.nanquantile(subj_res['Processed Results'][x_parameter][model],quantile_exclusion))*(subj_res['Processed Results'][x_parameter][model]>np.nanquantile(subj_res['Processed Results'][x_parameter][model],1-quantile_exclusion))  
 
                                             
@@ -2231,19 +2249,19 @@ class visualize_results(object):
          
                                         #if 'ccrsq' in y_parameter.lower():
                                         #    alpha[analysis][subj][model][roi] *= (subj_res['Processed Results'][y_parameter][model]>0)
-                                        if y_parameter_toplevel is '':
+                                        if y_parameter_toplevel == '':
                                             alpha[analysis][subj][model][roi] *= np.isfinite(subj_res['Processed Results'][y_parameter][model])
                                         else:
                                             alpha[analysis][subj][model][roi] *= np.isfinite(subj_res['Processed Results'][y_parameter_toplevel][y_parameter])
                                        
-                                        if x_param_model is not '':
+                                        if x_param_model != '':
                                             
                                             alpha[analysis][subj][model][roi] *= np.isfinite(subj_res['Processed Results'][x_parameter][x_param_model])
                                             
                                             x_par[analysis][subj][model][roi] = subj_res['Processed Results'][x_parameter][x_param_model][alpha[analysis][subj][model][roi]>rsq_thresh]                                          
                                         
                                         
-                                        elif x_parameter_toplevel is not '':
+                                        elif x_parameter_toplevel != '':
                                             alpha[analysis][subj][model][roi] *= np.isfinite(subj_res['Processed Results'][x_parameter_toplevel][x_parameter])
                                             x_par[analysis][subj][model][roi] = (subj_res['Processed Results'][x_parameter_toplevel][x_parameter][alpha[analysis][subj][model][roi]>rsq_thresh])
                                             
@@ -2254,7 +2272,7 @@ class visualize_results(object):
                                             x_par[analysis][subj][model][roi] = subj_res['Processed Results'][x_parameter][model][alpha[analysis][subj][model][roi]>rsq_thresh]
                                             
                                         #handling special case of plotting receptors as y-parameter, since they are not part of any model
-                                        if y_parameter_toplevel is '':
+                                        if y_parameter_toplevel == '':
                                             y_par[analysis][subj][model][roi] = (subj_res['Processed Results'][y_parameter][model][alpha[analysis][subj][model][roi]>rsq_thresh])
                                         else:
                                             y_par[analysis][subj][model][roi] = (subj_res['Processed Results'][y_parameter_toplevel][y_parameter][alpha[analysis][subj][model][roi]>rsq_thresh])
@@ -2275,8 +2293,12 @@ class visualize_results(object):
                  
     
                                         #r - squared weighting
-                                        rsq_x[analysis][subj][model][roi] = np.copy(subj_res['Processed Results'][weights][model][alpha[analysis][subj][model][roi]>rsq_thresh])
-                                        rsq_y[analysis][subj][model][roi] = np.copy(subj_res['Processed Results'][weights][model][alpha[analysis][subj][model][roi]>rsq_thresh])
+                                        if weights != None:
+                                            rsq_x[analysis][subj][model][roi] = np.copy(subj_res['Processed Results'][weights][model][alpha[analysis][subj][model][roi]>rsq_thresh])
+                                            rsq_y[analysis][subj][model][roi] = np.copy(subj_res['Processed Results'][weights][model][alpha[analysis][subj][model][roi]>rsq_thresh])
+                                        else:
+                                            rsq_x[analysis][subj][model][roi] = np.ones_like(x_par[analysis][subj][model][roi])    
+                                            rsq_y[analysis][subj][model][roi] = np.ones_like(y_par[analysis][subj][model][roi])
 
                                         #no need for rsq-weighting if plotting rsq
                                         if 'rsq' in y_parameter.lower():
@@ -2287,15 +2309,15 @@ class visualize_results(object):
 
 
                                         #if plotting different model parameters
-                                        if x_param_model is not '' and x_param_model in subj_res['Processed Results'][weights]:
+                                        if x_param_model != '' and x_param_model in subj_res['Processed Results'][weights]:
                                             rsq_x = np.copy(subj_res['Processed Results'][weights][x_param_model][alpha[analysis][subj][model][roi]>rsq_thresh])
                                         
      
                                         #if plotting non-model stuff like receptors and noise ceiling and variance
-                                        if x_parameter_toplevel is not '':
+                                        if x_parameter_toplevel != '':
                                             rsq_x[analysis][subj][model][roi] = np.ones_like(x_par[analysis][subj][model][roi])
                                             
-                                        if y_parameter_toplevel is not '':
+                                        if y_parameter_toplevel != '':
                                             rsq_y[analysis][subj][model][roi] = np.ones_like(y_par[analysis][subj][model][roi])
                                         
                                         
@@ -2330,10 +2352,7 @@ class visualize_results(object):
                                 if zscore_ydata:
                                     y_par[analysis][subj][model][roi] = zscore(y_par[analysis][subj][model][roi])
                                 
-        
-                                if weights is None:
-                                    rsq_x[analysis][subj][model][roi] = np.ones_like(rsq_x[analysis][subj][model][roi])
-                                    rsq_y[analysis][subj][model][roi] = np.ones_like(rsq_y[analysis][subj][model][roi])
+    
                             
 
                         for i, roi in enumerate([r for r in rois]):# if 'all' not in r and 'combined' not in r and 'Brain' not in r]):
@@ -2357,7 +2376,7 @@ class visualize_results(object):
                                 
                                 for model in self.only_models:    
                                                                     
-                                    pl.figure(f"{analysis} {subj} Mean {y_parameter}", figsize=(8, 8), frameon=True)
+                                    pl.figure(f"{analysis} {subj} Mean {y_parameter}", figsize=(38, 18), frameon=True)
                                     
                                     if log_yaxis:
                                         pl.gca().set_yscale('log')
@@ -2366,7 +2385,7 @@ class visualize_results(object):
                                         pl.ylabel(f"{subj} Mean {y_parameter} (°)")
                                     elif 'B/D' in y_parameter:
                                         pl.ylabel(f"{subj} Mean {y_parameter} (% signal change)")
-                                    elif y_parameter_toplevel is not '' and 'Receptor' in y_parameter_toplevel:
+                                    elif y_parameter_toplevel != '' and 'Receptor' in y_parameter_toplevel:
                                         pl.ylabel(f"{subj} Mean {y_parameter} (pmol/ml)")                                        
                                     else:
                                         pl.ylabel(f"{subj} Mean {y_parameter}")
@@ -2381,7 +2400,7 @@ class visualize_results(object):
                                                                 weights=rsq_y[analysis][subj][model][roi])
                                     bar_height = full_roi_stats.mean
                                     
-                                    if zconfint_err_alpha is not None:                                    
+                                    if zconfint_err_alpha != None:                                    
                                         bar_err = (np.abs(full_roi_stats.zconfint_mean(alpha=zconfint_err_alpha) - bar_height)).reshape(2,1)*upsampling_corr_factor**0.5                                    
                                     else:
                                         bar_err = full_roi_stats.std_mean*upsampling_corr_factor**0.5
@@ -2442,7 +2461,7 @@ class visualize_results(object):
                                                     ssj_stats = weightstats.DescrStatsW(y_par[analysis][ssj[0]][model][roi],
                                                                 weights=rsq_y[analysis][ssj[0]][model][roi])
                                                     
-                                                    if zconfint_err_alpha is not None:
+                                                    if zconfint_err_alpha != None:
                                                         yerr_sj = (np.abs(ssj_stats.zconfint_mean(alpha=zconfint_err_alpha) - ssj_stats.mean)).reshape(2,1)*upsampling_corr_factor**0.5
                                                     else:
                                                         yerr_sj = ssj_stats.std_mean*upsampling_corr_factor**0.5
@@ -2663,6 +2682,7 @@ class visualize_results(object):
                                                 ssj_datapoints_x = np.linspace(bar_position-0.15*bar_or_violin_width, bar_position+0.15*bar_or_violin_width, len(subjects)-1)
 
                                                 ssj_group_stats_roi_means = []
+                                                ssj_group_stats_roi_errs = []
                                                 ssj_group_stats_roi_weights = []
 
                                                 for ssj_nr, ssj in enumerate(subjects[:-1]):
@@ -2674,10 +2694,12 @@ class visualize_results(object):
                                                         ssj_group_stats_roi_means.append(ssj_stats.mean)
                                                         ssj_group_stats_roi_weights.append(rsq_y[analysis][ssj[0]][model][roi].mean())
                                                         
-                                                        if zconfint_err_alpha is not None:
+                                                        if zconfint_err_alpha != None:
                                                             yerr_sj = (np.abs(ssj_stats.zconfint_mean(alpha=zconfint_err_alpha) - ssj_stats.mean)).reshape(2,1)*upsampling_corr_factor**0.5
                                                         else:
                                                             yerr_sj = ssj_stats.std_mean*upsampling_corr_factor**0.5
+
+                                                        ssj_group_stats_roi_errs.append(yerr_sj)
                                                             
                                                         pl.errorbar(ssj_datapoints_x[ssj_nr], ssj_stats.mean,
                                                         yerr=yerr_sj,  alpha=np.nanmax((0,np.nanmean(rsq_y[analysis][ssj[0]][model][roi]))),
@@ -2691,11 +2713,11 @@ class visualize_results(object):
 
                                                         #sj number on plot
                                                         #if space == 'fsnative'
-                                                        sj_number_on_plot = False
+                                                        sj_number_on_plot = True
                                                         if sj_number_on_plot:
                                                             pl.text(ssj_datapoints_x[ssj_nr], ssj_stats.mean, int(ssj[0].split('_')[0].split('-')[1]), fontsize=12, color='k', ha='center', va=vanch_sj)      
 
-                                                        plot_lines = True
+                                                        plot_lines = False
                                                         if plot_lines:
                                                             dict_lines[analysis][ssj[0]][model]['xpos'].append(ssj_datapoints_x[ssj_nr])      
                                                             dict_lines[analysis][ssj[0]][model]['ypos'].append(ssj_stats.mean)
@@ -2752,11 +2774,25 @@ class visualize_results(object):
                                                     if pval<1e-4:
                                                         pval_str+="*"
                                        
-                                            if bar_height<0:
-                                                vanch = 'top'
-                                            else:
-                                                vanch = 'bottom'
-                                            pl.text(bar_position, bar_height, pval_str, fontsize=16, color='k', weight = 'bold', ha='center', va=vanch)                                            
+                                            if pval_str != '':
+                                                if bar_height>0:
+                                                    roi_pval_str = f"{roi.replace('custom.','').replace('HCPQ1Q6.','').replace('glasser_','')}\n{pval_str}"
+                                                    vanch = 'bottom'
+                                                else:
+                                                    roi_pval_str = f"{pval_str}\n{roi.replace('custom.','').replace('HCPQ1Q6.','').replace('glasser_','')}"
+                                                    vanch = 'top'
+                                                
+                                                if bar_err != None:
+                                                    text_y_pos = bar_height+(bar_err*np.sign(bar_height))
+                                                else:
+                                                    if each_subj_on_group:
+                                                        text_y_pos = np.sign(bar_height)*np.max(np.abs(ssj_group_stats_roi_means)) + np.sign(bar_height)*ssj_group_stats_roi_errs[np.argmax(np.abs(ssj_group_stats_roi_means))]
+                                                    else:
+                                                        text_y_pos = bar_height
+
+
+                                                pl.text(bar_position, text_y_pos, roi_pval_str,
+                                                     fontsize=16, color='k', weight = 'bold', ha='center', va=vanch)
                                                                  
                                     #before was 0.4* bar_or_violin_width
                                     if len(self.only_models)>1:
@@ -2764,7 +2800,7 @@ class visualize_results(object):
                                     else:
                                         bar_position += (0.4*bar_or_violin_width)
     
-                                    pl.xticks(x_ticks,x_labels)
+                                    pl.xticks(x_ticks,x_labels, rotation=90)
                                     
                                     # handles, labels = pl.gca().get_legend_handles_labels()
                                     # by_label = dict(zip(labels, handles))
@@ -2811,19 +2847,19 @@ class visualize_results(object):
     
                                             else:
     
-                                                if y_parameter_toplevel is not '':
+                                                if y_parameter_toplevel != '':
                                                     rsq_regr_weight[analysis][subj][model][roi] = rsq_x[analysis][subj][model][roi]
                                                     
                                                     if rsq_alpha_plot:
                                                         rsq_alpha_plots_all_rois = np.nan_to_num(np.array([np.nanmean(rsq_x[analysis][subj][model][r]) for r in rois if 'all' not in r and 'combined' not in r and 'Brain' not in r and len(y_par[analysis][subj][model][r])>10]))
 
-                                                if x_parameter_toplevel is not '':
+                                                if x_parameter_toplevel != '':
                                                     rsq_regr_weight[analysis][subj][model][roi] = rsq_y[analysis][subj][model][roi]
                                                     
                                                     if rsq_alpha_plot:
                                                         rsq_alpha_plots_all_rois = np.nan_to_num(np.array([np.nanmean(rsq_y[analysis][subj][model][r]) for r in rois if 'all' not in r and 'combined' not in r and 'Brain' not in r and len(y_par[analysis][subj][model][r])>10]))
     
-                                                elif x_param_model is not '':
+                                                elif x_param_model != '':
                                                     rsq_regr_weight[analysis][subj][model][roi] = (rsq_y[analysis][subj][model][roi]+rsq_x[analysis][subj][model][roi])/2
                                                     if rsq_alpha_plot:
                                                         rsq_alpha_plots_all_rois = np.nan_to_num(np.array([np.nanmean((rsq_y[analysis][subj][model][roi]+rsq_x[analysis][subj][model][roi])/2) for r in rois if 'all' not in r and 'combined' not in r and 'Brain' not in r and len(y_par[analysis][subj][model][r])>10]))
@@ -2942,7 +2978,7 @@ class visualize_results(object):
                                                     pass
                                             
                                             try:
-                                                if zconfint_err_alpha is not None:
+                                                if zconfint_err_alpha != None:
                                                     curr_yerr = np.array([np.abs(ss.zconfint_mean(alpha=zconfint_err_alpha)-ss.mean) for ss in y_par_stats[analysis][subj][model][roi]]).T*upsampling_corr_factor**0.5
                                                     curr_xerr = np.array([np.abs(ss.zconfint_mean(alpha=zconfint_err_alpha)-ss.mean) for ss in x_par_stats[analysis][subj][model][roi]]).T*upsampling_corr_factor**0.5
                                                 else:
@@ -2985,19 +3021,19 @@ class visualize_results(object):
                                     pl.xlabel(f"{x_parameter} (°)")
                                 elif 'B/D' in x_parameter:
                                     pl.xlabel(f"{x_parameter} (% signal change)")  
-                                elif x_parameter_toplevel is not '' and 'Receptor' in x_parameter_toplevel:
+                                elif x_parameter_toplevel != '' and 'Receptor' in x_parameter_toplevel:
                                     pl.xlabel(f"{x_parameter} (pmol/ml)")                                                 
                                 else:
                                     pl.xlabel(f"{x_parameter}")  
         
-                                if x_param_model is not '':
+                                if x_param_model != '':
                                     pl.xlabel(f"{x_param_model} {pl.gca().get_xlabel()}")
                                 
                                 if 'Eccentricity' in y_parameter or 'Size' in y_parameter:
                                     pl.ylabel(f"{subj} {roi.replace('custom.','').replace('HCPQ1Q6.','').replace('glasser_','')} {y_parameter} (°)")
                                 elif 'B/D' in y_parameter:
                                     pl.ylabel(f"{subj} {roi.replace('custom.','').replace('HCPQ1Q6.','').replace('glasser_','')} {y_parameter} (% signal change)")
-                                elif y_parameter_toplevel is not '' and 'Receptor' in y_parameter_toplevel:
+                                elif y_parameter_toplevel != '' and 'Receptor' in y_parameter_toplevel:
                                     pl.ylabel(f"{subj} {roi.replace('custom.','').replace('HCPQ1Q6.','').replace('glasser_','')} {y_parameter} (pmol/ml)")                                                                   
                                 else:
                                     pl.ylabel(f"{subj} {roi.replace('custom.','').replace('HCPQ1Q6.','').replace('glasser_','')} {y_parameter}")
@@ -3101,7 +3137,7 @@ class visualize_results(object):
                                                     pass
     
                                             #data points with errors
-                                            if zconfint_err_alpha is not None:
+                                            if zconfint_err_alpha != None:
                                                 curr_yerr = np.array([np.abs(ss.zconfint_mean(alpha=zconfint_err_alpha)-ss.mean) for ss in y_par_stats[analysis][subj][model][roi]]).T*upsampling_corr_factor**0.5
                                                 curr_xerr = np.array([np.abs(ss.zconfint_mean(alpha=zconfint_err_alpha)-ss.mean) for ss in x_par_stats[analysis][subj][model][roi]]).T*upsampling_corr_factor**0.5
                                             else:
@@ -3393,19 +3429,19 @@ class visualize_results(object):
                                     pl.xlabel(f"{x_parameter} (°)")
                                 elif 'B/D' in x_parameter:
                                     pl.xlabel(f"{x_parameter} (% signal change)")   
-                                elif x_parameter_toplevel is not '' and 'Receptor' in x_parameter_toplevel:
+                                elif x_parameter_toplevel != '' and 'Receptor' in x_parameter_toplevel:
                                     pl.xlabel(f"{x_parameter} (pmol/ml)")                                                 
                                 else:
                                     pl.xlabel(f"{x_parameter}")
                                     
-                                if x_param_model is not '':
+                                if x_param_model != '':
                                     pl.xlabel(f"{x_param_model} {pl.gca().get_xlabel()}")                                    
                                 
                                 if 'Eccentricity' in y_parameter or 'Size' in y_parameter:
                                     pl.ylabel(f"{subj} {model} {y_parameter} (°)")
                                 elif 'B/D' in y_parameter:
                                     pl.ylabel(f"{subj} {model} {y_parameter} (% signal change)")  
-                                elif y_parameter_toplevel is not '' and 'Receptor' in y_parameter_toplevel:
+                                elif y_parameter_toplevel != '' and 'Receptor' in y_parameter_toplevel:
                                     pl.ylabel(f"{subj} {model} {y_parameter} (pmol/ml)")                                                 
                                 else:
                                     pl.ylabel(f"{subj} {model} {y_parameter}")
@@ -3468,7 +3504,7 @@ class visualize_results(object):
         for space, space_res in spaces:
         
             
-            if quantile_exclusion is None:
+            if quantile_exclusion == None:
                 #surrounds larger than this are excluded from surround size calculations
                 w_max=60
                 #remove absurd suppression index values
@@ -3513,7 +3549,7 @@ class visualize_results(object):
 
                     #upsampling correction: fsnative has approximately 3 times as many datapoints as original
                     if subj != 'Group':
-                        if bold_voxel_volume is not None:
+                        if bold_voxel_volume != None:
                             
                             print("Make sure bold_voxel_volume is specified in mm^3")
                             
@@ -3571,7 +3607,7 @@ class visualize_results(object):
                                     
                                 
                                 else:
-                                    #if ROI is not defined
+                                    #if ROI != defined
                                     #if Brain use all available vertices
                                     if roi == 'Brain':
                                         alpha[analysis][subj][roi] = curr_alpha
@@ -3601,7 +3637,7 @@ class visualize_results(object):
                                             alpha[analysis][subj][roi] *= np.isfinite(subj_res['Processed Results'][param][model])
                                             
                                             #manual exclusion of outliers
-                                            if quantile_exclusion is None:    
+                                            if quantile_exclusion == None:    
                                                 print("Using manual exclusion, see multidim_analysis function. Set quantile_exclusion=1 for no exclusion.")
 
                                                 if param == 'Surround Size (fwatmin)':
@@ -3783,8 +3819,8 @@ class visualize_results(object):
                         if ('mean' in analysis) or 'fsaverage' in subj:
 
                             print(f"{analysis} {subj} {roi}")
-                            if x_dims_idx is None or y_dims_idx is None:    
-                                if parameter_toplevel is not None:
+                            if x_dims_idx == None or y_dims_idx == None:    
+                                if parameter_toplevel != None:
                                     print("X and Y dims not specified. Using receptors as X, everything else as Y.")
                                     x_dims = rec_dims
                                     y_dims = [dim for dim, _ in enumerate(ordered_dimensions) if dim not in rec_dims]
@@ -3835,7 +3871,7 @@ class visualize_results(object):
                                         
                                     par_means = np.array([wstats.mean for wstats in par_stats])
                                         
-                                    if zconfint_err_alpha is not None:
+                                    if zconfint_err_alpha != None:
                                         par_err = np.array([np.abs(wstats.zconfint_mean(alpha=zconfint_err_alpha)-wstats.mean) for wstats in par_stats])*upsampling_corr_factor**0.5
                                     else:
                                         par_err = np.array([wstats.std_mean for wstats in par_stats])*upsampling_corr_factor**0.5
@@ -4884,7 +4920,7 @@ class visualize_results(object):
                             if an_info["fitting_space"] == 'HCP' and n_pix == 54:
                                 n_pix = 67
                         
-                        if third_dim_sr_curves is not None:
+                        if third_dim_sr_curves != None:
                             fig = pl.figure(f"3D sr curves by {third_dim_sr_curves}", figsize=(8,8))
                             
                             ax = fig.add_subplot(111, projection='3d', azim=-45, elev=50)
@@ -5079,14 +5115,14 @@ class visualize_results(object):
                                        
                                         
                                         data_sr = [actual_response_1.mean, actual_response_1.mean,actual_response_2R.mean,actual_response_4.mean,actual_response_4.mean]/np.max([actual_response_1.mean, actual_response_1.mean,actual_response_2R.mean,actual_response_4.mean,actual_response_4.mean])
-                                        if zconfint_err_alpha is not None:
+                                        if zconfint_err_alpha != None:
                                             yerr_data_sr = np.array([np.abs(ss.zconfint_mean(alpha=zconfint_err_alpha)-ss.mean) for ss in [actual_response_1,actual_response_1,actual_response_2R,actual_response_4,actual_response_4]]).T*upsampling_corr_factor**0.5
                                         else:
                                             yerr_data_sr = np.array([ss.std_mean for ss in [actual_response_1,actual_response_1,actual_response_2R,actual_response_4,actual_response_4]])*upsampling_corr_factor**0.5
                                         
                                         #yerr_data_sr /= np.max([actual_response_1R.mean,actual_response_1S.mean,actual_response_2R.mean,actual_response_4R.mean,actual_response_4F.mean])
                                     
-                                    if third_dim_sr_curves is not None:
+                                    if third_dim_sr_curves != None:
                                         if third_dim_sr_curves in ordered_dimensions:
                                             third_dim_data = multidim_param_array[analysis][subj][roi][ordered_dimensions.index(third_dim_sr_curves)]
                                         else:
@@ -5112,7 +5148,7 @@ class visualize_results(object):
                                         
                                         if plot_curves:
                                             pl.plot(stim_sizes, mean_srf, c=cmap_rois[i], label=roi.replace('custom.','').replace('HCPQ1Q6.','').replace('glasser_',''), linewidth=3)
-                                            if third_dim_sr_curves is not None:
+                                            if third_dim_sr_curves != None:
                                                 #pl.figure(f"3D sr curves by {third_dim_sr_curves}")
                                                 
                                                 ax.plot(stim_sizes, np.zeros_like(stim_sizes), mean_srf, c=cmap_rois[i], label=roi.replace('custom.','').replace('HCPQ1Q6.','').replace('glasser_',''), linewidth=2, zorder=100)
@@ -5192,7 +5228,7 @@ class visualize_results(object):
                                             #pl.errorbar([0.5, 1.25, 2.5], data_sr[np.r_[1,2,4]], yerr_data_sr[:,np.r_[1,2,4]], alpha=0.4, markersize=4, marker='v',linestyle='', c=cmap_rois[i])
                                                  
     
-                        if third_dim_sr_curves is not None:                
+                        if third_dim_sr_curves != None:                
                             all_x = np.array(all_x)
                             all_y = np.array(all_y)
                             all_z = np.array(all_z)

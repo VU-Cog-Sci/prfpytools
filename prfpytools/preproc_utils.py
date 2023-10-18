@@ -2,6 +2,7 @@ import os
 import numpy as np
 import h5py
 import nibabel as nb
+import yaml
 from collections import defaultdict as dd
 from pathlib import Path
 import matplotlib.image as mpimg
@@ -24,6 +25,50 @@ def inverse_roi_mask(roi, array):
     array_2[roi] = False
     masked_array = array * array_2
     return masked_array
+
+
+
+def compute_clipping(analysis_info):
+    if 'sourcedata_path' in analysis_info:
+        if len(analysis_info['task_names'])>1:
+            t_n = '*'
+        else:
+            t_n = analysis_info['task_names'][0]
+        
+        if analysis_info['session'] == 'ses-all':
+            exp_files = sorted(Path(analysis_info['sourcedata_path']).glob(f"{analysis_info['subj']}_ses-*_task-{t_n}_run-*_expsettings.yml"))
+        else:
+            exp_files = sorted(Path(analysis_info['sourcedata_path']).glob(f"{analysis_info['subj']}_{analysis_info['session']}_task-{t_n}_run-*_expsettings.yml"))
+
+        
+        if len(exp_files)>0:
+            print("computing DM clipping from screen delims")
+            sc_delims_top_prop = []
+            for exp_file in exp_files:
+                with open(str(exp_file)) as f:
+                    exp_dict = yaml.safe_load(f)
+
+                if 'screen_delim' in exp_dict:    
+                    sc_delims_top_prop.append(exp_dict['screen_delim']['top']/exp_dict['window']['size'][1])
+            
+            sc_delim_top_prop = np.max(sc_delims_top_prop)
+
+            if sc_delim_top_prop>0:
+                dm_edges_clipping = [int(sc_delim_top_prop*analysis_info['n_pix']),0,0,0]
+                print(dm_edges_clipping)
+            else:
+                dm_edges_clipping = analysis_info["dm_edges_clipping"]
+
+        else:
+            dm_edges_clipping = analysis_info["dm_edges_clipping"]
+
+
+    else:
+        dm_edges_clipping = analysis_info["dm_edges_clipping"]
+
+    return dm_edges_clipping
+
+
 
 def create_dm_from_screenshots(screenshot_path,
                                n_pix=40,
@@ -202,7 +247,7 @@ def prepare_data(subj,
             print(f"For task {task_name}, session {session}, hemisphere {hemi}, of subject {subj}, a total of {len(tc_paths)} runs were found.")
             
             if fit_runs is not None and (len(fit_runs)>len(tc_paths) or np.any(np.array(fit_runs)>=len(tc_paths))):
-                print(f"{fit_runs} fit_runs requested but only {len(tc_paths)} runs were found.")
+                print(f"{len(fit_runs)} fit_runs requested but only {len(tc_paths)} runs were found.")
                 raise ValueError
 
             if fit_runs is None:

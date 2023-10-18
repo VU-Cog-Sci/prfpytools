@@ -33,7 +33,7 @@ if "mkl_num_threads" in analysis_info:
 import numpy as np
 from scipy.optimize import LinearConstraint, NonlinearConstraint
 
-from prfpytools.preproc_utils import create_full_stim, prepare_data
+from prfpytools.preproc_utils import create_full_stim, prepare_data, compute_clipping
 
 from prfpy.model import Iso2DGaussianModel, Norm_Iso2DGaussianModel, DoG_Iso2DGaussianModel, CSS_Iso2DGaussianModel
 from prfpy.fit import Iso2DGaussianFitter, Norm_Iso2DGaussianFitter, DoG_Iso2DGaussianFitter, CSS_Iso2DGaussianFitter
@@ -165,43 +165,9 @@ if not param_bounds and norm_model_variant != "abcd":
     param_bounds = True
 
 
+
 #DM masking based on screen delim if possible
-if 'sourcedata_path' in analysis_info:
-    if len(task_names)>1:
-        t_n = '*'
-    else:
-        t_n = task_names[0]
-    
-    if session == 'ses-all':
-        exp_files = sorted(Path(analysis_info['sourcedata_path']).glob(f"{subj}_ses-*_task-{t_n}_run-*_expsettings.yml"))
-    else:
-        exp_files = sorted(Path(analysis_info['sourcedata_path']).glob(f"{subj}_{session}_task-{t_n}_run-*_expsettings.yml"))
-
-    
-    if len(exp_files)>0:
-        print("computing DM clipping from screen delims")
-        sc_delims_top_prop = []
-        for exp_file in exp_files:
-            with open(str(exp_file)) as f:
-                exp_dict = yaml.safe_load(f)
-
-            if 'screen_delim' in exp_dict:    
-                sc_delims_top_prop.append(exp_dict['screen_delim']['top']/exp_dict['window']['size'][1])
-        
-        sc_delim_top_prop = np.max(sc_delims_top_prop)
-
-        if sc_delim_top_prop>0:
-            dm_edges_clipping = [int(sc_delim_top_prop*n_pix),0,0,0]
-            print(dm_edges_clipping)
-        else:
-            dm_edges_clipping = analysis_info["dm_edges_clipping"]
-
-    else:
-        dm_edges_clipping = analysis_info["dm_edges_clipping"]
-
-
-else:
-    dm_edges_clipping = analysis_info["dm_edges_clipping"]
+dm_edges_clipping = compute_clipping(analysis_info)
 
 analysis_info["dm_edges_clipping"] = dm_edges_clipping
 

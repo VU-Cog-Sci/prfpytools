@@ -15,6 +15,7 @@ from prfpy.model import Iso2DGaussianModel, Norm_Iso2DGaussianModel, DoG_Iso2DGa
 from prfpytools.preproc_utils import create_full_stim
 from prfpy.rf import gauss2D_iso_cart
 from prfpy.stimulus import PRFStimulus2D
+import dill
 
 opj = os.path.join
 
@@ -24,7 +25,7 @@ class results(object):
     
     def combine_results(self, results_folder,
                         timecourse_folder=None,
-                        ref_volume_path=None,
+                        raw_tc_stats_dict_path=None,
                         cvfold_comb='median',
                         calculate_CCrsq=False,
                         calculate_noise_ceiling=False,
@@ -209,11 +210,11 @@ class results(object):
                 noise_ceiling = np.array([np.corrcoef(tc_t,tc_f)[0,1] for tc_t,tc_f in zip(tc_all_test,tc_all_fit)])
 
                 #mean of the variance of single run timecourses
-                r_r_full['Single run Variance'] = np.mean([np.var(tc,axis=-1) for tc in tc_runs],axis=0)
+                r_r_full[f'Variance ({merged_an_info["data_scaling"]})'] = np.mean([np.var(tc,axis=-1) for tc in tc_runs],axis=0)
                 #variance of the mean timecourse
-                r_r_full['Variance of mean timecourse'] = np.var(np.mean(tc_runs,axis=0),axis=-1)
+                #r_r_full['Variance of mean timecourse'] = np.var(np.mean(tc_runs,axis=0),axis=-1)
                 
-                r_r_full[f"Noise Ceiling (CC)"] = np.copy(noise_ceiling)
+                r_r_full[f"Corrcoef"] = np.copy(noise_ceiling)
                 
             
             #calculate cross-condition r-squared
@@ -347,37 +348,48 @@ class results(object):
                     self.main_dict[space][reduced_an_name][subj+ses_str][res] = deepcopy(an_res[res])
                 
             
-                       
-            raw_tc_stats = dd(lambda:np.zeros(mask.shape))
-
             
-            if '999999' in subj:
-                tc_raw = np.load(opj(timecourse_folder,f'999999_timecourse-raw_space-{space}.npy'))
-                mask = np.load(opj(timecourse_folder,f'999999_mask-raw_space-{space}.npy'))
-            else:
-                try:
-                    tc_raw = np.load(opj(timecourse_folder,f'{subj}{ses_str}_timecourse-raw_space-{space}.npy'))
-                    mask = np.load(opj(timecourse_folder,f'{subj}{ses_str}_mask-raw_space-{space}.npy'))
-                except:
-                    tc_raw = np.load(opj(timecourse_folder,f'{subj}_ses-all_timecourse-raw_space-{space}.npy'))
-                    mask = np.load(opj(timecourse_folder,f'{subj}_ses-all_mask-raw_space-{space}.npy'))              
+            if raw_tc_stats_dict_path is not None and os.path.exists(raw_tc_stats_dict_path):
+                print('loading tc stats from dictionary')
+
+                with open(raw_tc_stats_dict_path, 'rb') as handle:
+                    raw_tc_stats_dict=renamed_load(handle)
+
+                if subj+ses_str in raw_tc_stats_dict.keys():     
+                    for kk in raw_tc_stats_dict[subj+ses_str].keys():            
+
+                        self.main_dict[space][reduced_an_name][subj+ses_str]['Results'][kk] = deepcopy(raw_tc_stats_dict[subj+ses_str][kk])
+
+            if 'Mean' not in self.main_dict[space][reduced_an_name][subj+ses_str]['Results'].keys():
+                print('computing stats from timecourse')
                 
-            tc_mean = tc_raw.mean(-1)
-            tc_mean_full = np.zeros(mask.shape)
-            tc_mean_full[mask] = tc_mean
-            raw_tc_stats['Mean'] = tc_mean_full
-        
-            tc_var = tc_raw.var(-1)
-            tc_var_full = np.zeros(mask.shape)
-            tc_var_full[mask] = tc_var
-            raw_tc_stats['Variance'] = tc_var_full
-        
-            tc_tsnr_full = np.zeros(mask.shape)
-            tc_tsnr_full[mask] = tc_mean/np.sqrt(tc_var)
-            raw_tc_stats['TSNR'] = tc_tsnr_full
+                if '999999' in subj:
+                    tc_raw = np.load(opj(timecourse_folder,f'999999_timecourse-raw_space-{space}.npy'))
+                    mask = np.load(opj(timecourse_folder,f'999999_mask-raw_space-{space}.npy'))
+                else:
+                    try:
+                        tc_raw = np.load(opj(timecourse_folder,f'{subj}{ses_str}_timecourse-raw_space-{space}.npy'))
+                        mask = np.load(opj(timecourse_folder,f'{subj}{ses_str}_mask-raw_space-{space}.npy'))
+                    except:
+                        print('could not find raw stats for this session. using ses-all.')
+                        tc_raw = np.load(opj(timecourse_folder,f'{subj}_ses-all_timecourse-raw_space-{space}.npy'))
+                        mask = np.load(opj(timecourse_folder,f'{subj}_ses-all_mask-raw_space-{space}.npy'))              
+                    
+                tc_mean = tc_raw.mean(-1)
+                tc_mean_full = np.zeros(mask.shape)
+                tc_mean_full[mask] = tc_mean
+                self.main_dict[space][reduced_an_name][subj+ses_str]['Results']['Mean'] = deepcopy(tc_mean_full)
             
+                tc_var = tc_raw.var(-1)
+                tc_var_full = np.zeros(mask.shape)
+                tc_var_full[mask] = tc_var
+                self.main_dict[space][reduced_an_name][subj+ses_str]['Results']['Variance'] = deepcopy(tc_var_full)
+            
+                tc_tsnr_full = np.zeros(mask.shape)
+                tc_tsnr_full[mask] = tc_mean/np.sqrt(tc_var)
+                self.main_dict[space][reduced_an_name][subj+ses_str]['Results']['TSNR'] = deepcopy(tc_tsnr_full)
+                
 
-            self.main_dict[space][reduced_an_name][subj+ses_str]['Timecourse Stats'] = deepcopy(raw_tc_stats)
                 
         return
         
@@ -390,7 +402,7 @@ class results(object):
             if 'sub-' not in k and not k.isdecimal() and '999999' not in k and 'fsaverage' not in k:
                 print(k)
                 self.process_results(v, compute_suppression_index, return_norm_profiles)
-            elif 'Results' in v and 'Processed Results' not in v:
+            elif 'Results' in v:# and 'Processed Results' not in v:
                 mask = v['mask']
                 normalize_RFs = v['analysis_info']['normalize_RFs']
                 
@@ -491,11 +503,11 @@ class results(object):
                     elif isinstance(v2, np.ndarray) and v2.ndim == 1 and 'model' in k2:
                         processed_results[k2.split('_model-')[0]][k2.split('_model-')[1]][mask] = np.copy(v2)
                         
-                    elif isinstance(v2, np.ndarray) and v2.ndim == 1 and 'Noise Ceiling' in k2:
-                        processed_results['Noise Ceiling'][k2][mask] = np.copy(v2)
-
-                    elif isinstance(v2, np.ndarray) and v2.ndim == 1 and 'Variance' in k2:
-                        processed_results['Variance Stats'][k2][mask] = np.copy(v2)                        
+                    elif isinstance(v2, np.ndarray) and v2.ndim == 1 and (('Corrcoef' in k2) or ('Variance' in k2) or ('Mean' in k2) or ('TSNR' in k2)):
+                        if len(v2) == mask.sum():
+                            processed_results['Timecourse Stats'][k2][mask] = np.copy(v2)
+                        else:
+                            processed_results['Timecourse Stats'][k2] = np.copy(v2)
     
                 v['Processed Results'] = deepcopy(processed_results)
         return
@@ -798,5 +810,15 @@ def graph_randomization(data_max, data_min, eigvecs_reduced, ft):
     
     
     
-    
+#extremely useful in cases of having to unpickle objects when class/module/function names have been changed
+class RenameUnpickler(dill.Unpickler):
+    def find_class(self, module, name):
+        renamed_module = module
+        if "utils." in module:
+            renamed_module = module.replace("utils.","prfpytools.")
+
+        return super(RenameUnpickler, self).find_class(renamed_module, name)
+
+def renamed_load(file_obj):
+    return RenameUnpickler(file_obj).load()    
     
