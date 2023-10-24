@@ -1078,17 +1078,17 @@ class visualize_results(object):
                         for stat in tc_stats.keys():
 
                             if 'Mean' in stat:
-                                vmin_stat = np.nanquantile(tc_stats['Mean'][alpha[analysis][subj][model]>rsq_thresh],0.1)
-                                vmax_stat = np.nanquantile(tc_stats['Mean'][alpha[analysis][subj][model]>rsq_thresh],0.9)
+                                vmin_stat = np.nanquantile(tc_stats['Mean'][alpha[analysis][subj]['all']>rsq_thresh],0.1)
+                                vmax_stat = np.nanquantile(tc_stats['Mean'][alpha[analysis][subj]['all']>rsq_thresh],0.9)
                             elif 'TSNR' in stat:
-                                vmin_stat = np.nanquantile(tc_stats['TSNR'][alpha[analysis][subj][model]>rsq_thresh],0.1)
-                                vmax_stat = np.nanquantile(tc_stats['TSNR'][alpha[analysis][subj][model]>rsq_thresh],0.9)
+                                vmin_stat = np.nanquantile(tc_stats['TSNR'][alpha[analysis][subj]['all']>rsq_thresh],0.1)
+                                vmax_stat = np.nanquantile(tc_stats['TSNR'][alpha[analysis][subj]['all']>rsq_thresh],0.9)
                             elif 'Variance' in stat and 'psc' not in stat:
-                                vmin_stat = np.nanquantile(tc_stats['Variance'][alpha[analysis][subj][model]>rsq_thresh],0.1)
-                                vmax_stat = np.nanquantile(tc_stats['Variance'][alpha[analysis][subj][model]>rsq_thresh],0.9)
+                                vmin_stat = np.nanquantile(tc_stats['Variance'][alpha[analysis][subj]['all']>rsq_thresh],0.1)
+                                vmax_stat = np.nanquantile(tc_stats['Variance'][alpha[analysis][subj]['all']>rsq_thresh],0.9)
                             else:
-                                vmin_stat = np.nanquantile(tc_stats[stat][alpha[analysis][subj][model]>rsq_thresh],0.1)
-                                vmax_stat = np.nanquantile(tc_stats[stat][alpha[analysis][subj][model]>rsq_thresh],0.9)
+                                vmin_stat = np.nanquantile(tc_stats[stat][alpha[analysis][subj]['all']>rsq_thresh],0.1)
+                                vmax_stat = np.nanquantile(tc_stats[stat][alpha[analysis][subj]['all']>rsq_thresh],0.9)
 
                             ds_stats[f"{subj} {stat}"] = Vertex2D_fix(tc_stats[stat], alpha[analysis][subj]['all'], #np.ones_like(alpha[analysis][subj]['all']),
                                                             vmin=vmin_stat, 
@@ -1755,7 +1755,8 @@ class visualize_results(object):
                     self.js_handle_dict[space][analysis][subj][js_handle].ui.set(param_name, param_value)
                 
                 
-            # Save image           
+            # Save image    
+            time.sleep(0.3)       
             self.js_handle_dict[space][analysis][subj][js_handle].getImage(output_path, size =(3200, 2400))
         
             # the block below trims the edges of the image:
@@ -1964,7 +1965,1492 @@ class visualize_results(object):
        
         return
     
+
+    def group_quant_plots(self, x_parameter, y_parameter, rois, rsq_thresh, save_figures, figure_path,
+                    space_names = 'fsnative', analysis_names = 'all', subject_ids='all', groups=[],
+                    x_parameter_toplevel='', y_parameter_toplevel='', 
+                    ylim={}, xlim={}, log_yaxis=False, log_xaxis = False, nr_bins = 8, weights='RSq',
+                    x_param_model='', violin=False, scatter=False, diff_norm=False, diff_gauss=False, diff_gauss_x=False,
+                    rois_on_plot = False, rsq_alpha_plot = False,
+                    means_only=False, stats_on_plot=False, bin_by='size', zscore_ydata=False, zscore_xdata=False,
+                    zconfint_err_alpha = None, fit = True,exp_fit = False, show_legend=False, each_subj_on_group=False,
+                    bold_voxel_volume = None, quantile_exclusion=0.999):
+        """
+        
+
+        Parameters
+        ----------
+        x_parameter : TYPE
+            DESCRIPTION.
+        y_parameter : TYPE
+            DESCRIPTION.
+        rois : TYPE
+            DESCRIPTION.
+        rsq_thresh : TYPE
+            DESCRIPTION.
+        save_figures : TYPE
+            DESCRIPTION.
+        analysis_names : TYPE, optional
+            DESCRIPTION. The default is 'all'.
+        subject_ids : TYPE, optional
+            DESCRIPTION. The default is 'all'.
+        ylim : TYPE, optional
+            DESCRIPTION. The default == None.
+        x_param_model : TYPE, optional
+            DESCRIPTION. The default == None.
+        violin : TYPE, optional
+            DESCRIPTION. The default is False.
+        scatter : TYPE, optional
+            DESCRIPTION. The default is False.
+        diff_gauss : TYPE, optional
+            DESCRIPTION. The default is False.
+        means_only : bool, optional
+            whether to only plot the means/distribs of y parameter, without y as function of x. The default is False.
+        stats_on_plot : TYPE, optional
+            DESCRIPTION. The default is False.
+
+        Returns
+        -------
+        mid : TYPE
+            DESCRIPTION.
+
+        """
+       
+        pl.rcParams.update({'font.size': 22})
+        pl.rcParams.update({'pdf.fonttype':42})
+        pl.rcParams.update({'figure.max_open_warning': 0})
+        pl.rcParams['axes.spines.right'] = False
+        pl.rcParams['axes.spines.top'] = False
+        
+        base_fig_path = figure_path
+        
+        cmap_values = list(np.linspace(0.9, 0.0, len([r for r in rois if r not in ['Brain', 'all_custom', 'combined']])))
+        
+        cmap_values += [0 for r in rois  if r in ['Brain', 'all_custom', 'combined']]
+        
+        cmap_rois = cm.get_cmap('nipy_spectral')(cmap_values)#
+
+        self.curr_rois_names = []
+        
+        #making black into dark gray for visualization reasons
+        cmap_rois[(cmap_rois == [0,0,0,1]).sum(1)==4] = [0.33,0.33,0.33,1]
+
+        if space_names == 'all':
+            spaces = [item for item in self.main_dict.items()]
+        else:
+            spaces = [item for item in self.main_dict.items() if item[0] in space_names] 
+
+        for space, space_res in spaces:
+            if 'fs' in space or 'HCP' in space:
+                
+                if quantile_exclusion == None:
+                    #surrounds larger than this are excluded from surround size calculations
+                    w_max=60
+                    #remove absurd suppression index values
+                    supp_max=1000
+                    #css max
+                    css_max=1
+                    #max b and d
+                    bd_max=1000
+                #bar or violin width
+                if len(self.only_models)>1:
+                    bar_or_violin_width = 0.3
+                else:
+                    bar_or_violin_width = 1.5
+
+                
+                        
+                if analysis_names == 'all':
+                    analyses = [item for item in space_res.items()]
+                else:
+                    analyses = [item for item in space_res.items() if item[0] in analysis_names] 
+                    
+                if len(analyses)>1:
+                    analyses.append(('Analyses mean', {sub:{} for sub in analyses[0][1]}))
+                    
+
+                alpha = dd(lambda:dd(lambda:dd(lambda:dd(dict))))
+                x_par = dd(lambda:dd(lambda:dd(lambda:dd(dict))))
+                y_par = dd(lambda:dd(lambda:dd(lambda:dd(dict))))
+                rsq_y = dd(lambda:dd(lambda:dd(lambda:dd(dict))))
+                rsq_x = dd(lambda:dd(lambda:dd(lambda:dd(dict))))
+                rsq_regr_weight = dd(lambda:dd(lambda:dd(lambda:dd(list))))
     
+                x_par_stats = dd(lambda:dd(lambda:dd(lambda:dd(list))))
+                y_par_stats = dd(lambda:dd(lambda:dd(lambda:dd(list))))
+                rsq_y_stats = dd(lambda:dd(lambda:dd(lambda:dd(list))))
+                rsq_x_stats = dd(lambda:dd(lambda:dd(lambda:dd(list))))
+                
+                bootstrap_fits = dd(lambda:dd(lambda:dd(lambda:dd(list))))
+
+                dict_lines = dd(lambda:dd(lambda:dd(lambda:dd(lambda:dd(list)))))
+                
+                
+                for analysis, analysis_res in analyses:       
+                    if subject_ids == 'all':
+                        subjects = [item for item in analysis_res.items()]
+                    else:
+                        subjects = [item for item in analysis_res.items() if item[0] in subject_ids]
+                    
+                    if len(subjects)>1:
+                        for group in groups:
+                            subjects.append((f'Group_{group}', {}))
+                        
+                    figure_path = base_fig_path
+
+                    if not os.path.exists(figure_path):
+                        os.makedirs(figure_path)
+                    figure_path = opj(figure_path, space)
+                    if not os.path.exists(figure_path):
+                        os.makedirs(figure_path)
+                    figure_path = opj(figure_path, analysis)
+                    if not os.path.exists(figure_path):
+                        os.makedirs(figure_path)                            
+                    
+                    upsampling_corr_factors = dd(list)
+                    for subj, subj_res in subjects:
+
+                        if 'Group' not in subj:
+                            group = self.find_group(subj)
+                        else:
+                            group = subj.split('_')[1]
+
+                        print(f"{space} {analysis} {subj} {group}")
+
+                        
+                         
+                        #upsampling correction: fsnative has approximately 3 times as many datapoints as original
+                        if 'Group' not in subj:
+                            if bold_voxel_volume != None:
+                                
+                                print("Make sure bold_voxel_volume is specified in mm^3")
+                                
+                                try:
+                                    if subj.isdecimal() and space == 'HCP':
+                                        pycortex_subj = '999999'
+                                    elif 'fsaverage' in subj or 'fsaverage' in space:
+                                        pycortex_subj = 'fsaverage'                                        
+                                    else:
+                                        pycortex_subj = subj.split('_')[0]
+                                        
+                                    aseg = nb.load(opj(cortex.database.default_filestore,pycortex_subj,'anatomicals','aseg.nii.gz'))
+                                    anat_vox_vol = aseg.header.get_zooms()[0]*aseg.header.get_zooms()[1]*aseg.header.get_zooms()[2]
+                                    cortex_volume = ((aseg.get_fdata()==42).sum()+(aseg.get_fdata()==3).sum())*anat_vox_vol
+                                    nr_bold_voxels = cortex_volume/bold_voxel_volume
+                                    nr_surf_vertices = cortex.db.get_surfinfo(pycortex_subj).data.shape[0]
+            
+                                    upsampling_corr_factor = nr_surf_vertices / nr_bold_voxels
+                                    
+              
+                                except Exception as e:
+                                    print(e)
+                                    print("Unable to perform upsampling correction.")
+                                    upsampling_corr_factor = 1
+                                    pass
+                                    
+                            else:
+                                print("BOLD voxel volume not specified. Not performing upsampling correction.")
+                                upsampling_corr_factor = 1
+                            print(upsampling_corr_factor)
+                            upsampling_corr_factors[group].append(upsampling_corr_factor)
+                        else:
+                            upsampling_corr_factor = np.mean(upsampling_corr_factors[group])
+                            
+                        print(f"Upsampling correction factor: {upsampling_corr_factor}")
+                        
+                        x_ticks=[]
+                        x_labels=[]    
+                        bar_position = 0
+
+                        if group == groups[1]:
+                            bar_position += 1.5*bar_or_violin_width
+                        elif group == groups[2]:
+                            bar_position += 3*bar_or_violin_width
+                        
+                        # binned eccentricity vs other parameters relationships       
+            
+                        #model_colors = {'Gauss':'blue','CSS':'orange','DoG':'green','Norm_abcd':'red','Norm_abc':'purple'}
+
+                        model_colors = {'Gauss':'blue','CSS':'orange','DoG':'green','Norm_abcd':'red','Norm_abc':'purple'}
+
+                        
+                                                
+
+    
+                        for i, roi in enumerate(rois):                              
+                            for model in self.only_models:                                
+
+                                
+                                if 'mean an' not in analysis or 'fsaverage' in subj:
+                                    if 'sub' in subj or 'fsaverage' in subj or subj.isdecimal():
+                                        if space == 'fsaverage':
+                                            roi_subj = 'fsaverage'
+                                        else:
+                                            roi_subj = subj
+
+                                        if 'rsq' in y_parameter.lower():
+                                            #comparing same vertices for model performance
+                                            curr_alpha = subj_res['Processed Results']['Alpha']['all']
+                                        else:
+                                            #otherwise model-specific alpha
+                                            curr_alpha = (subj_res['Processed Results']['Alpha'][model])
+                                            
+                                        if roi in self.idx_rois[roi_subj]:
+    
+                                            alpha[analysis][subj][model][roi] = (roi_mask(self.idx_rois[roi_subj][roi], curr_alpha)) 
+       
+                                        else:
+                                            #if ROI != defined
+                                            #if Brain use all available vertices
+                                            if roi == 'Brain':
+                                                alpha[analysis][subj][model][roi] = curr_alpha
+                                            elif roi == 'combined':
+                                                alpha[analysis][subj][model][roi] = (roi_mask(np.concatenate(tuple([self.idx_rois[roi_subj][r] for r in rois if ('combined' not in r and 'Brain' not in r and r in self.idx_rois[roi_subj])])), curr_alpha))    
+                                            elif roi == 'all_custom':
+                                                alpha[analysis][subj][model][roi] = (roi_mask(np.concatenate(tuple([self.idx_rois[roi_subj][r] for r in self.idx_rois[roi_subj] if 'custom' in r])), curr_alpha))    
+                                            # elif space == 'fsaverage' and roi in self.idx_rois['fsaverage']:
+                                            #     alpha[analysis][subj][model][roi] = (roi_mask(self.idx_rois['fsaverage'][roi], curr_alpha))
+                                            else:
+                                                #, otherwise none
+                                                print(f"{roi}: undefined ROI")
+                                                alpha[analysis][subj][model][roi] = np.zeros_like(curr_alpha).astype('bool')
+                                        
+                                        
+                                        #manual exclusion of outliers
+                                        if quantile_exclusion == None:
+                                            print("Using manual exclusion, see quant_plots function. Set quantile_exclusion=1 for no exclusion.")
+                                            if y_parameter == 'Surround Size (fwatmin)' or x_parameter == 'Surround Size (fwatmin)':# and model == 'DoG':
+                                                #exclude too large surround (no surround)
+                                                alpha[analysis][subj][model][roi] *= (subj_res['Processed Results']['Surround Size (fwatmin)'][model]<w_max)
+                                                if x_param_model != '':
+                                                    alpha[analysis][subj][model][roi] *= (subj_res['Processed Results']['Surround Size (fwatmin)'][x_param_model]<w_max)
+    
+                                            
+                                            if y_parameter == 'Surround/Centre Amplitude'  or x_parameter == 'Surround/Centre Amplitude' :# and model == 'DoG':
+                                                #exclude too large surround (no surround)
+                                                if x_param_model != '':
+                                                    alpha[analysis][subj][model][roi] *= (subj_res['Processed Results']['Surround/Centre Amplitude'][x_param_model]<w_max)
+                                                else:
+                                                    alpha[analysis][subj][model][roi] *= (subj_res['Processed Results']['Surround/Centre Amplitude'][model]<w_max)
+    
+                                                    
+                                            if 'Suppression' in y_parameter:
+                                                #exclude nonsensical suppression index values
+                                                alpha[analysis][subj][model][roi] *= (subj_res['Processed Results'][y_parameter][model]<supp_max)                                            
+                                            if 'Suppression' in x_parameter:
+                                                #exclude nonsensical suppression index values
+                                                alpha[analysis][subj][model][roi] *= (subj_res['Processed Results'][x_parameter][model]<supp_max)
+                                                if x_param_model != '':
+                                                    alpha[analysis][subj][model][roi] *= (subj_res['Processed Results'][x_parameter][x_param_model]<supp_max)
+                                                    
+                                            if 'CSS Exponent' in x_parameter:
+                                                alpha[analysis][subj][model][roi] *= (subj_res['Processed Results'][x_parameter][x_param_model]<css_max)
+                                            
+                                            if 'Norm Param.' in y_parameter:
+                                                alpha[analysis][subj][model][roi] *= (subj_res['Processed Results'][y_parameter][model]<bd_max)                                            
+                                            if 'Norm Param.' in x_parameter:
+                                                alpha[analysis][subj][model][roi] *= (subj_res['Processed Results'][x_parameter][model]<bd_max)                                            
+                                                if x_param_model != '':
+                                                    alpha[analysis][subj][model][roi] *= (subj_res['Processed Results'][x_parameter][x_param_model]<bd_max)
+                                        
+                                        else:
+                                            if y_parameter_toplevel == '':    
+                                                alpha[analysis][subj][model][roi] *= (subj_res['Processed Results'][y_parameter][model]<np.nanquantile(subj_res['Processed Results'][y_parameter][model],quantile_exclusion))*(subj_res['Processed Results'][y_parameter][model]>np.nanquantile(subj_res['Processed Results'][y_parameter][model],1-quantile_exclusion))  
+
+                                            if x_param_model != '':
+                                                #nanquantile handles nans but will not work if there are infs
+                                                alpha[analysis][subj][model][roi] *= (subj_res['Processed Results'][x_parameter][x_param_model]<np.nanquantile(subj_res['Processed Results'][x_parameter][x_param_model],quantile_exclusion))*(subj_res['Processed Results'][x_parameter][x_param_model]>np.nanquantile(subj_res['Processed Results'][x_parameter][x_param_model],1-quantile_exclusion))  
+
+                                            if x_parameter_toplevel == '':
+                                                alpha[analysis][subj][model][roi] *= (subj_res['Processed Results'][x_parameter][model]<np.nanquantile(subj_res['Processed Results'][x_parameter][model],quantile_exclusion))*(subj_res['Processed Results'][x_parameter][model]>np.nanquantile(subj_res['Processed Results'][x_parameter][model],1-quantile_exclusion))  
+
+                                            
+                                            
+         
+                                        #if 'ccrsq' in y_parameter.lower():
+                                        #    alpha[analysis][subj][model][roi] *= (subj_res['Processed Results'][y_parameter][model]>0)
+                                        if y_parameter_toplevel == '':
+                                            alpha[analysis][subj][model][roi] *= np.isfinite(subj_res['Processed Results'][y_parameter][model])
+                                        else:
+                                            alpha[analysis][subj][model][roi] *= np.isfinite(subj_res['Processed Results'][y_parameter_toplevel][y_parameter])
+                                       
+                                        if x_param_model != '':
+                                            
+                                            alpha[analysis][subj][model][roi] *= np.isfinite(subj_res['Processed Results'][x_parameter][x_param_model])
+                                            
+                                            x_par[analysis][subj][model][roi] = subj_res['Processed Results'][x_parameter][x_param_model][alpha[analysis][subj][model][roi]>rsq_thresh]                                          
+                                        
+                                        
+                                        elif x_parameter_toplevel != '':
+                                            alpha[analysis][subj][model][roi] *= np.isfinite(subj_res['Processed Results'][x_parameter_toplevel][x_parameter])
+                                            x_par[analysis][subj][model][roi] = (subj_res['Processed Results'][x_parameter_toplevel][x_parameter][alpha[analysis][subj][model][roi]>rsq_thresh])
+                                            
+                                        else:
+                                            #remove nans and infinities
+                                            alpha[analysis][subj][model][roi] *= np.isfinite(subj_res['Processed Results'][x_parameter][model])                                    
+
+                                            x_par[analysis][subj][model][roi] = subj_res['Processed Results'][x_parameter][model][alpha[analysis][subj][model][roi]>rsq_thresh]
+                                            
+                                        #handling special case of plotting receptors as y-parameter, since they are not part of any model
+                                        if y_parameter_toplevel == '':
+                                            y_par[analysis][subj][model][roi] = (subj_res['Processed Results'][y_parameter][model][alpha[analysis][subj][model][roi]>rsq_thresh])
+                                        else:
+                                            y_par[analysis][subj][model][roi] = (subj_res['Processed Results'][y_parameter_toplevel][y_parameter][alpha[analysis][subj][model][roi]>rsq_thresh])
+                                            
+                                        
+                                        
+                                        if diff_gauss:
+                                            y_par[analysis][subj][model][roi] -= subj_res['Processed Results'][y_parameter]['Gauss'][alpha[analysis][subj][model][roi]>rsq_thresh]
+                                        
+                                        if diff_gauss_x:
+                                            x_par[analysis][subj][model][roi] -= subj_res['Processed Results'][x_parameter]['Gauss'][alpha[analysis][subj][model][roi]>rsq_thresh]
+                                        
+                                            
+
+                                            #set negative ccrsq and rsq to zero
+                                            #if 'ccrsq' in y_parameter.lower():
+                                            #    y_par[analysis][subj][model][roi][y_par[analysis][subj][model][roi]<0] = 0
+                 
+    
+                                        #r - squared weighting
+                                        if weights != None:
+                                            rsq_x[analysis][subj][model][roi] = np.copy(subj_res['Processed Results'][weights][model][alpha[analysis][subj][model][roi]>rsq_thresh])
+                                            rsq_y[analysis][subj][model][roi] = np.copy(subj_res['Processed Results'][weights][model][alpha[analysis][subj][model][roi]>rsq_thresh])
+                                        else:
+                                            rsq_x[analysis][subj][model][roi] = np.ones_like(x_par[analysis][subj][model][roi])    
+                                            rsq_y[analysis][subj][model][roi] = np.ones_like(y_par[analysis][subj][model][roi])
+
+                                        #no need for rsq-weighting if plotting rsq
+                                        if 'rsq' in y_parameter.lower():
+                                            rsq_y[analysis][subj][model][roi] = np.ones_like(y_par[analysis][subj][model][roi])
+                                        if 'rsq' in x_parameter.lower():
+                                            rsq_x[analysis][subj][model][roi] = np.ones_like(x_par[analysis][subj][model][roi])      
+
+
+
+                                        #if plotting different model parameters
+                                        if x_param_model != '' and x_param_model in subj_res['Processed Results'][weights]:
+                                            rsq_x = np.copy(subj_res['Processed Results'][weights][x_param_model][alpha[analysis][subj][model][roi]>rsq_thresh])
+                                        
+     
+                                        #if plotting non-model stuff like receptors and noise ceiling and variance
+                                        if x_parameter_toplevel != '':
+                                            rsq_x[analysis][subj][model][roi] = np.ones_like(x_par[analysis][subj][model][roi])
+                                            
+                                        if y_parameter_toplevel != '':
+                                            rsq_y[analysis][subj][model][roi] = np.ones_like(y_par[analysis][subj][model][roi])
+                                        
+                                        
+        
+                                    elif len(subjects)>1 and 'fsaverage' not in subjects:
+                                        #group stats
+                                        x_par_group = np.concatenate(tuple([x_par[analysis][sid][model][roi] for sid in x_par[analysis] if 'Group' not in sid and sid in self.groups_dict[group]]))
+                                        
+                                        y_par_group = np.concatenate(tuple([y_par[analysis][sid][model][roi] for sid in y_par[analysis] if 'Group' not in sid and sid in self.groups_dict[group]]))
+                                        rsq_x_group = np.concatenate(tuple([rsq_x[analysis][sid][model][roi] for sid in rsq_x[analysis] if 'Group' not in sid and sid in self.groups_dict[group]]))
+                                        rsq_y_group = np.concatenate(tuple([rsq_y[analysis][sid][model][roi] for sid in rsq_y[analysis] if 'Group' not in sid and sid in self.groups_dict[group]]))
+                                       
+                                        x_par[analysis][subj][model][roi] = np.copy(x_par_group)
+                                        y_par[analysis][subj][model][roi] = np.copy(y_par_group)
+                                        rsq_x[analysis][subj][model][roi] = np.copy(rsq_x_group)                                    
+                                        rsq_y[analysis][subj][model][roi] = np.copy(rsq_y_group)
+
+                                elif 'fsaverage' not in subjects:
+                                    #mean analysis
+                                    ans = [an[0] for an in analyses if 'mean an' not in an[0]]
+                                    alpha[analysis][subj][model][roi] = np.hstack(tuple([alpha[an][subj][model][roi] for an in ans]))
+                                    x_par[analysis][subj][model][roi] = np.hstack(tuple([x_par[an][subj][model][roi] for an in ans]))
+                                    y_par[analysis][subj][model][roi] = np.hstack(tuple([y_par[an][subj][model][roi] for an in ans]))
+                                    rsq_x[analysis][subj][model][roi] = np.hstack(tuple([rsq_x[an][subj][model][roi] for an in ans]))
+                                    rsq_y[analysis][subj][model][roi] = np.hstack(tuple([rsq_y[an][subj][model][roi] for an in ans]))                        
+                                    
+                                
+                                
+                                
+                                if zscore_xdata:
+                                    x_par[analysis][subj][model][roi] = zscore(x_par[analysis][subj][model][roi])
+                                if zscore_ydata:
+                                    y_par[analysis][subj][model][roi] = zscore(y_par[analysis][subj][model][roi])
+                                
+    
+                            
+
+                        for i, roi in enumerate([r for r in rois]):# if 'all' not in r and 'combined' not in r and 'Brain' not in r]):
+                            
+                            if len(y_par[analysis][subj][model][roi])>10:
+                                self.curr_rois_names.append(roi)
+
+                            
+                                samples_in_roi = len(y_par[analysis][subj][model][roi])
+                                print(f"Samples in ROI {roi}: {samples_in_roi}")
+                                
+                                if i>0:
+                                    bar_position += ((2+len(groups))*bar_or_violin_width)
+
+                                
+                                if group == groups[1]:
+                                    
+                                    label_position = bar_position+(0.5*bar_or_violin_width)*(len(self.only_models)-1)                     
+          
+                                    x_ticks.append(label_position)
+                                    x_labels.append(roi.replace('custom.','').replace('HCPQ1Q6.','').replace('glasser_','')+'\n')   
+                                
+                                for model in self.only_models:    
+
+                                    if len(rois)>15 or 'Group' in subj:  
+                                        pl.figure(f"{analysis} {subj.split('_')[0]} Mean {y_parameter}", figsize=(38, 18), frameon=True)
+                                    else:
+                                        pl.figure(f"{analysis} {subj.split('_')[0]} Mean {y_parameter}", figsize=(8, 8), frameon=True)
+
+                                    
+                                    if log_yaxis:
+                                        pl.gca().set_yscale('log')
+                                    
+                                    if 'Eccentricity' in y_parameter or 'Size' in y_parameter:
+                                        pl.ylabel(f"{subj.split('_')[0]} Mean {y_parameter} (°)")
+                                    elif 'B/D' in y_parameter:
+                                        pl.ylabel(f"{subj.split('_')[0]} Mean {y_parameter} (% signal change)")
+                                    elif y_parameter_toplevel != '' and 'Receptor' in y_parameter_toplevel:
+                                        pl.ylabel(f"{subj.split('_')[0]} Mean {y_parameter} (pmol/ml)")                                        
+                                    else:
+                                        pl.ylabel(f"{subj.split('_')[0]} Mean {y_parameter}")
+                                        
+                                    if 'Mean' in xlim:
+                                        pl.xlim(xlim['Mean'])
+                                        
+                                    if 'Mean' in ylim:
+                                        pl.ylim(ylim['Mean'])
+                                        
+                                    full_roi_stats = weightstats.DescrStatsW(y_par[analysis][subj][model][roi],
+                                                                weights=rsq_y[analysis][subj][model][roi])
+                                    
+                                    bar_height = full_roi_stats.mean
+                                    
+                                    if zconfint_err_alpha != None:                                    
+                                        bar_err = (np.abs(full_roi_stats.zconfint_mean(alpha=zconfint_err_alpha) - bar_height)).reshape(2,1)*upsampling_corr_factor**0.5                                    
+                                    else:
+                                        bar_err = full_roi_stats.std_mean*upsampling_corr_factor**0.5
+                                        
+    
+    
+                                    if len(self.only_models)>1:
+                                        if violin:
+                                            viol_plot = pl.violinplot(y_par[analysis][subj][model][roi], [bar_position],
+                                                          widths=[bar_or_violin_width], showextrema=False, showmeans=True, showmedians=True)
+                                            
+                                            for viol in viol_plot['bodies']:
+                                                viol.set_facecolor(model_colors[model])
+                                                viol.set_edgecolor('black')
+                                                viol.set_alpha(1.0)
+                                                
+                                            viol_plot['cmeans'].set_color('black')
+                                            viol_plot['cmedians'].set_color('white')
+                                                       
+                                                
+                                            bar_height = y_par[analysis][subj][model][roi].max()
+                                        else:
+                                            if 'Group' in subj and each_subj_on_group:
+                                                bar_err = None
+                                            
+                                            pl.bar(bar_position, bar_height, width=bar_or_violin_width, yerr=bar_err, 
+                                                   edgecolor=model_colors[model], label=model, color=model_colors[model])
+                                            
+                                            if 'Group' in subj and each_subj_on_group:
+                                                ssj_datapoints_x = np.linspace(bar_position-0.33*bar_or_violin_width, bar_position+0.33*bar_or_violin_width, len(subjects)-1)
+                                                for ssj_nr, ssj in enumerate([s for s in subjects if 'Group' not in s[0] and s[0] in self.groups_dict[group]]):
+                                                    
+                                                    ssj_stats = weightstats.DescrStatsW(y_par[analysis][ssj[0]][model][roi],
+                                                                weights=rsq_y[analysis][ssj[0]][model][roi])
+                                                    
+                                                    if zconfint_err_alpha != None:
+                                                        yerr_sj = (np.abs(ssj_stats.zconfint_mean(alpha=zconfint_err_alpha) - ssj_stats.mean)).reshape(2,1)*upsampling_corr_factor**0.5
+                                                    else:
+                                                        yerr_sj = ssj_stats.std_mean*upsampling_corr_factor**0.5
+                                                       
+                                                    pl.errorbar(ssj_datapoints_x[ssj_nr], ssj_stats.mean,
+                                                    yerr=yerr_sj, alpha=np.nanmean(rsq_y[analysis][ssj[0]][model][roi]),
+                                                    fmt='s',  mec='k', color=model_colors[model], ecolor='k')
+                                        
+    
+                                                                               
+                                        
+                                        if stats_on_plot:
+                                            if diff_gauss:
+                                                base_model = 'Gauss'
+                                            elif diff_norm:
+                                                base_model = [m for m in self.only_models if 'Norm' in m][0]
+                                                
+                                            
+                                            #do model comparison stats only once, at the last model
+                                            if self.only_models.index(model) == (len(self.only_models)-1):
+    
+                                                if violin:
+                                                    text_height = np.max([y_par[analysis][subj][m][roi].max() for m in self.only_models])
+                                                else:
+                                                    text_height = np.max([y_par[analysis][subj][m][roi].mean()+sem(y_par[analysis][subj][m][roi])*upsampling_corr_factor for m in self.only_models])
+                                                
+                                                y1, y2 = pl.gca().get_window_extent().get_points()[:, 1]
+                                                window_size_points = y2-y1
+                                                
+                                                if 'Mean' in ylim:
+                                                    axis_height = ylim['Mean'][1]-ylim['Mean'][0]
+                                                    #16 is font size
+                                                    text_distance = 1.5*(16*axis_height)/window_size_points
+                                                else:
+                                                    axis_height = np.max([[y_par[analysis][subj][m][r].mean()+sem(y_par[analysis][subj][m][r])*upsampling_corr_factor for m in self.only_models] for r in rois])-\
+                                                                    np.min([[y_par[analysis][subj][m][r].mean()-sem(y_par[analysis][subj][m][r])*upsampling_corr_factor for m in self.only_models] for r in rois])
+                                                    #a bit more distance since axis_height is an approximation
+                                                    text_distance = 2*(16*axis_height)/window_size_points
+         
+                                                
+    
+    
+                                                for mod in [m for m in self.only_models if base_model != m]:
+                                                    
+                                                    
+                                                    diff = y_par[analysis][subj][mod][roi] - y_par[analysis][subj][base_model][roi]
+                                                    
+                                                    pvals = []
+                                                    
+                                                    for ccc in range(10000):                                         
+                                                                                                                   
+                                                        #if ccc<50:
+                                                        #    pl.figure(f"null distribs {analysis} {subj} {mod} {roi}")
+                                                        #    pl.hist(null_distrib, bins=50, color=cmap_rois[i])
+                                                        
+                                                        
+                                                        #correct for upsampling
+                                                        samp_idx = np.random.randint(0, len(diff), int(len(diff)/upsampling_corr_factor))
+    
+                                                        observ = diff[samp_idx]
+                                                        
+                                                        null_distrib = np.sign(np.random.rand(len(diff[samp_idx]))-0.5)*diff[samp_idx]
+                                                        
+                                                        if diff_gauss:
+                                                            #test whether other models improve on gauss
+                                                            pvals.append(null_distrib.mean() >= observ.mean())
+                                                        elif diff_norm:
+                                                            #test whether norm improves over other models
+                                                            pvals.append(null_distrib.mean() <= observ.mean())
+                                                            
+                                                        #pvals.append(wilcoxon(observ, null_distrib, alternative='greater')[1])
+                                                        #pvals.append(ks_2samp(observ, null_distrib, alternative='less')[1])
+        
+                                                    #pl.figure(f"{analysis} {subj} Mean {y_parameter}", figsize=(8, 8), frameon=True) 
+                                                            
+                                                        
+                                                    pval = np.mean(pvals) 
+                                                    print(f"{mod} pval: {pval}")
+                                                    
+                                                    pval_str = ""
+                                                    
+                                                    #compute p values
+                                                    if pval<0.01:
+                                                        if diff_gauss:
+                                                            text_color = model_colors[mod]
+                                                        elif diff_norm:
+                                                            text_color = model_colors[base_model]
+                                                        pval_str+="*"
+                                                        if pval<1e-4:
+                                                            pval_str+="*"
+                                                            if pval<1e-6:
+                                                                pval_str+="*"
+                                                    elif pval>0.99:
+                                                        if diff_gauss:
+                                                            text_color = model_colors[base_model]        
+                                                        elif diff_norm:
+                                                            text_color = model_colors[mod]        
+                                                        pval_str+="*"
+                                                        if pval>(1-1e-4):
+                                                            pval_str+="*"
+                                                            if pval>(1-1e-6):
+                                                                pval_str+="*"                                                    
+    
+    
+                                                    def plot_comparison_bracket():
+                                                        #dh = text_distance
+                                                        
+                                                        barh = text_distance/2
+                                                        y = max(ly, ry) + barh
+                                                        #barx = [lx, lx, rx, rx]
+                                                        #bary = [y, y+barh, y+barh, y]
+                                                        mid = ((lx+rx)/2, y+0.5*barh)
+                                                        
+                                                        #pl.plot(barx, bary, c='black')
+                                                        pl.plot([lx,lx], [y,y+barh], c=c_left)
+                                                        pl.plot([rx,rx], [y,y+barh], c=c_right)
+                                                        pl.plot([lx,rx],[y+barh, y+barh], c='black')
+                                                        return mid
+    
+                                                    if mod == 'CSS':
+                                                        if diff_gauss:
+                                                            css_text_pos = text_height+1.5*text_distance
+                                                            c_left = 'blue'
+                                                            c_right = 'orange'
+                                                            lx, ly = bar_position-3*bar_or_violin_width, css_text_pos
+                                                            rx, ry = bar_position-bar_or_violin_width, css_text_pos
+                                                        else:
+                                                            css_text_pos = text_height
+                                                            c_left = 'orange'
+                                                            c_right = 'red'                                                    
+                                                            lx, ly = bar_position-bar_or_violin_width, css_text_pos
+                                                            rx, ry = bar_position, css_text_pos
+                                                            
+                                                        
+                                                        
+                                                    elif mod == 'DoG':
+                                                        if diff_gauss:
+                                                            dog_text_pos = text_height
+                                                            c_left = 'blue'
+                                                            c_right = 'green'
+                                                            lx, ly = bar_position-3*bar_or_violin_width, dog_text_pos
+                                                            rx, ry = bar_position-2*bar_or_violin_width, dog_text_pos
+                                                        else:
+                                                            dog_text_pos = text_height+1.5*text_distance     
+                                                            c_left = 'green'
+                                                            c_right = 'red'
+                                                            lx, ly = bar_position-2*bar_or_violin_width, dog_text_pos
+                                                            rx, ry = bar_position, dog_text_pos                                                        
+                                                                                                         
+                                                        
+                                                        
+                                                    elif mod == 'Gauss' or 'Norm' in mod:
+                                                        c_left = 'blue'
+                                                        c_right = 'red'
+                                                        #used to be bar_position-3*bar_or_violin_width
+                                                        lx, ly = bar_position-bar_or_violin_width, text_height+3*text_distance  
+                                                        rx, ry = bar_position, text_height+3*text_distance                                                    
+                                                        
+                                                    mid = plot_comparison_bracket()
+                                                        
+                                                    pl.text(*mid, pval_str, fontsize=16, color=text_color, weight = 'bold', ha='center', va='bottom')
+                                   
+                                        
+                                    else:
+                                        if violin:
+                                            try:
+                                                viol_plot = pl.violinplot(y_par[analysis][subj][model][roi], [bar_position],
+                                                              widths=[bar_or_violin_width], showextrema=False, showmeans=True, showmedians=True)
+                                                
+                                                for viol in viol_plot['bodies']:
+                                                    viol.set_facecolor(cmap_rois[i])
+                                                    viol.set_edgecolor('black')
+                                                    viol.set_alpha(1.0)
+                                                    
+                                                viol_plot['cmeans'].set_color('black')
+                                                viol_plot['cmedians'].set_color('white')
+                                                
+                                                                               
+                                                
+                                                
+                                            except:
+                                                pass
+                                                        
+                                        else:
+                                            if 'Group' in subj and each_subj_on_group:
+                                                bar_err = None
+                                                
+                                            pl.bar(bar_position, bar_height, width=bar_or_violin_width, yerr=bar_err, 
+                                                   edgecolor=cmap_rois[i], color=cmap_rois[i])
+                                            
+                                            if i == (len(rois)-1):
+                                                pl.plot(np.linspace(-bar_or_violin_width,bar_position+bar_or_violin_width,10),np.zeros(10),color='k',ls='--',alpha=1,lw=1)
+                                            
+                                            if 'Group' in subj and each_subj_on_group:
+                                                ssj_datapoints_x = np.linspace(bar_position-0.15*bar_or_violin_width, bar_position+0.15*bar_or_violin_width, len(subjects)-len(groups))
+
+                                                ssj_group_stats_roi_means = []
+                                                ssj_group_stats_roi_errs = []
+                                                ssj_group_stats_roi_weights = []
+
+                                                for ssj_nr, ssj in enumerate([s for s in subjects if 'Group' not in s[0] and s[0] in self.groups_dict[group]]):
+                                                    if len(y_par[analysis][ssj[0]][model][roi])>10:
+                                                    
+                                                        ssj_stats = weightstats.DescrStatsW(y_par[analysis][ssj[0]][model][roi],
+                                                                    weights=rsq_y[analysis][ssj[0]][model][roi])
+                                                        
+                                                        ssj_group_stats_roi_means.append(ssj_stats.mean)
+                                                        ssj_group_stats_roi_weights.append(rsq_y[analysis][ssj[0]][model][roi].mean())
+                                                        
+                                                        if zconfint_err_alpha != None:
+                                                            yerr_sj = (np.abs(ssj_stats.zconfint_mean(alpha=zconfint_err_alpha) - ssj_stats.mean)).reshape(2,1)*upsampling_corr_factor**0.5
+                                                        else:
+                                                            yerr_sj = ssj_stats.std_mean*upsampling_corr_factor**0.5
+
+                                                        ssj_group_stats_roi_errs.append(yerr_sj)
+                                                            
+                                                        pl.errorbar(ssj_datapoints_x[ssj_nr], ssj_stats.mean,
+                                                        yerr=yerr_sj,  alpha=np.nanmax((0,np.nanmean(rsq_y[analysis][ssj[0]][model][roi]))),
+                                                        fmt='s',  mec='k', color=cmap_rois[i], ecolor='k')    
+
+                                                        #if i == 0:
+                                                        if  ssj_stats.mean<0:
+                                                            vanch_sj = 'top'
+                                                        else:
+                                                            vanch_sj = 'bottom'
+
+                                                        #sj number on plot
+                                                        #if space == 'fsnative'
+                                                        sj_number_on_plot = True
+                                                        if sj_number_on_plot:
+                                                            pl.text(ssj_datapoints_x[ssj_nr], ssj_stats.mean, int(ssj[0].split('_')[0].split('-')[1]), fontsize=12, color='k', ha='center', va=vanch_sj,
+                                                                    alpha=np.nanmax((0,np.nanmean(rsq_y[analysis][ssj[0]][model][roi]))))      
+
+                                                        plot_lines = True
+                                                        if plot_lines:
+                                                            dict_lines[analysis][ssj[0].split('_')[0]][model][roi]['xpos'].append(ssj_datapoints_x[ssj_nr])      
+                                                            dict_lines[analysis][ssj[0].split('_')[0]][model][roi]['ypos'].append(ssj_stats.mean)
+
+                                                            
+
+                                                            if group == groups[-1]:
+                                                                pl.plot(dict_lines[analysis][ssj[0].split('_')[0]][model][roi]['xpos'],dict_lines[analysis][ssj[0].split('_')[0]][model][roi]['ypos'],c='k',
+                                                                        alpha=np.mean([np.nanmax((0,np.nanmean(rsq_y[analysis][s[0]][model][roi]))) for s in subjects if ssj[0].split('_')[0] in s[0]]))
+
+                                        if stats_on_plot:    
+                                            
+                                            if 'Group' in subj:
+                                                diff = np.array(ssj_group_stats_roi_means)
+                                                diff_weights = np.array(ssj_group_stats_roi_weights)
+                                            else:
+                                                diff = y_par[analysis][subj][model][roi]
+                                                diff_weights = rsq_y[analysis][subj][model][roi]
+
+                                            pvals = []
+                                                
+                                            for ccc in range(10000):                                                                                                                                 
+                                                
+                                                #correct for upsampling
+                                                #ideally add rsq weighting, increase asterisks font size,
+
+                                                if 'Group' in subj:
+                                                    samp_idx = np.arange(len(diff))
+                                                    
+                                                else: 
+                                                    samp_idx = np.random.randint(0, len(diff), int(len(diff)/upsampling_corr_factor))
+
+                                                observ = diff[samp_idx]
+                                                observ_weights = diff_weights[samp_idx]
+                                                
+                                                signs = np.sign(np.random.rand(len(observ))-0.5)
+
+                                                null_distrib = signs*observ
+
+                                                null_mean = (null_distrib * observ_weights).sum()/(observ_weights.sum())
+                                                observ_mean = (observ * observ_weights).sum()/(observ_weights.sum())
+                                                                                           
+                                                pvals.append(np.abs(null_mean) >= np.abs(observ_mean))
+
+                                                        
+                                                    
+                                            pval = np.mean(pvals) 
+                                            print(f'roi {pval}')
+                                            
+                                            pval_str = ""
+                                            
+                                            #compute p values
+                                            if pval<0.01:
+                                                pval_str+="*"
+                                                if pval<1e-3:
+                                                    pval_str+="*"
+                                                    if pval<1e-4:
+                                                        pval_str+="*"
+                                       
+                                            if pval_str != '':
+                                                if bar_height>0:
+                                                    roi_pval_str = f"{roi.replace('custom.','').replace('HCPQ1Q6.','').replace('glasser_','')}\n{pval_str}"
+                                                    vanch = 'bottom'
+                                                else:
+                                                    roi_pval_str = f"{pval_str}\n{roi.replace('custom.','').replace('HCPQ1Q6.','').replace('glasser_','')}"
+                                                    vanch = 'top'
+                                                
+                                                if bar_err != None:
+                                                    text_y_pos = bar_height+(bar_err*np.sign(bar_height))
+                                                else:
+                                                    if each_subj_on_group:
+                                                        text_y_pos = np.sign(bar_height)*np.max(np.abs(ssj_group_stats_roi_means)) + np.sign(bar_height)*ssj_group_stats_roi_errs[np.argmax(np.abs(ssj_group_stats_roi_means))]
+                                                    else:
+                                                        text_y_pos = bar_height
+
+
+                                                pl.text(bar_position, text_y_pos, roi_pval_str,
+                                                     fontsize=16, color='k', weight = 'bold', ha='center', va=vanch)
+                                                                 
+                                    #before was 0.4* bar_or_violin_width
+                                    if len(self.only_models)>1:
+                                        bar_position += (bar_or_violin_width)
+                                    else:
+                                        bar_position += (0.4*bar_or_violin_width)
+                                    
+                                    
+                                    if group == groups[1]:
+                                        pl.xticks(x_ticks,x_labels, rotation=90, ha='left')
+                                    
+                                    # handles, labels = pl.gca().get_legend_handles_labels()
+                                    # by_label = dict(zip(labels, handles))
+                                    # if len(self.only_models) == 1:
+                                    #     pl.legend(by_label.values(), by_label.keys())
+                                        
+                                    if save_figures:
+    
+                                        pl.savefig(opj(figure_path, f"{subj.split('_')[0]} {model} Mean {y_parameter_toplevel} {y_parameter.replace('/','')}.pdf"), dpi=600, bbox_inches='tight')
+                                                              
+
+                        
+                        if not means_only:
+                            for i, roi in enumerate(rois):
+                                if len(y_par[analysis][subj][model][roi])>10:
+                                    ###################
+                                    #x vs y param by ROI
+                                    pl.figure(f"{analysis} {subj} {roi.replace('custom.','').replace('HCPQ1Q6.','').replace('glasser_','')} {y_parameter} VS {x_parameter}", figsize=(8, 8), frameon=True)
+                                    if log_yaxis:
+                                        pl.gca().set_yscale('log')
+                                    if log_xaxis:
+                                        pl.gca().set_xscale('log')
+                                    
+                                    if roi in ylim:
+                                        pl.ylim(ylim[roi])
+                                    if roi in xlim:
+                                        pl.xlim(xlim[roi])
+                                        
+                                    for model in self.only_models:
+                                        #bin stats 
+                                        x_par_sorted = np.argsort(x_par[analysis][subj][model][roi])
+                                        
+                                        
+                                        try:
+    
+                                            #set the weighting for regression and for plot alpha depending on the situation
+                                            
+                                            if np.allclose(rsq_y[analysis][subj][model][roi], rsq_x[analysis][subj][model][roi]):
+                                                
+                                                rsq_regr_weight[analysis][subj][model][roi] = rsq_y[analysis][subj][model][roi]
+                                                if rsq_alpha_plot:
+                                                    rsq_alpha_plots_all_rois = np.nan_to_num(np.array([np.nanmean(rsq_y[analysis][subj][model][r]) for r in rois if 'all' not in r and 'combined' not in r and 'Brain' not in r and len(y_par[analysis][subj][model][r])>10]))
+    
+    
+                                            else:
+    
+                                                if y_parameter_toplevel != '':
+                                                    rsq_regr_weight[analysis][subj][model][roi] = rsq_x[analysis][subj][model][roi]
+                                                    
+                                                    if rsq_alpha_plot:
+                                                        rsq_alpha_plots_all_rois = np.nan_to_num(np.array([np.nanmean(rsq_x[analysis][subj][model][r]) for r in rois if 'all' not in r and 'combined' not in r and 'Brain' not in r and len(y_par[analysis][subj][model][r])>10]))
+
+                                                if x_parameter_toplevel != '':
+                                                    rsq_regr_weight[analysis][subj][model][roi] = rsq_y[analysis][subj][model][roi]
+                                                    
+                                                    if rsq_alpha_plot:
+                                                        rsq_alpha_plots_all_rois = np.nan_to_num(np.array([np.nanmean(rsq_y[analysis][subj][model][r]) for r in rois if 'all' not in r and 'combined' not in r and 'Brain' not in r and len(y_par[analysis][subj][model][r])>10]))
+    
+                                                elif x_param_model != '':
+                                                    rsq_regr_weight[analysis][subj][model][roi] = (rsq_y[analysis][subj][model][roi]+rsq_x[analysis][subj][model][roi])/2
+                                                    if rsq_alpha_plot:
+                                                        rsq_alpha_plots_all_rois = np.nan_to_num(np.array([np.nanmean((rsq_y[analysis][subj][model][roi]+rsq_x[analysis][subj][model][roi])/2) for r in rois if 'all' not in r and 'combined' not in r and 'Brain' not in r and len(y_par[analysis][subj][model][r])>10]))
+                                                    
+                                            
+                                            if bin_by == 'space':
+                                            #equally spaced bins
+                                                x_par_range = np.linspace(np.nanquantile(x_par[analysis][subj][model][roi], 0.05), np.nanquantile(x_par[analysis][subj][model][roi], 0.95), nr_bins)
+                                                split_x_par_bins = np.array_split(x_par_sorted, [np.nanargmin(np.abs(el-np.sort(x_par[analysis][subj][model][roi]))) for el in x_par_range])
+                                            elif bin_by == 'size':
+                                            #equally sized bins
+                                                split_x_par_bins = np.array_split(x_par_sorted, nr_bins)
+                                        
+                                        
+                                            for x_par_quantile in split_x_par_bins:
+                                                #ddof_correction_quantile = ddof_corr*np.sum(rsq[analysis][subj][model][roi][x_par_quantile])
+                                                
+                                                y_par_stats[analysis][subj][model][roi].append(weightstats.DescrStatsW(y_par[analysis][subj][model][roi][x_par_quantile],
+                                                                                                      weights=rsq_y[analysis][subj][model][roi][x_par_quantile]))
+                        
+                                                x_par_stats[analysis][subj][model][roi].append(weightstats.DescrStatsW(x_par[analysis][subj][model][roi][x_par_quantile],
+                                                                                                      weights=rsq_x[analysis][subj][model][roi][x_par_quantile]))
+                                                
+                                                rsq_y_stats[analysis][subj][model][roi].append(weightstats.DescrStatsW(rsq_y[analysis][subj][model][roi][x_par_quantile],
+                                                                                                      weights=np.ones_like(rsq_y[analysis][subj][model][roi][x_par_quantile])))
+                                                rsq_x_stats[analysis][subj][model][roi].append(weightstats.DescrStatsW(rsq_x[analysis][subj][model][roi][x_par_quantile],
+                                                                                                      weights=np.ones_like(rsq_x[analysis][subj][model][roi][x_par_quantile])))
+    
+    
+                                            curr_x_bins = np.array([ss.mean for ss in x_par_stats[analysis][subj][model][roi]])
+                                            curr_y_bins = np.array([ss.mean for ss in y_par_stats[analysis][subj][model][roi]])                                   
+                
+                                        except:
+                                            pass    
+        
+                                        if not scatter:
+                                            
+                                            if len(self.only_models)>1:
+                                                current_color = model_colors[model]
+                                                current_label = model
+                                            else:
+                                                current_color = cmap_rois[i]
+                                                current_label = roi.replace('custom.','').replace('HCPQ1Q6.','').replace('glasser_','')                                           
+                                            if fit:
+                                                try:
+                                                    WLS = LinearRegression()
+                                                    
+    
+                                                    WLS.fit(x_par[analysis][subj][model][roi].reshape(-1, 1), y_par[analysis][subj][model][roi], sample_weight=rsq_regr_weight[analysis][subj][model][roi])
+        
+                                                    wls_score = WLS.score(x_par[analysis][subj][model][roi].reshape(-1, 1),
+                                                                          y_par[analysis][subj][model][roi].reshape(-1, 1),
+                                                                        sample_weight=rsq_regr_weight[analysis][subj][model][roi].reshape(-1, 1))
+                                                    
+                                                    _, pval_lin = spearmanr(x_par[analysis][subj][model][roi],y_par[analysis][subj][model][roi])
+                                                    
+                                                    print(f"{roi} {model} WLS score {wls_score}")
+                                                    
+                                                    
+                                                    if exp_fit:
+                                                        #start points for sigmoid fits
+                                                        x0s = [[1,1,0.5,1],[-1,1,0.5,1],[-10,10,1,10],[10,10,1,10],[1,100,0.5,1],[-1,100,0.5,1],[-5,20,0.28,56]]
+                                                        curr_min_res = np.inf
+                                                        
+                                                        for x0 in x0s:
+                                                            try:
+                                                                res = minimize(lambda x,a,y:1-r2_score(y,x[3]+x[0]/(x[1]*np.exp(-x[2]*a)+1),sample_weight=rsq_regr_weight[analysis][subj][model][roi]), x0=x0,
+                                                                               args=(x_par[analysis][subj][model][roi],
+                                                                                     y_par[analysis][subj][model][roi]),
+                                                                               method='Powell', options={'ftol':1e-8, 'xtol':1e-8})
+                                                                if res['fun']<curr_min_res:
+                                                                    exp_res = deepcopy(res)
+                                                                    curr_min_res = deepcopy(res['fun'])
+                                                            except Exception as e:
+                                                                print(e)
+                                                                x0s.append(np.random.rand(4))
+                                                                pass
+                                                        
+                                                        
+                                                        
+                                                        exp_pred = exp_res['x'][3]+exp_res['x'][0]/(exp_res['x'][1]*np.exp(-exp_res['x'][2]*np.linspace(curr_x_bins.min(),curr_x_bins.max(),100))+1)
+                                                        #full_exp_pred = exp_res['x'][3]+exp_res['x'][0]/(exp_res['x'][1]*np.exp(-exp_res['x'][2]*x_par[analysis][subj][model][roi])+1)
+                                                        
+                                                        rsq_pred=1-exp_res['fun']
+                                                                
+                                                    for c in range(200):
+                                                        
+                                                        sample = np.random.randint(0, len(x_par[analysis][subj][model][roi]), int(len(x_par[analysis][subj][model][roi])/upsampling_corr_factor))
+                                                        
+                                                        WLS_bootstrap = LinearRegression()
+                                                        WLS_bootstrap.fit(x_par[analysis][subj][model][roi][sample].reshape(-1, 1), y_par[analysis][subj][model][roi][sample], sample_weight=rsq_regr_weight[analysis][subj][model][roi][sample])
+                                                        
+                                                        bootstrap_fits[analysis][subj][model][roi].append(WLS_bootstrap.predict(curr_x_bins.reshape(-1, 1)))
+                                                
+                                                                                                                
+                                                        
+                                                    pl.plot(curr_x_bins,
+                                                        WLS.predict(curr_x_bins.reshape(-1, 1)),
+                                                        color=current_color, label=f"Lin. R2={wls_score:.2f}")# p={pval_lin:.2e}")
+                                                    
+                                                    if exp_fit:
+                                                        pl.plot(np.linspace(curr_x_bins.min(),curr_x_bins.max(),100), exp_pred, 
+                                                                color=current_color, label=f"Sigm. R2={rsq_pred:.2f}", ls='--')
+                                              
+                                                    #conf interval shading s
+                                                    pl.fill_between(curr_x_bins,
+                                                                np.min(bootstrap_fits[analysis][subj][model][roi], axis=0),
+                                                                np.max(bootstrap_fits[analysis][subj][model][roi], axis=0),
+                                                                alpha=0.2, color=current_color, label=f"Lin. R2={wls_score:.2f}")# p={pval_lin:.2e}")
+                                                    
+                                                
+    
+                                                        
+                                                except Exception as e:
+                                                    print(e)
+                                                    pass
+                                            
+                                            try:
+                                                if zconfint_err_alpha != None:
+                                                    curr_yerr = np.array([np.abs(ss.zconfint_mean(alpha=zconfint_err_alpha)-ss.mean) for ss in y_par_stats[analysis][subj][model][roi]]).T*upsampling_corr_factor**0.5
+                                                    curr_xerr = np.array([np.abs(ss.zconfint_mean(alpha=zconfint_err_alpha)-ss.mean) for ss in x_par_stats[analysis][subj][model][roi]]).T*upsampling_corr_factor**0.5
+                                                else:
+                                                    curr_yerr = np.array([ss.std_mean for ss in y_par_stats[analysis][subj][model][roi]])*upsampling_corr_factor**0.5
+                                                    curr_xerr = np.array([ss.std_mean for ss in x_par_stats[analysis][subj][model][roi]])*upsampling_corr_factor**0.5
+                                                    
+                                                
+                                                pl.errorbar(curr_x_bins,
+                                                    curr_y_bins,
+                                                    yerr=curr_yerr,
+                                                    xerr=curr_xerr,
+                                                    fmt='s',  mec='black', label=current_label, color=current_color)#, mfc=model_colors[model], ecolor=model_colors[model])
+    
+                                               
+                                                    
+                                            except Exception as e:
+                                                print(e)
+                                                pass
+                                        else:
+                                            try:
+                                                if len(self.only_models)>1:
+                                                    current_color = model_colors[model]
+                                                    current_label = model
+                                                else:
+                                                    current_color = cmap_rois[i]
+                                                    current_label = roi.replace('custom.','').replace('HCPQ1Q6.','').replace('glasser_','')
+                                                    
+                                                scatter_cmap = colors.LinearSegmentedColormap.from_list(
+                                                    'alpha_rsq', [(0, (*colors.to_rgb(current_color),0)), (1, current_color)])
+                                                    
+                                                pl.scatter(x_par[analysis][subj][model][roi], y_par[analysis][subj][model][roi], marker='o', s=0.01,
+                                                    label=current_label, zorder=len(rois)-i, c=rsq_regr_weight[analysis][subj][model][roi], cmap=scatter_cmap)
+    
+                                            except Exception as e:
+                                                print(e)
+                                                pass                            
+                                
+
+                                if 'Eccentricity' in x_parameter or 'Size' in x_parameter:
+                                    pl.xlabel(f"{x_parameter} (°)")
+                                elif 'B/D' in x_parameter:
+                                    pl.xlabel(f"{x_parameter} (% signal change)")  
+                                elif x_parameter_toplevel != '' and 'Receptor' in x_parameter_toplevel:
+                                    pl.xlabel(f"{x_parameter} (pmol/ml)")                                                 
+                                else:
+                                    pl.xlabel(f"{x_parameter}")  
+        
+                                if x_param_model != '':
+                                    pl.xlabel(f"{x_param_model} {pl.gca().get_xlabel()}")
+                                
+                                if 'Eccentricity' in y_parameter or 'Size' in y_parameter:
+                                    pl.ylabel(f"{subj} {roi.replace('custom.','').replace('HCPQ1Q6.','').replace('glasser_','')} {y_parameter} (°)")
+                                elif 'B/D' in y_parameter:
+                                    pl.ylabel(f"{subj} {roi.replace('custom.','').replace('HCPQ1Q6.','').replace('glasser_','')} {y_parameter} (% signal change)")
+                                elif y_parameter_toplevel != '' and 'Receptor' in y_parameter_toplevel:
+                                    pl.ylabel(f"{subj} {roi.replace('custom.','').replace('HCPQ1Q6.','').replace('glasser_','')} {y_parameter} (pmol/ml)")                                                                   
+                                else:
+                                    pl.ylabel(f"{subj} {roi.replace('custom.','').replace('HCPQ1Q6.','').replace('glasser_','')} {y_parameter}")
+                                    
+                                
+                                    
+                                if show_legend:
+                                
+                                    handles, labels = pl.gca().get_legend_handles_labels()
+        
+                                    legend_dict = dd(list)
+                                    for cc, label in enumerate(labels):
+                                        legend_dict[label].append(handles[cc])
+                                        
+                                    for label in legend_dict:
+                                        legend_dict[label] = tuple(legend_dict[label])
+        
+                                    pl.legend([legend_dict[label] for label in legend_dict], legend_dict.keys())  
+                                    
+                                if save_figures:
+                                    
+                                    pl.savefig(opj(figure_path, f"{subj} {roi.replace('custom.','').replace('HCPQ1Q6.','').replace('glasser_','')} {y_parameter_toplevel} {y_parameter.replace('/','')} VS {x_parameter_toplevel} {x_param_model} {x_parameter.replace('/','')}.pdf"), dpi=600, bbox_inches='tight')
+                                    
+
+                        ########params by model (all rois)
+                        if not means_only:        
+                            for model in self.only_models:
+                                
+                                pl.figure(f"{analysis} {subj} {model} {y_parameter} VS {x_parameter}", figsize=(8, 8), frameon=True)
+                                if log_yaxis:
+                                    pl.gca().set_yscale('log')
+                                if log_xaxis:
+                                    pl.gca().set_xscale('log')
+                                
+                                if model in ylim:
+                                    pl.ylim(ylim[model])
+                                if model in xlim:
+                                    pl.xlim(xlim[model])
+                                    
+                                all_rois_x_means = []
+                                all_rois_y_means = []
+                                all_rois_rsq_means = []
+                                all_rois_x = []
+                                all_rois_y = []
+                                all_rois_rsq = []
+                                
+                                all_rois_alpha = []
+                                    
+                                for i, roi in enumerate([r for r in rois if 'all' not in r and 'combined' not in r and 'Brain' not in r]):
+                                    
+                                    if len(y_par[analysis][subj][model][roi])>10:
+
+                                        current_color = cmap_rois[i]
+                                        current_label = roi.replace('custom.','').replace('HCPQ1Q6.','') .replace('glasser_','') 
+                                        
+                                        if not scatter:
+                                            curr_x_bins = np.array([ss.mean for ss in x_par_stats[analysis][subj][model][roi]])
+                                            curr_y_bins = np.array([ss.mean for ss in y_par_stats[analysis][subj][model][roi]])     
+                                            
+                                            if nr_bins == 1:
+                                                all_rois_x.append(x_par[analysis][subj][model][roi])
+                                                all_rois_y.append(y_par[analysis][subj][model][roi])
+                                                all_rois_rsq.append(rsq_regr_weight[analysis][subj][model][roi])
+                                                all_rois_x_means.append(curr_x_bins)
+                                                all_rois_y_means.append(curr_y_bins)
+                                                all_rois_rsq_means.append(np.nanmean(rsq_regr_weight[analysis][subj][model][roi]))
+                                                
+                                                #all_rois_alpha.append(np.where(alpha[analysis][subj][model][roi]>rsq_thresh)[0])
+                                                all_rois_alpha.append(np.where(alpha[analysis][subj][model][roi]>rsq_thresh)[0])
+                                                
+                                            
+                                            if fit:
+                                                try:
+                                                    WLS = LinearRegression()
+                                                    WLS.fit(x_par[analysis][subj][model][roi].reshape(-1, 1), y_par[analysis][subj][model][roi], sample_weight=rsq_regr_weight[analysis][subj][model][roi])
+                                                    
+               
+                                                    pl.plot(curr_x_bins,
+                                                        WLS.predict(curr_x_bins.reshape(-1, 1)),
+                                                        color=current_color, label=current_label)
+                                                        #color=roi_colors[roi]) 
+        
+                                                                                      
+                                                    # wls_score = WLS.score(curr_x_bins.reshape(-1, 1),
+                                                    #                       curr_y_bins.reshape(-1, 1),
+                                                    #                     sample_weight=np.array([ss.mean for ss in rsq_stats[analysis][subj][model][roi]]).reshape(-1, 1))
+                                                    # print(f"{roi} {model} WLS score {wls_score}")
+                                                except Exception as e:
+                                                    print(e)
+                                                    pass
+                                                
+                                                try:
+                                                    #conf interval shading
+                                                    pl.fill_between(curr_x_bins,
+                                                                    np.min(bootstrap_fits[analysis][subj][model][roi], axis=0),
+                                                                    np.max(bootstrap_fits[analysis][subj][model][roi], axis=0),
+                                                                    alpha=0.2, color=current_color, label=current_label)
+                                                    
+                                                except Exception as e:
+                                                    print(e)
+                                                    pass
+    
+                                            #data points with errors
+                                            if zconfint_err_alpha != None:
+                                                curr_yerr = np.array([np.abs(ss.zconfint_mean(alpha=zconfint_err_alpha)-ss.mean) for ss in y_par_stats[analysis][subj][model][roi]]).T*upsampling_corr_factor**0.5
+                                                curr_xerr = np.array([np.abs(ss.zconfint_mean(alpha=zconfint_err_alpha)-ss.mean) for ss in x_par_stats[analysis][subj][model][roi]]).T*upsampling_corr_factor**0.5
+                                            else:
+                                                curr_yerr = np.array([ss.std_mean for ss in y_par_stats[analysis][subj][model][roi]])*upsampling_corr_factor**0.5
+                                                curr_xerr = np.array([ss.std_mean for ss in x_par_stats[analysis][subj][model][roi]])*upsampling_corr_factor**0.5
+                                            
+                                            if rsq_alpha_plot:
+    
+                                                rsq_alpha_plot_max = np.nanmax(rsq_alpha_plots_all_rois)
+                                                rsq_alpha_plot_min = np.nanmin(rsq_alpha_plots_all_rois)   
+                                                                                          
+                                                alpha_plot = (np.nanmean(rsq_regr_weight[analysis][subj][model][roi])-rsq_alpha_plot_min)/(rsq_alpha_plot_max-rsq_alpha_plot_min)#np.nanmean(rsq_regr_weight[analysis][subj][model][roi])/rsq_alpha_plot_max#(1-rsq_alpha_plot_min)*(np.nanmean(rsq_regr_weight[analysis][subj][model][roi])-rsq_alpha_plot_min)/(rsq_alpha_plot_max-rsq_alpha_plot_min) + rsq_alpha_plot_min
+                                                
+                                            else:
+                                                alpha_plot = 1
+                                            #print(alpha_plot)
+                                            alpha_plot = np.clip(alpha_plot,0,1)
+                                            if np.isnan(alpha_plot) or not np.isfinite(alpha_plot):
+                                                alpha_plot = 0
+    
+                                            plot_hexbins = False
+                                            
+                                            if plot_hexbins:
+                                                roi_fill_color = 'k'
+                                                roi_border_color = 'w'
+                                            else:
+                                                roi_fill_color = current_color
+                                                roi_border_color = 'k'
+
+                                            if nr_bins == 1:
+                                                ms=16
+                                                mew=2
+                                            else:
+                                                ms=5
+                                                mew=1
+
+                                                
+                                            pl.errorbar(curr_x_bins,
+                                                curr_y_bins,
+                                                yerr=0,#curr_yerr,
+                                                xerr=0,#curr_xerr,
+                                            fmt='s ', mec=roi_border_color, color=roi_fill_color, label=current_label, alpha=alpha_plot, ms=ms, mew=mew)#color=current_color, ###mfc=roi_colors[roi], ecolor=roi_colors[roi])
+                                            
+                                            if rois_on_plot: 
+                                                roi_name_txt = pl.text(curr_x_bins[-1], curr_y_bins[-1], current_label, fontsize=25, alpha=alpha_plot, color=roi_fill_color,  ha='left', va='bottom') #color=current_color,
+                                                roi_name_txt.set_path_effects([peff.withStroke(linewidth=1, foreground=roi_border_color)])
+                        
+                                        
+                                        else:
+                                            
+                                            try:
+        
+                                                
+                                                scatter_cmap = colors.LinearSegmentedColormap.from_list(
+                                                    'alpha_rsq', [(0, (*colors.to_rgb(current_color),0)), (1, current_color)])
+                                                    
+                                                pl.scatter(x_par[analysis][subj][model][roi], y_par[analysis][subj][model][roi], marker='o', s=0.01,
+                                                    label=current_label, zorder=len(rois)-i, c=rsq_x[analysis][subj][model][roi], cmap=scatter_cmap)
+        
+                                            except Exception as e:
+                                                print(e)
+                                                pass       
+ 
+      
+
+                                if nr_bins == 1:
+                                    
+                                    all_rois_rsq_means = np.array(all_rois_rsq_means)
+                                    all_rois_x_means = np.concatenate(all_rois_x_means)
+                                    all_rois_y_means = np.concatenate(all_rois_y_means)
+                                    all_rois_rsq = np.concatenate(all_rois_rsq)
+                                    all_rois_x = np.concatenate(all_rois_x)
+                                    all_rois_y = np.concatenate(all_rois_y)
+                                    
+                                    all_rois_alpha = np.concatenate(all_rois_alpha)
+                                    
+                                    
+                                    normalize_rsq = False
+                                    use_roi_means = True
+                                    #NOTE if doing full_data: set plot hexbins to true. has been moved above to manage roi datapoints color
+                                    use_full_data = False
+                                    perm_yw = False
+                                    
+                                    n_perm = 1000000
+                                    
+                                    #np.save('/Users/marcoaqil/full_quantrois.npy', all_rois_alpha)
+                                    #np.save(f'/Users/marcoaqil/{x_parameter}_alpha.npy', all_rois_alpha)
+                                    #np.save(f'/Users/marcoaqil/{x_parameter}_quant.npy', all_rois_x)
+                                    
+                                    #an attempt to use a normalized r2 value as weight. correlations seems slightly stronger; pvals unaffected
+                                    if normalize_rsq:                                        
+                                        all_rois_rsq_means = (all_rois_rsq_means - all_rois_rsq_means.min()) / (all_rois_rsq_means.max() - all_rois_rsq_means.min())                                    
+                                        all_rois_rsq = (all_rois_rsq - all_rois_rsq.min()) / (all_rois_rsq.max() - all_rois_rsq.min())
+                                    
+                                    
+                                    if use_roi_means:
+                                        CC_w = weightstats.DescrStatsW(np.stack((all_rois_x_means,all_rois_y_means)).T, weights=all_rois_rsq_means).corrcoef[0,1]
+                                    if use_full_data:
+                                        CC_w_full_data = weightstats.DescrStatsW(np.stack((all_rois_x,all_rois_y)).T, weights=all_rois_rsq).corrcoef[0,1]
+                                        
+                                        eigvecs_reduced, ft_x = reduced_graph_ft(all_rois_x, all_rois_alpha, 
+                                                                                 eigenvectors_path='/Users/marcoaqil/1000eigvecs_full_quantrois.npy', 
+                                                                                 eigenvectors_indices_path='/Users/marcoaqil/full_quantrois.npy', 
+                                                                                 pycortex_subj=pycortex_subj)
+                                        data_max_x = all_rois_x.max()
+                                        data_min_x = all_rois_x.min()
+                                        
+                                        if perm_yw:
+                                            _, ft_y = reduced_graph_ft(all_rois_y, all_rois_alpha, 
+                                                                                     eigenvectors_path='/Users/marcoaqil/1000eigvecs_full_quantrois.npy', 
+                                                                                     eigenvectors_indices_path='/Users/marcoaqil/full_quantrois.npy', 
+                                                                                     pycortex_subj=pycortex_subj)
+                                            data_max_y = all_rois_y.max()
+                                            data_min_y = all_rois_y.min()   
+                                            
+                                            _, ft_w = reduced_graph_ft(all_rois_rsq, all_rois_alpha, 
+                                                                                     eigenvectors_path='/Users/marcoaqil/1000eigvecs_full_quantrois.npy', 
+                                                                                     eigenvectors_indices_path='/Users/marcoaqil/full_quantrois.npy', 
+                                                                                     pycortex_subj=pycortex_subj)
+                                            data_max_w = all_rois_rsq.max()
+                                            data_min_w = all_rois_rsq.min()                                        
+                                             
+                                    
+                                    CC_boot = []
+                                    CC_boot_full_data = []
+                                    
+                                    for perm in tqdm(range(n_perm)):                                        
+                                        if use_roi_means:
+                                            #samp_idx = np.random.randint(0, len(all_rois_x_means), len(all_rois_x_means))
+                                            perm_x = np.copy(all_rois_x_means)#[samp_idx]
+                                            perm_y = np.copy(all_rois_y_means)#[samp_idx]
+                                            perm_w = np.copy(all_rois_rsq_means)#[samp_idx] 
+                                            
+                                            np.random.shuffle(perm_x)
+                                            if perm_yw:
+                                                np.random.shuffle(perm_y)
+                                                np.random.shuffle(perm_w)
+                                            
+                                            CC_boot.append(weightstats.DescrStatsW(np.stack((perm_x,perm_y)).T, weights=perm_w).corrcoef[0,1])
+                                            
+                                        if use_full_data:
+                                            #samp_idx = np.random.randint(0, len(all_rois_x), int(len(all_rois_x)/upsampling_corr_factor))                                        
+                                            # perm_x = all_rois_x[samp_idx]
+                                            perm_y_full_data = np.copy(all_rois_y)#[samp_idx]
+                                            perm_w_full_data = np.copy(all_rois_rsq)#[samp_idx]      
+                                            
+                                            perm_x_full_data = graph_randomization(data_max_x, data_min_x, eigvecs_reduced, ft_x)#[samp_idx]
+                                            
+                                            if perm_yw:
+                                                perm_y_full_data = graph_randomization(data_max_y, data_min_y, eigvecs_reduced, ft_y)#[samp_idx]
+                                                perm_w_full_data = graph_randomization(data_max_w, data_min_w, eigvecs_reduced, ft_w)#[samp_idx]
+                                                
+                                            CC_boot_full_data.append(weightstats.DescrStatsW(np.stack((perm_x_full_data,perm_y_full_data)).T, 
+                                                                                             weights=perm_w_full_data).corrcoef[0,1])
+                                            
+                                            
+                                    
+                                    title_string = ""                                        
+                                    if use_roi_means:
+                                        print(f"null mean roi means CC (should be close to zero) {np.mean(CC_boot)}")
+                                        pval_wcc = np.sum(np.abs(CC_w)<np.abs(np.array(CC_boot)))/len(CC_boot)
+                                        
+                                        if n_perm >= 100000:
+                                            if pval_wcc<1e-2:
+                                                pval_string = '*'
+                                                if pval_wcc<1e-3:
+                                                    pval_string = '**'
+                                                    if pval_wcc<1e-4:
+                                                        pval_string = '***'                                                                                        
+                                            else:
+                                                pval_string = 'n.s.'
+                                        else:
+                                            pval_string = ""
+                                        
+                                        title_string += f"wCC={CC_w:.2f} p={pval_wcc:.2e} ({pval_string})"
+                                    
+                                    if use_full_data:
+                                        if use_roi_means:
+                                            title_string += "; "
+                                            
+                                        print(f"null mean full data CC (should be close to zero) {np.mean(CC_boot_full_data)}")
+                                        pval_wcc_full_data = np.sum(np.abs(CC_w_full_data)<np.abs(np.array(CC_boot_full_data)))/len(CC_boot_full_data)    
+                                        
+                                        if n_perm >= 100000:
+                                            if pval_wcc_full_data<1e-2:
+                                                pval_string_full_data = '*'
+                                                if pval_wcc_full_data<1e-3:
+                                                    pval_string_full_data = '**'
+                                                    if pval_wcc_full_data<1e-4:
+                                                        pval_string_full_data = '***'                                                                                        
+                                            else:
+                                                pval_string_full_data = 'n.s.'
+                                        else:
+                                            pval_string_full_data = ""
+                                            
+                                        title_string += f" wCCfd={CC_w_full_data:.2f} p={pval_wcc_full_data:.2e} ({pval_string_full_data})"                                        
+                                    
+                                    
+                                    pl.title(title_string)
+                                    
+
+
+                                    #new_cmap = pl.get_cmap('cmr.rainforest')
+                                    new_cmap = pl.get_cmap(cmr.get_sub_cmap('Reds', 0.05, 0.9))
+                                    bins_b = 'log'#None #'log'
+                                    
+
+                                    if plot_hexbins:
+                                        pl.hexbin(all_rois_x, all_rois_y, all_rois_rsq, gridsize=25, alpha=0.5, linewidths=0, bins=bins_b, edgecolors='none', cmap=new_cmap)#, cmap='binary') # mincnt=10,
+
+                                    #regression line
+                                                                       
+                                    
+                                    if use_roi_means:
+                                        WLS_comb = LinearRegression()
+                                        
+                                        WLS_comb.fit(all_rois_x_means.reshape(-1, 1), all_rois_y_means, sample_weight=all_rois_rsq_means)  
+
+                                        # if use_full_data:
+                                        #     WLS_comb_prediction = WLS_comb.predict(all_rois_x.reshape(-1, 1))    
+                                        #     pl.plot(all_rois_x[np.argsort(all_rois_x)],
+                                        #     WLS_comb_prediction[np.argsort(all_rois_x)],
+                                        #     color='w')            
+                                        # else:
+                                        WLS_comb_prediction = WLS_comb.predict(all_rois_x_means.reshape(-1, 1))                                          
+                                        pl.plot(all_rois_x_means[np.argsort(all_rois_x_means)],
+                                            WLS_comb_prediction[np.argsort(all_rois_x_means)],
+                                            color='k', zorder=1003)    
+                                        
+                                    if use_full_data:     
+                                        
+                                        WLS_comb_full_data = LinearRegression()
+                                        
+                                        WLS_comb_full_data.fit(all_rois_x.reshape(-1, 1), all_rois_y, sample_weight=all_rois_rsq)                                           
+                                        WLS_comb_full_data_prediction = WLS_comb_full_data.predict(all_rois_x.reshape(-1, 1))    
+                                        pl.plot(all_rois_x[np.argsort(all_rois_x)],
+                                            WLS_comb_full_data_prediction[np.argsort(all_rois_x)],
+                                            color='k', zorder=1000)                                         
+
+                                 
+                                    #bootstrap conf intervals
+                                    comb_boot_fits = []
+                                    comb_boot_fits_full_data = []
+                                    for bootc in range(200):
+                                        if use_roi_means:
+                                            samp_idx = np.random.randint(0, len(all_rois_x_means), len(all_rois_x_means))
+                                            bootc_x = all_rois_x_means[samp_idx]
+                                            bootc_y = all_rois_y_means[samp_idx]
+                                            bootc_w = all_rois_rsq_means[samp_idx]
+                                            
+                                            WLS_comb_boot = LinearRegression()
+                                            WLS_comb_boot.fit(bootc_x.reshape(-1, 1), bootc_y, sample_weight=bootc_w)  
+                                        if use_full_data:                                            
+                                            samp_idx_full_data = np.random.randint(0, len(all_rois_x), int(len(all_rois_x)/upsampling_corr_factor))
+                                            bootc_x_full_data = all_rois_x[samp_idx_full_data]
+                                            bootc_y_full_data = all_rois_y[samp_idx_full_data]
+                                            bootc_w_full_data = all_rois_rsq[samp_idx_full_data]    
+                                            WLS_comb_boot_full_data = LinearRegression()
+                                            WLS_comb_boot_full_data.fit(bootc_x_full_data.reshape(-1, 1), bootc_y_full_data, sample_weight=bootc_w_full_data)                                       
+
+                                        
+                                        if use_roi_means:
+                                            comb_boot_fits.append(WLS_comb_boot.predict(all_rois_x_means.reshape(-1, 1)))
+                                        if use_full_data:
+                                            comb_boot_fits_full_data.append(WLS_comb_boot_full_data.predict(all_rois_x.reshape(-1, 1)))
+                                    
+                                    
+                                    if use_roi_means:
+                                        comb_boot_fits = np.array(comb_boot_fits)
+                                    
+                                        conf_max = np.nanquantile(comb_boot_fits,0.95,axis=0)#WLS_comb_prediction + sem(comb_boot_fits,axis=0)#
+                                        conf_min = np.nanquantile(comb_boot_fits,0.05,axis=0)#WLS_comb_prediction - sem(comb_boot_fits,axis=0)#
+                                    
+                                    
+                                        pl.plot(all_rois_x_means[np.argsort(all_rois_x_means)],conf_max[np.argsort(all_rois_x_means)], color='k', ls = '--', zorder=1004)
+                                        pl.plot(all_rois_x_means[np.argsort(all_rois_x_means)],conf_min[np.argsort(all_rois_x_means)], color='k', ls = '--', zorder=1005)
+                                        
+                                    if use_full_data:
+                                        comb_boot_fits_full_data = np.array(comb_boot_fits_full_data)
+                                    
+                                        conf_max_full_data = np.nanquantile(comb_boot_fits_full_data,0.95,axis=0)#WLS_comb_prediction + sem(comb_boot_fits,axis=0)#
+                                        conf_min_full_data = np.nanquantile(comb_boot_fits_full_data,0.05,axis=0)#WLS_comb_prediction - sem(comb_boot_fits,axis=0)#                                        
+                                        
+                                        pl.plot(all_rois_x[np.argsort(all_rois_x)],conf_max_full_data[np.argsort(all_rois_x)], color='k', ls = '--', zorder=1001)
+                                        pl.plot(all_rois_x[np.argsort(all_rois_x)],conf_min_full_data[np.argsort(all_rois_x)], color='k', ls = '--', zorder=1002)                                    
+
+                                
+                                if 'Eccentricity' in x_parameter or 'Size' in x_parameter:
+                                    pl.xlabel(f"{x_parameter} (°)")
+                                elif 'B/D' in x_parameter:
+                                    pl.xlabel(f"{x_parameter} (% signal change)")   
+                                elif x_parameter_toplevel != '' and 'Receptor' in x_parameter_toplevel:
+                                    pl.xlabel(f"{x_parameter} (pmol/ml)")                                                 
+                                else:
+                                    pl.xlabel(f"{x_parameter}")
+                                    
+                                if x_param_model != '':
+                                    pl.xlabel(f"{x_param_model} {pl.gca().get_xlabel()}")                                    
+                                
+                                if 'Eccentricity' in y_parameter or 'Size' in y_parameter:
+                                    pl.ylabel(f"{subj} {model} {y_parameter} (°)")
+                                elif 'B/D' in y_parameter:
+                                    pl.ylabel(f"{subj} {model} {y_parameter} (% signal change)")  
+                                elif y_parameter_toplevel != '' and 'Receptor' in y_parameter_toplevel:
+                                    pl.ylabel(f"{subj} {model} {y_parameter} (pmol/ml)")                                                 
+                                else:
+                                    pl.ylabel(f"{subj} {model} {y_parameter}")
+                                    
+                                if show_legend:
+                                    handles, labels = pl.gca().get_legend_handles_labels()
+        
+                                    legend_dict = dd(list)
+                                    for cc, label in enumerate(labels):
+                                        legend_dict[label].append(handles[cc])
+                                        
+                                    for label in legend_dict:
+                                        legend_dict[label] = tuple(legend_dict[label])
+        
+                                    pl.legend([legend_dict[label] for label in legend_dict], legend_dict.keys())                      
+    
+                                if save_figures:
+
+                                    pl.savefig(opj(figure_path, f"{subj} {model} {y_parameter_toplevel} {y_parameter.replace('/','')} VS {x_parameter_toplevel} {x_param_model} {x_parameter.replace('/','')}.pdf"), dpi=600, bbox_inches='tight')
+
+
+        return
+    
+
+
     def quant_plots(self, x_parameter, y_parameter, rois, rsq_thresh, save_figures, figure_path,
                     space_names = 'fsnative', analysis_names = 'all', subject_ids='all', 
                     x_parameter_toplevel='', y_parameter_toplevel='', 
@@ -2375,8 +3861,11 @@ class visualize_results(object):
                                 x_labels.append(roi.replace('custom.','').replace('HCPQ1Q6.','').replace('glasser_','')+'\n')   
                                 
                                 for model in self.only_models:    
-                                                                    
-                                    pl.figure(f"{analysis} {subj} Mean {y_parameter}", figsize=(38, 18), frameon=True)
+                                    if len(rois)>15:  
+                                        pl.figure(f"{analysis} {subj} Mean {y_parameter}", figsize=(38, 18), frameon=True)
+                                    else:
+                                        pl.figure(f"{analysis} {subj} Mean {y_parameter}", figsize=(8, 8), frameon=True)
+
                                     
                                     if log_yaxis:
                                         pl.gca().set_yscale('log')
@@ -2799,8 +4288,9 @@ class visualize_results(object):
                                         bar_position += (bar_or_violin_width)
                                     else:
                                         bar_position += (0.4*bar_or_violin_width)
-    
-                                    pl.xticks(x_ticks,x_labels, rotation=90)
+
+
+                                    pl.xticks(x_ticks,x_labels, rotation=90, ha='left')
                                     
                                     # handles, labels = pl.gca().get_legend_handles_labels()
                                     # by_label = dict(zip(labels, handles))
