@@ -1972,7 +1972,7 @@ class visualize_results(object):
                     ylim={}, xlim={}, log_yaxis=False, log_xaxis = False, nr_bins = 8, weights='RSq',
                     x_param_model='', violin=False, scatter=False, diff_norm=False, diff_gauss=False, diff_gauss_x=False,
                     rois_on_plot = False, rsq_alpha_plot = False,
-                    means_only=False, stats_on_plot=False, bin_by='size', zscore_ydata=False, zscore_xdata=False,
+                    means_only=False, stats_on_plot=False, only_stats=False, bin_by='size', zscore_ydata=False, zscore_xdata=False,
                     zconfint_err_alpha = None, fit = True,exp_fit = False, show_legend=False, each_subj_on_group=False,
                     bold_voxel_volume = None, quantile_exclusion=0.999):
         """
@@ -2084,6 +2084,10 @@ class visualize_results(object):
                 bootstrap_fits = dd(lambda:dd(lambda:dd(lambda:dd(list))))
 
                 dict_lines = dd(lambda:dd(lambda:dd(lambda:dd(lambda:dd(list)))))
+
+                ssj_group_stats_roi_means = dd(lambda:dd(lambda:dd(lambda:dd(list))))
+                ssj_group_stats_roi_errs = dd(lambda:dd(lambda:dd(lambda:dd(list))))
+                ssj_group_stats_roi_weights = dd(lambda:dd(lambda:dd(lambda:dd(list))))
                 
                 
                 for analysis, analysis_res in analyses:       
@@ -2095,6 +2099,8 @@ class visualize_results(object):
                     if len(subjects)>1:
                         for group in groups:
                             subjects.append((f'Group_{group}', {}))
+                    
+                    print([ee[0] for ee in subjects])
                         
                     figure_path = base_fig_path
 
@@ -2108,6 +2114,9 @@ class visualize_results(object):
                         os.makedirs(figure_path)                            
                     
                     upsampling_corr_factors = dd(list)
+
+
+
                     for subj, subj_res in subjects:
 
                         if 'Group' not in subj:
@@ -2162,10 +2171,16 @@ class visualize_results(object):
                         x_labels=[]    
                         bar_position = 0
 
-                        if group == groups[1]:
-                            bar_position += 1.5*bar_or_violin_width
-                        elif group == groups[2]:
-                            bar_position += 3*bar_or_violin_width
+                        if len(groups)>1:
+
+                            if group == groups[1]:
+                                bar_position += 1.5*bar_or_violin_width
+                            elif group == groups[2]:
+                                bar_position += 3*bar_or_violin_width
+
+                        elif '-' in y_parameter or '-' in y_parameter_toplevel:
+                            if group == '10mg':
+                                bar_position += 1.5*bar_or_violin_width
                         
                         # binned eccentricity vs other parameters relationships       
             
@@ -2387,33 +2402,55 @@ class visualize_results(object):
                                 if i>0:
                                     bar_position += ((2+len(groups))*bar_or_violin_width)
 
-                                
-                                if group == groups[1]:
-                                    
+                                if len(groups)>1:
+                                    if group == groups[1]:
+                                        
+                                        label_position = bar_position+(0.5*bar_or_violin_width)*(len(self.only_models)-1)                     
+            
+                                        x_ticks.append(label_position)
+                                        x_labels.append(roi.replace('custom.','').replace('HCPQ1Q6.','').replace('glasser_','')+'\n')
+                                else:
                                     label_position = bar_position+(0.5*bar_or_violin_width)*(len(self.only_models)-1)                     
-          
+        
                                     x_ticks.append(label_position)
-                                    x_labels.append(roi.replace('custom.','').replace('HCPQ1Q6.','').replace('glasser_','')+'\n')   
-                                
-                                for model in self.only_models:    
+                                    x_labels.append(roi.replace('custom.','').replace('HCPQ1Q6.','').replace('glasser_','')+'\n')
 
-                                    if len(rois)>15 or 'Group' in subj:  
-                                        pl.figure(f"{analysis} {subj.split('_')[0]} Mean {y_parameter}", figsize=(38, 18), frameon=True)
+
+                                for model in self.only_models:
+
+                                    if len(rois)>15 or 'Group' in subj:
+                                         figsize = (38, 18)
                                     else:
-                                        pl.figure(f"{analysis} {subj.split('_')[0]} Mean {y_parameter}", figsize=(8, 8), frameon=True)
+                                        figsize=(12, 8)
+
+
+
+                                    if '-' in y_parameter:
+                                        y_parameter_str = y_parameter.replace(' '+y_parameter.split(' ')[-1],'')
+                                        y_parameter_toplevel_str = y_parameter_toplevel                                     
+                                    elif '-' in y_parameter_toplevel:
+                                        y_parameter_str = y_parameter
+                                        y_parameter_toplevel_str = y_parameter_toplevel.replace(' '+y_parameter_toplevel.split(' ')[-1],'')
+                                    else:
+                                        y_parameter_str = y_parameter
+                                        y_parameter_toplevel_str = y_parameter_toplevel
+
+                                    figname = f"{analysis} {subj.split('_')[0]} Mean {y_parameter_toplevel_str} {y_parameter_str}"
+
+                                    pl.figure(figname, figsize=figsize, frameon=True)
 
                                     
                                     if log_yaxis:
                                         pl.gca().set_yscale('log')
                                     
                                     if 'Eccentricity' in y_parameter or 'Size' in y_parameter:
-                                        pl.ylabel(f"{subj.split('_')[0]} Mean {y_parameter} (°)")
+                                        pl.ylabel(f"{subj.split('_')[0]} Mean {y_parameter_str} (°)")
                                     elif 'B/D' in y_parameter:
-                                        pl.ylabel(f"{subj.split('_')[0]} Mean {y_parameter} (% signal change)")
+                                        pl.ylabel(f"{subj.split('_')[0]} Mean {y_parameter_str} (% signal change)")
                                     elif y_parameter_toplevel != '' and 'Receptor' in y_parameter_toplevel:
-                                        pl.ylabel(f"{subj.split('_')[0]} Mean {y_parameter} (pmol/ml)")                                        
+                                        pl.ylabel(f"{subj.split('_')[0]} Mean {y_parameter_str} (pmol/ml)")                                        
                                     else:
-                                        pl.ylabel(f"{subj.split('_')[0]} Mean {y_parameter}")
+                                        pl.ylabel(f"{subj.split('_')[0]} Mean {y_parameter_str}")
                                         
                                     if 'Mean' in xlim:
                                         pl.xlim(xlim['Mean'])
@@ -2430,6 +2467,12 @@ class visualize_results(object):
                                         bar_err = (np.abs(full_roi_stats.zconfint_mean(alpha=zconfint_err_alpha) - bar_height)).reshape(2,1)*upsampling_corr_factor**0.5                                    
                                     else:
                                         bar_err = full_roi_stats.std_mean*upsampling_corr_factor**0.5
+
+
+                                    #horrible stuff out here
+                                    if not only_stats:
+                                        self.dict_stats_text_pos[analysis][subj][y_parameter_toplevel][y_parameter][model][roi]['barheight'] = bar_height+bar_err
+                                        self.dict_stats_text_pos[analysis][subj][y_parameter_toplevel][y_parameter][model][roi]['barpos'] = bar_position
                                         
     
     
@@ -2451,8 +2494,10 @@ class visualize_results(object):
                                         else:
                                             if 'Group' in subj and each_subj_on_group:
                                                 bar_err = None
+
+                                            if not only_stats:
                                             
-                                            pl.bar(bar_position, bar_height, width=bar_or_violin_width, yerr=bar_err, 
+                                                pl.bar(bar_position, bar_height, width=bar_or_violin_width, yerr=bar_err, 
                                                    edgecolor=model_colors[model], label=model, color=model_colors[model])
                                             
                                             if 'Group' in subj and each_subj_on_group:
@@ -2466,10 +2511,12 @@ class visualize_results(object):
                                                         yerr_sj = (np.abs(ssj_stats.zconfint_mean(alpha=zconfint_err_alpha) - ssj_stats.mean)).reshape(2,1)*upsampling_corr_factor**0.5
                                                     else:
                                                         yerr_sj = ssj_stats.std_mean*upsampling_corr_factor**0.5
+
+                                                    if not only_stats:
                                                        
-                                                    pl.errorbar(ssj_datapoints_x[ssj_nr], ssj_stats.mean,
-                                                    yerr=yerr_sj, alpha=np.nanmean(rsq_y[analysis][ssj[0]][model][roi]),
-                                                    fmt='s',  mec='k', color=model_colors[model], ecolor='k')
+                                                        pl.errorbar(ssj_datapoints_x[ssj_nr], ssj_stats.mean,
+                                                        yerr=yerr_sj, alpha=np.nanmean(rsq_y[analysis][ssj[0]][model][roi]),
+                                                        fmt='s',  mec='k', color=model_colors[model], ecolor='k')
                                         
     
                                                                                
@@ -2649,19 +2696,21 @@ class visualize_results(object):
                                         else:
                                             if 'Group' in subj and each_subj_on_group:
                                                 bar_err = None
+
+                                            if not only_stats:
                                                 
-                                            pl.bar(bar_position, bar_height, width=bar_or_violin_width, yerr=bar_err, 
+                                                pl.bar(bar_position, bar_height, width=bar_or_violin_width, yerr=bar_err, 
                                                    edgecolor=cmap_rois[i], color=cmap_rois[i])
                                             
                                             if i == (len(rois)-1):
-                                                pl.plot(np.linspace(-bar_or_violin_width,bar_position+bar_or_violin_width,10),np.zeros(10),color='k',ls='--',alpha=1,lw=1)
+                                                if not only_stats:
+                                                    pl.plot(np.linspace(-bar_or_violin_width,bar_position+bar_or_violin_width,10),np.zeros(10),color='k',ls='--',alpha=1,lw=1)
                                             
                                             if 'Group' in subj and each_subj_on_group:
-                                                ssj_datapoints_x = np.linspace(bar_position-0.15*bar_or_violin_width, bar_position+0.15*bar_or_violin_width, len(subjects)-len(groups))
 
-                                                ssj_group_stats_roi_means = []
-                                                ssj_group_stats_roi_errs = []
-                                                ssj_group_stats_roi_weights = []
+                                                ssj_datapoints_x = np.linspace(bar_position-0.3*bar_or_violin_width, bar_position+0.3*bar_or_violin_width, len([s for s in subjects if 'Group' not in s[0] and s[0] in self.groups_dict[group]]))
+
+
 
                                                 for ssj_nr, ssj in enumerate([s for s in subjects if 'Group' not in s[0] and s[0] in self.groups_dict[group]]):
                                                     if len(y_par[analysis][ssj[0]][model][roi])>10:
@@ -2669,22 +2718,24 @@ class visualize_results(object):
                                                         ssj_stats = weightstats.DescrStatsW(y_par[analysis][ssj[0]][model][roi],
                                                                     weights=rsq_y[analysis][ssj[0]][model][roi])
                                                         
-                                                        ssj_group_stats_roi_means.append(ssj_stats.mean)
-                                                        ssj_group_stats_roi_weights.append(rsq_y[analysis][ssj[0]][model][roi].mean())
+                                                        ssj_group_stats_roi_means[analysis][group][model][roi].append(ssj_stats.mean)
+                                                        ssj_group_stats_roi_weights[analysis][group][model][roi].append(rsq_y[analysis][ssj[0]][model][roi].mean())
                                                         
                                                         if zconfint_err_alpha != None:
                                                             yerr_sj = (np.abs(ssj_stats.zconfint_mean(alpha=zconfint_err_alpha) - ssj_stats.mean)).reshape(2,1)*upsampling_corr_factor**0.5
                                                         else:
                                                             yerr_sj = ssj_stats.std_mean*upsampling_corr_factor**0.5
 
-                                                        ssj_group_stats_roi_errs.append(yerr_sj)
+                                                        ssj_group_stats_roi_errs[analysis][group][model][roi].append(yerr_sj)
+
+                                                        if not only_stats:
                                                             
-                                                        pl.errorbar(ssj_datapoints_x[ssj_nr], ssj_stats.mean,
-                                                        yerr=yerr_sj,  alpha=np.nanmax((0,np.nanmean(rsq_y[analysis][ssj[0]][model][roi]))),
-                                                        fmt='s',  mec='k', color=cmap_rois[i], ecolor='k')    
+                                                            pl.errorbar(ssj_datapoints_x[ssj_nr], ssj_group_stats_roi_means[analysis][group][model][roi][ssj_nr],
+                                                            yerr=ssj_group_stats_roi_errs[analysis][group][model][roi][ssj_nr],  alpha=np.nanmax((0,np.nanmean(rsq_y[analysis][ssj[0]][model][roi]))),
+                                                            fmt='s',  mec='k', color=cmap_rois[i], ecolor='k')    
 
                                                         #if i == 0:
-                                                        if  ssj_stats.mean<0:
+                                                        if  ssj_group_stats_roi_means[analysis][group][model][roi][ssj_nr]<0:
                                                             vanch_sj = 'top'
                                                         else:
                                                             vanch_sj = 'bottom'
@@ -2693,32 +2744,37 @@ class visualize_results(object):
                                                         #if space == 'fsnative'
                                                         sj_number_on_plot = True
                                                         if sj_number_on_plot:
-                                                            pl.text(ssj_datapoints_x[ssj_nr], ssj_stats.mean, int(ssj[0].split('_')[0].split('-')[1]), fontsize=12, color='k', ha='center', va=vanch_sj,
+                                                            if not only_stats:
+                                                                pl.text(ssj_datapoints_x[ssj_nr], ssj_group_stats_roi_means[analysis][group][model][roi][ssj_nr], int(ssj[0].split('_')[0].split('-')[1]), fontsize=12, color='k', ha='center', va=vanch_sj,
                                                                     alpha=np.nanmax((0,np.nanmean(rsq_y[analysis][ssj[0]][model][roi]))))      
 
                                                         plot_lines = True
                                                         if plot_lines:
                                                             dict_lines[analysis][ssj[0].split('_')[0]][model][roi]['xpos'].append(ssj_datapoints_x[ssj_nr])      
-                                                            dict_lines[analysis][ssj[0].split('_')[0]][model][roi]['ypos'].append(ssj_stats.mean)
+                                                            dict_lines[analysis][ssj[0].split('_')[0]][model][roi]['ypos'].append(ssj_group_stats_roi_means[analysis][group][model][roi][ssj_nr])
 
                                                             
 
                                                             if group == groups[-1]:
-                                                                pl.plot(dict_lines[analysis][ssj[0].split('_')[0]][model][roi]['xpos'],dict_lines[analysis][ssj[0].split('_')[0]][model][roi]['ypos'],c='k',
+                                                                if not only_stats:
+                                                                    pl.plot(dict_lines[analysis][ssj[0].split('_')[0]][model][roi]['xpos'],dict_lines[analysis][ssj[0].split('_')[0]][model][roi]['ypos'],c='k',
                                                                         alpha=np.mean([np.nanmax((0,np.nanmean(rsq_y[analysis][s[0]][model][roi]))) for s in subjects if ssj[0].split('_')[0] in s[0]]))
 
-                                        if stats_on_plot:    
+                                        if stats_on_plot:
+                                            #do stats once when subj is in last group
+
+                                            #if 'Group' in subj and 'placebo' not in subj:   #group == groups[-1]:    
                                             
                                             if 'Group' in subj:
-                                                diff = np.array(ssj_group_stats_roi_means)
-                                                diff_weights = np.array(ssj_group_stats_roi_weights)
+                                                diff = np.array(ssj_group_stats_roi_means[analysis][group][model][roi])
+                                                diff_weights = np.array(ssj_group_stats_roi_weights[analysis][group][model][roi])
                                             else:
                                                 diff = y_par[analysis][subj][model][roi]
                                                 diff_weights = rsq_y[analysis][subj][model][roi]
 
                                             pvals = []
                                                 
-                                            for ccc in range(10000):                                                                                                                                 
+                                            for ccc in range(100000):                                                                                                                                 
                                                 
                                                 #correct for upsampling
                                                 #ideally add rsq weighting, increase asterisks font size,
@@ -2738,7 +2794,7 @@ class visualize_results(object):
 
                                                 null_mean = (null_distrib * observ_weights).sum()/(observ_weights.sum())
                                                 observ_mean = (observ * observ_weights).sum()/(observ_weights.sum())
-                                                                                           
+                                                                                        
                                                 pvals.append(np.abs(null_mean) >= np.abs(observ_mean))
 
                                                         
@@ -2755,36 +2811,57 @@ class visualize_results(object):
                                                     pval_str+="*"
                                                     if pval<1e-4:
                                                         pval_str+="*"
-                                       
+                                    
                                             if pval_str != '':
-                                                if bar_height>0:
-                                                    roi_pval_str = f"{roi.replace('custom.','').replace('HCPQ1Q6.','').replace('glasser_','')}\n{pval_str}"
-                                                    vanch = 'bottom'
+                                                if not only_stats:
+                                                    if bar_height>0:
+                                                        roi_pval_str = f"{roi.replace('custom.','').replace('HCPQ1Q6.','').replace('glasser_','')}\n{pval_str}"
+                                                        vanch = 'bottom'
+                                                    else:
+                                                        roi_pval_str = f"{pval_str}\n{roi.replace('custom.','').replace('HCPQ1Q6.','').replace('glasser_','')}"
+                                                        vanch = 'top'
                                                 else:
-                                                    roi_pval_str = f"{pval_str}\n{roi.replace('custom.','').replace('HCPQ1Q6.','').replace('glasser_','')}"
-                                                    vanch = 'top'
+                                                    roi_pval_str = f"{pval_str}"
+                                                    vanch = 'bottom'                                                    
+
+                                                text_x_pos = bar_position
                                                 
                                                 if bar_err != None:
                                                     text_y_pos = bar_height+(bar_err*np.sign(bar_height))
                                                 else:
                                                     if each_subj_on_group:
-                                                        text_y_pos = np.sign(bar_height)*np.max(np.abs(ssj_group_stats_roi_means)) + np.sign(bar_height)*ssj_group_stats_roi_errs[np.argmax(np.abs(ssj_group_stats_roi_means))]
+                                                        text_y_pos = np.sign(bar_height)*np.max(np.abs(ssj_group_stats_roi_means[analysis][group][model][roi])) + np.sign(bar_height)*ssj_group_stats_roi_errs[analysis][group][model][roi][np.argmax(np.abs(ssj_group_stats_roi_means[analysis][group][model][roi]))]
                                                     else:
                                                         text_y_pos = bar_height
+                                             
+                                                if only_stats:
+                                                    text_x_pos = self.dict_stats_text_pos[analysis][subj][y_parameter_toplevel_str][y_parameter_str][model][roi]['barpos']
+                                                    text_y_pos = self.dict_stats_text_pos[analysis][subj][y_parameter_toplevel_str][y_parameter_str][model][roi]['barheight']
+
+                                                if 'Group' in subj:
+                                                    text_y_pos = 0
+                                                    vanch = 'top'
+                                                    fontsize=32
+                                                else:
+                                                    fontsize=16
 
 
-                                                pl.text(bar_position, text_y_pos, roi_pval_str,
-                                                     fontsize=16, color='k', weight = 'bold', ha='center', va=vanch)
-                                                                 
+                                                pl.text(text_x_pos, text_y_pos, roi_pval_str,
+                                                    fontsize=fontsize, color='k', weight = 'bold', ha='center', va=vanch)
+                                                                    
                                     #before was 0.4* bar_or_violin_width
                                     if len(self.only_models)>1:
                                         bar_position += (bar_or_violin_width)
                                     else:
                                         bar_position += (0.4*bar_or_violin_width)
+
+                                    if not only_stats:
                                     
-                                    
-                                    if group == groups[1]:
-                                        pl.xticks(x_ticks,x_labels, rotation=90, ha='left')
+                                        if len(groups)>1:
+                                            if group == groups[1]:
+                                                pl.xticks(x_ticks,x_labels, rotation=90, ha='left')
+                                        else:
+                                            pl.xticks(x_ticks,x_labels, rotation=90, ha='left')
                                     
                                     # handles, labels = pl.gca().get_legend_handles_labels()
                                     # by_label = dict(zip(labels, handles))
@@ -2792,8 +2869,9 @@ class visualize_results(object):
                                     #     pl.legend(by_label.values(), by_label.keys())
                                         
                                     if save_figures:
-    
-                                        pl.savefig(opj(figure_path, f"{subj.split('_')[0]} {model} Mean {y_parameter_toplevel} {y_parameter.replace('/','')}.pdf"), dpi=600, bbox_inches='tight')
+
+                                        pl.savefig(opj(figure_path, f"{subj.split('_')[0]} {model} Mean {y_parameter_toplevel_str} {y_parameter_str.replace('/','')}.pdf"), dpi=600, bbox_inches='tight')
+
                                                               
 
                         
@@ -4406,7 +4484,7 @@ class visualize_results(object):
                                                     
                                                     _, pval_lin = spearmanr(x_par[analysis][subj][model][roi],y_par[analysis][subj][model][roi])
                                                     
-                                                    print(f"{roi} {model} WLS score {wls_score}")
+                                                    pl.title(f"{roi} {model} pval unweighted {pval_lin:.3f}")
                                                     
                                                     
                                                     if exp_fit:
