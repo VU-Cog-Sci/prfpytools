@@ -358,6 +358,9 @@ elif os.path.exists(opj(data_path, f"{subj}_{session}_timecourse_space-{fitting_
     print("Using time series from: "+opj(data_path, f"{subj}_{session}_timecourse_space-{fitting_space}.npy"))
     tc_full_iso_nonzerovar_dict = {}
     tc_full_iso_nonzerovar_dict['tc'] = np.load(opj(data_path, f"{subj}_{session}_timecourse_space-{fitting_space}.npy"))
+    tc_full_iso_nonzerovar_dict['mask'] = np.load(opj(data_path, f"{subj}_{session}_mask_space-{fitting_space}.npy"))
+    tc_full_iso_nonzerovar_dict['order'] = np.load(opj(data_path, f"{subj}_{session}_order_space-{fitting_space}.npy"))
+
     if crossvalidate:
         tc_full_iso_nonzerovar_dict['tc_test'] = np.load(opj(data_path, f"{subj}_{session}_timecourse-test_space-{fitting_space}.npy"))
 
