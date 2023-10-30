@@ -675,7 +675,7 @@ if 'gauss' in models_to_fit:
         prev_gauss_grid_fit_params = np.load(gauss_gridparams_path)
         prev_gauss_grid_fit_mask = np.load(gauss_gridparams_path.replace(f"gridparams-gauss","mask"))
 
-        prev_gauss_grid_fit_params_unmasked = np.zeros(prev_gauss_grid_fit_mask.shape[0],prev_gauss_grid_fit_params.shape[1])
+        prev_gauss_grid_fit_params_unmasked = np.zeros((prev_gauss_grid_fit_mask.shape[0],prev_gauss_grid_fit_params.shape[1]))
         prev_gauss_grid_fit_params_unmasked[prev_gauss_grid_fit_mask] = prev_gauss_grid_fit_params
 
         prev_gauss_grid_fit_params_thismask = prev_gauss_grid_fit_params_unmasked[tc_full_iso_nonzerovar_dict['mask']][tc_full_iso_nonzerovar_dict['order']]
@@ -696,7 +696,7 @@ if 'gauss' in models_to_fit:
         prev_gauss_iter_fit_params = np.load(gauss_iterparams_path)
         prev_gauss_iter_fit_mask = np.load(gauss_iterparams_path.replace(f"iterparams-gauss","mask"))
 
-        prev_gauss_iter_fit_params_unmasked = np.zeros(prev_gauss_iter_fit_mask.shape[0],prev_gauss_iter_fit_params.shape[1])
+        prev_gauss_iter_fit_params_unmasked = np.zeros((prev_gauss_iter_fit_mask.shape[0],prev_gauss_iter_fit_params.shape[1]))
         prev_gauss_iter_fit_params_unmasked[prev_gauss_iter_fit_mask] = prev_gauss_iter_fit_params
 
         prev_gauss_iter_fit_params_thismask = prev_gauss_iter_fit_params_unmasked[tc_full_iso_nonzerovar_dict['mask']][tc_full_iso_nonzerovar_dict['order']]
@@ -862,7 +862,7 @@ if "CSS" in models_to_fit:
         prev_css_grid_fit_params = np.load(css_gridparams_path)
         prev_css_grid_fit_mask = np.load(css_gridparams_path.replace(f"gridparams-css","mask"))
 
-        prev_css_grid_fit_params_unmasked = np.zeros(prev_css_grid_fit_mask.shape[0],prev_css_grid_fit_params.shape[1])
+        prev_css_grid_fit_params_unmasked = np.zeros((prev_css_grid_fit_mask.shape[0],prev_css_grid_fit_params.shape[1]))
         prev_css_grid_fit_params_unmasked[prev_css_grid_fit_mask] = prev_css_grid_fit_params
 
         prev_css_grid_fit_params_thismask = prev_css_grid_fit_params_unmasked[tc_full_iso_nonzerovar_dict['mask']][tc_full_iso_nonzerovar_dict['order']]
@@ -879,7 +879,7 @@ if "CSS" in models_to_fit:
         prev_css_iter_fit_params = np.load(css_iterparams_path)
         prev_css_iter_fit_mask = np.load(css_iterparams_path.replace(f"iterparams-css","mask"))
 
-        prev_css_iter_fit_params_unmasked = np.zeros(prev_css_iter_fit_mask.shape[0],prev_css_iter_fit_params.shape[1])
+        prev_css_iter_fit_params_unmasked = np.zeros((prev_css_iter_fit_mask.shape[0],prev_css_iter_fit_params.shape[1]))
         prev_css_iter_fit_params_unmasked[prev_css_iter_fit_mask] = prev_css_iter_fit_params
 
         prev_css_iter_fit_params_thismask = prev_css_iter_fit_params_unmasked[tc_full_iso_nonzerovar_dict['mask']][tc_full_iso_nonzerovar_dict['order']]
@@ -1046,7 +1046,7 @@ if "DoG" in models_to_fit:
         prev_dog_grid_fit_params = np.load(dog_gridparams_path)
         prev_dog_grid_fit_mask = np.load(dog_gridparams_path.replace(f"gridparams-dog","mask"))
 
-        prev_dog_grid_fit_params_unmasked = np.zeros(prev_dog_grid_fit_mask.shape[0],prev_dog_grid_fit_params.shape[1])
+        prev_dog_grid_fit_params_unmasked = np.zeros((prev_dog_grid_fit_mask.shape[0],prev_dog_grid_fit_params.shape[1]))
         prev_dog_grid_fit_params_unmasked[prev_dog_grid_fit_mask] = prev_dog_grid_fit_params
 
         prev_dog_grid_fit_params_thismask = prev_dog_grid_fit_params_unmasked[tc_full_iso_nonzerovar_dict['mask']][tc_full_iso_nonzerovar_dict['order']]
@@ -1066,7 +1066,7 @@ if "DoG" in models_to_fit:
         prev_dog_iter_fit_params = np.load(dog_iterparams_path)
         prev_dog_iter_fit_mask = np.load(dog_iterparams_path.replace(f"iterparams-dog","mask"))
 
-        prev_dog_iter_fit_params_unmasked = np.zeros(prev_dog_iter_fit_mask.shape[0],prev_dog_iter_fit_params.shape[1])
+        prev_dog_iter_fit_params_unmasked = np.zeros((prev_dog_iter_fit_mask.shape[0],prev_dog_iter_fit_params.shape[1]))
         prev_dog_iter_fit_params_unmasked[prev_dog_iter_fit_mask] = prev_dog_iter_fit_params
 
         prev_dog_iter_fit_params_thismask = prev_dog_iter_fit_params_unmasked[tc_full_iso_nonzerovar_dict['mask']][tc_full_iso_nonzerovar_dict['order']]
@@ -1239,7 +1239,7 @@ if "norm" in models_to_fit:
             prev_norm_grid_fit_params = np.load(norm_gridparams_path)
             prev_norm_grid_fit_mask = np.load(norm_gridparams_path.replace(f"gridparams-norm{variant}","mask"))
 
-            prev_norm_grid_fit_params_unmasked = np.zeros(prev_norm_grid_fit_mask.shape[0],prev_norm_grid_fit_params.shape[1])
+            prev_norm_grid_fit_params_unmasked = np.zeros((prev_norm_grid_fit_mask.shape[0],prev_norm_grid_fit_params.shape[1]))
             prev_norm_grid_fit_params_unmasked[prev_norm_grid_fit_mask] = prev_norm_grid_fit_params
 
             prev_norm_grid_fit_params_thismask = prev_norm_grid_fit_params_unmasked[tc_full_iso_nonzerovar_dict['mask']][tc_full_iso_nonzerovar_dict['order']]
@@ -1259,7 +1259,7 @@ if "norm" in models_to_fit:
             prev_norm_iter_fit_params = np.load(norm_iterparams_path)
             prev_norm_iter_fit_mask = np.load(norm_iterparams_path.replace(f"iterparams-norm{variant}","mask"))
 
-            prev_norm_iter_fit_params_unmasked = np.zeros(prev_norm_iter_fit_mask.shape[0],prev_norm_iter_fit_params.shape[1])
+            prev_norm_iter_fit_params_unmasked = np.zeros((prev_norm_iter_fit_mask.shape[0],prev_norm_iter_fit_params.shape[1]))
             prev_norm_iter_fit_params_unmasked[prev_norm_iter_fit_mask] = prev_norm_iter_fit_params
 
             prev_norm_iter_fit_params_thismask = prev_norm_iter_fit_params_unmasked[tc_full_iso_nonzerovar_dict['mask']][tc_full_iso_nonzerovar_dict['order']]
