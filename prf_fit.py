@@ -717,7 +717,8 @@ if 'gauss' in models_to_fit:
                 gauss_bounds = np.array(gauss_bounds)
                 gauss_bounds = np.repeat(gauss_bounds[np.newaxis,...], gf.iterative_search_params.shape[0], axis=0)
 
-                gauss_bounds[:,-2:,:] = np.tile(gf.iterative_search_params[:,-3:-1],(2,1))
+                gauss_bounds[:,-2,:] = np.tile(gf.iterative_search_params[:,-3],(2,1)).T
+                gauss_bounds[:,-1,:] = np.tile(gf.iterative_search_params[:,-2],(2,1)).T
 
             gf.iterative_fit(rsq_threshold=rsq_threshold, verbose=verbose,
                             starting_params=gf.iterative_search_params,
@@ -901,7 +902,8 @@ if "CSS" in models_to_fit:
                 css_bounds = np.array(css_bounds)
                 css_bounds = np.repeat(css_bounds[np.newaxis,...], gf_css.iterative_search_params.shape[0], axis=0)
 
-                css_bounds[:,-2:,:] = np.tile(gf_css.iterative_search_params[:,-3:-1],(2,1))
+                css_bounds[:,-2,:] = np.tile(gf_css.iterative_search_params[:,-3],(2,1)).T
+                css_bounds[:,-1,:] = np.tile(gf_css.iterative_search_params[:,-2],(2,1)).T
     
             gf_css.iterative_fit(rsq_threshold=rsq_threshold, verbose=verbose,
                              starting_params=gf_css.iterative_search_params,
@@ -1087,7 +1089,8 @@ if "DoG" in models_to_fit:
                 dog_bounds = np.array(dog_bounds)
                 dog_bounds = np.repeat(dog_bounds[np.newaxis,...], gf_dog.iterative_search_params.shape[0], axis=0)
 
-                dog_bounds[:,-2:,:] = np.tile(gf_dog.iterative_search_params[:,-3:-1],(2,1))
+                dog_bounds[:,-2,:] = np.tile(gf_dog.iterative_search_params[:,-3],(2,1)).T
+                dog_bounds[:,-1,:] = np.tile(gf_dog.iterative_search_params[:,-2],(2,1)).T
     
             gf_dog.iterative_fit(rsq_threshold=rsq_threshold, verbose=verbose,
                              starting_params=gf_dog.iterative_search_params,
@@ -1280,7 +1283,9 @@ if "norm" in models_to_fit:
                     dict_norm_model_variants[f'norm_bounds_{variant}'] = np.array(dict_norm_model_variants[f'norm_bounds_{variant}'])
                     dict_norm_model_variants[f'norm_bounds_{variant}'] = np.repeat(dict_norm_model_variants[f'norm_bounds_{variant}'][np.newaxis,...], gf_norm.iterative_search_params.shape[0], axis=0)
 
-                    dict_norm_model_variants[f'norm_bounds_{variant}'][:,-2:,:] = np.tile(gf_norm.iterative_search_params[:,-3:-1],(2,1))
+                    dict_norm_model_variants[f'norm_bounds_{variant}'][:,-2,:] = np.tile(gf_norm.iterative_search_params[:,-3],(2,1)).T
+                    dict_norm_model_variants[f'norm_bounds_{variant}'][:,-1,:] = np.tile(gf_norm.iterative_search_params[:,-2],(2,1)).T
+
         
                 gf_norm.iterative_fit(rsq_threshold=rsq_threshold, verbose=verbose,
                                 starting_params=gf_norm.iterative_search_params,
