@@ -185,14 +185,15 @@ for subj_ses in subjects.split(','):
                 for variant in norm_model_variant:
 
                     if model in grid_models and refit_mode != "iterate":
-                        grid_path = opj(data_path, f"{subj}_{session}_gridparams-{model}{variant}_space-{fitting_space}")
-                        grid_result = np.concatenate(tuple([np.load(grid_path+str(chunk_nr)+".npy") for chunk_nr in range(n_chunks)]), axis=0)
-                
-                        grid_path+=analysis_time
-                
-                        grid_result[order] = np.copy(grid_result)
-                
-                        np.save(grid_path.replace(grid_path.split(os.path.sep)[1], replacer), grid_result) 
+                        if f"norm{variant}_gridparams_path" not in analysis_info and f"norm{variant}_iterparams_path" not in analysis_info:
+                            grid_path = opj(data_path, f"{subj}_{session}_gridparams-{model}{variant}_space-{fitting_space}")
+                            grid_result = np.concatenate(tuple([np.load(grid_path+str(chunk_nr)+".npy") for chunk_nr in range(n_chunks)]), axis=0)
+                    
+                            grid_path+=analysis_time
+                    
+                            grid_result[order] = np.copy(grid_result)
+                    
+                            np.save(grid_path.replace(grid_path.split(os.path.sep)[1], replacer), grid_result) 
                 
                     iter_path = opj(data_path, f"{subj}_{session}_iterparams-{model}{variant}_space-{fitting_space}")
                 
@@ -205,14 +206,15 @@ for subj_ses in subjects.split(','):
                     np.save(iter_path.replace(iter_path.split(os.path.sep)[1], replacer), model_result)
             else:
                 if model in grid_models and refit_mode != "iterate":
-                    grid_path = opj(data_path, f"{subj}_{session}_gridparams-{model}_space-{fitting_space}")
-                    grid_result = np.concatenate(tuple([np.load(grid_path+str(chunk_nr)+".npy") for chunk_nr in range(n_chunks)]), axis=0)
-            
-                    grid_path+=analysis_time
-            
-                    grid_result[order] = np.copy(grid_result)
-            
-                    np.save(grid_path.replace(grid_path.split(os.path.sep)[1], replacer), grid_result) 
+                    if f"{model}_gridparams_path" not in analysis_info and f"{model}_iterparams_path" not in analysis_info:
+                        grid_path = opj(data_path, f"{subj}_{session}_gridparams-{model}_space-{fitting_space}")
+                        grid_result = np.concatenate(tuple([np.load(grid_path+str(chunk_nr)+".npy") for chunk_nr in range(n_chunks)]), axis=0)
+                
+                        grid_path+=analysis_time
+                
+                        grid_result[order] = np.copy(grid_result)
+                
+                        np.save(grid_path.replace(grid_path.split(os.path.sep)[1], replacer), grid_result) 
             
                 iter_path = opj(data_path, f"{subj}_{session}_iterparams-{model}_space-{fitting_space}")
             
