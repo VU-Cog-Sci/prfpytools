@@ -1215,6 +1215,28 @@ if "norm" in models_to_fit:
 
             save_path = opj(data_path, f"{subj}_{session}_gridparams-norm{variant}_space-{fitting_space}{chunk_nr}")
 
+
+            if f"norm{variant}_grid_starting_params_path" in analysis_info:
+
+                norm_grid_starting_params_path = glob.glob(analysis_info[f"norm{variant}_grid_starting_params_path"].replace('$subj',subj).replace('$ses',session))[0]
+
+                if len(glob.glob(analysis_info[f"norm{variant}_grid_starting_params_path"].replace('$subj',subj).replace('$ses',session)))>1:
+                    print("warning: ambiguous starting params (more than one path found). check your files.")
+
+                norm_grid_starting_params = np.load(norm_grid_starting_params_path)
+
+                norm_grid_starting_params_mask = np.load(norm_grid_starting_params_path.replace(f"iterparams-norm{variant}","mask"))
+
+                norm_grid_starting_params_unmasked = np.zeros((norm_grid_starting_params_mask.shape[0],norm_grid_starting_params.shape[1]))
+                norm_grid_starting_params_unmasked[norm_grid_starting_params_mask] = norm_grid_starting_params
+
+                norm_grid_starting_params_thismask = norm_grid_starting_params_unmasked[tc_full_iso_nonzerovar_dict['mask']][tc_full_iso_nonzerovar_dict['order']]
+
+                norm_grid_starting_params = np.array_split(norm_grid_starting_params_thismask, n_chunks)[chunk_nr]
+            else:
+                norm_grid_starting_params = None
+
+
             if not os.path.exists(f"{save_path}.npy") or refit_mode == "overwrite":
 
 
@@ -1223,6 +1245,7 @@ if "norm" in models_to_fit:
                             dict_norm_model_variants[f'surround_size_grid_{variant}'],
                             dict_norm_model_variants[f'neural_baseline_grid_{variant}'],
                             dict_norm_model_variants[f'surround_baseline_grid_{variant}'],
+                            gaussian_params=norm_grid_starting_params,
                             verbose=verbose,
                             n_batches=n_batches,
                             rsq_threshold=rsq_threshold,

@@ -547,7 +547,7 @@ class visualize_results(object):
                             tc_stats = p_r['Timecourse Stats']
                         else:
                             tc_stats=dict()
-                            tc_stats['Mean'] = np.ones_like(p_r[alpha_weight][[mod for mod in self.only_models if mod in p_r[alpha_weight]][0]])
+                            tc_stats['Mean'] = np.ones_like(subj_res['mask']) #p_r[alpha_weight][[mod for mod in self.only_models if mod in p_r[alpha_weight]][0]])
                        
                         #######Raw bold timecourse vein threshold
                         if subj not in self.tc_min:
@@ -574,14 +574,16 @@ class visualize_results(object):
                         
 
                         if 'Mean' in tc_stats:
-                            p_r['Alpha']['all'] *= (tc_stats['Mean']>self.tc_min[subj])
+                            #p_r['Alpha']['all'] *= (tc_stats['Mean']>self.tc_min[subj])
+                            p_r['Alpha']['all'][tc_stats['Mean']<self.tc_min[subj]] = -1
 
                         
                         for model in models:
                             p_r['Alpha'][model] = p_r[alpha_weight][model] * (p_r['Eccentricity'][model]>self.ecc_min) * (p_r['Eccentricity'][model]<self.ecc_max)\
                                  #* (p_r['Noise Ceiling']['Noise Ceiling (RSq)']!=0)
                             if 'Mean' in tc_stats:
-                                p_r['Alpha'][model] *= (tc_stats['Mean']>self.tc_min[subj])
+                                #p_r['Alpha'][model] *= (tc_stats['Mean']>self.tc_min[subj])
+                                p_r['Alpha'][model][tc_stats['Mean']<self.tc_min[subj]] = -1
                                 
                             if threshold_li and '#Subjects with CVRSq>0' in p_r:
                                 
@@ -612,7 +614,8 @@ class visualize_results(object):
     def pycortex_plots(self, rois, rsq_thresh,
                        space_names = 'fsnative', analysis_names = 'all', subject_ids='all', param_diffs=[],
                        timecourse_folder = None, screenshot_paths = [], save_colorbars=False, pycortex_cmap = 'nipy_spectral',
-                       rsq_max_opacity = 0.5, pycortex_image_path = None, roi_borders_name = None):        
+                       rsq_max_opacity = 0.5, pycortex_image_path = None, roi_borders_name = None,
+                       clickerfun='standard'):        
         pl.rcParams.update({'font.size': 16})
         pl.rcParams.update({'pdf.fonttype':42})        
         self.click=0
@@ -621,8 +624,353 @@ class visualize_results(object):
                 os.makedirs(pycortex_image_path)
         self.pycortex_image_path = pycortex_image_path
 
-        #######PYCORTEX PICKERFUN
+        #######PYCORTEX PICKERFUNS
         #function to plot prf and timecourses when clicking surface vertex in webgl        
+
+        def groups_clicker_function(voxel,hemi,vertex):
+            if space == 'fsnative' or space == 'HCP':
+                print('recovering vertex index...')
+                #translate javascript indeing to python
+                lctm, rctm = cortex.utils.get_ctmmap(pycortex_subj, method='mg2', level=9)
+                if hemi == 'left':
+                    index = lctm[int(vertex)]
+                    #print(f"{model} rsq {p_r['RSq'][model][index]}")
+                else:
+                    index = len(lctm)+rctm[int(vertex)]
+                    #print(f"{model} rsq {p_r['RSq'][model][index]}") 
+                
+                    
+                print('recovering data and model timecourses...')
+
+                color_dict = {'placebo':'blue','5mg':'orange','10mg':'green'}                
+    
+                #recover needed information
+                an_info = subj_res['analysis_info']       
+                #this was added later
+                if 'normalize_integral_dx' not in an_info:
+                    an_info['normalize_integral_dx'] = False    
+
+
+                gen_subj = subj.split('_')[0]
+
+                this_subj_groups = dict()
+                
+                for group in self.groups:
+                    this_subj_groups[group] = [s for s in self.subjects if gen_subj in s and s in self.groups_dict[group]][0]
+          
+
+    
+                if not hasattr(self, 'prf_stim') or self.prf_stim.task_names != an_info['task_names']:
+        
+
+                    self.prf_stim = create_full_stim(screenshot_paths=screenshot_paths,
+                                n_pix=an_info['n_pix'],
+                                discard_volumes=an_info['discard_volumes'],
+                                dm_edges_clipping=an_info['dm_edges_clipping'],
+                                screen_size_cm=an_info['screen_size_cm'],
+                                screen_distance_cm=an_info['screen_distance_cm'],
+                                TR=an_info['TR'],
+                                task_names=an_info['task_names'],
+                                normalize_integral_dx=an_info['normalize_integral_dx'])
+                    
+
+                pl.ion()
+    
+                if self.click==0:
+                    gs_kw = dict(width_ratios=[1, 1, 1], height_ratios=[1, 1, 1, 20/8])
+                    self.cbar=dict()
+
+                    self.f, self.axes = pl.subplot_mosaic([[f'timecourse' for group in this_subj_groups.keys()],
+                                                [f'timecourse diffs' for group in this_subj_groups.keys()],
+                                                [f'{group} prf' for group in this_subj_groups.keys()],
+                                                [f'{group} vertex info' for group in this_subj_groups.keys()]],
+                                                gridspec_kw=gs_kw,
+                                                figsize=(18, 44))#, tight_layout=True)
+
+                else:
+                    for k in self.cbar:
+                        self.cbar[k].remove()
+                    for k, ax in self.axes.items():
+                        ax.clear()
+
+
+                preds = dd(dict)
+                prfs = dd(dict) 
+                tc = dd(dict)
+                tc_err = dd(dict)
+                tc_test = dd(dict)
+                tc_fit = dd(dict)
+
+                tc_full = dict()
+                tc_full_err = dict()
+
+                tc_full_test = dict()
+                tc_full_fit = dict()
+
+                base_group = 'placebo'
+    
+                for n_group, group in enumerate(this_subj_groups):
+
+                    this_subj = this_subj_groups[group]
+                    this_subj_res = analysis_res[this_subj]
+
+                    vertex_info = ""
+
+
+
+                    tc_paths = [str(path) for path in sorted(Path(timecourse_folder).glob(f"{this_subj}_timecourse_space-{an_info['fitting_space']}_task-*_run-*.npy"))]   
+
+                    mask_paths = [tc_path.replace('timecourse_','mask_') for tc_path in tc_paths]
+                    #all_task_names = np.unique(np.array([elem.replace('task-','') for path in tc_paths for elem in path.split('_')  if 'task' in elem]))
+                    all_runs = np.unique(np.array([int(elem.replace('run-','').replace('.npy','')) for path in tc_paths for elem in path.split('_')  if 'run-' in elem]))
+
+
+                    
+                    for i,task in enumerate(an_info['task_names']):
+                        if task not in self.prf_stims:
+                            self.prf_stims[task] = create_full_stim(screenshot_paths=[screenshot_paths[i]],
+                                    n_pix=an_info['n_pix'],
+                                    discard_volumes=an_info['discard_volumes'],
+                                    dm_edges_clipping=an_info['dm_edges_clipping'],
+                                    screen_size_cm=an_info['screen_size_cm'],
+                                    screen_distance_cm=an_info['screen_distance_cm'],
+                                    TR=an_info['TR'],
+                                    task_names=[task],
+                                    normalize_integral_dx=an_info['normalize_integral_dx'])                    
+                            
+                        tc_runs=[]
+
+                        #red_per = self.prf_stims[task].late_iso_dict['periods'][(self.prf_stims[task].late_iso_dict['periods']<20) | (self.prf_stims[task].late_iso_dict['periods']>234)]
+
+                        
+                        for run in all_runs:
+                            mask_run = [np.load(mask_path) for mask_path in mask_paths if f"task-{task}_" in mask_path and f"run-{run}." in mask_path][0]
+                            
+                            if space == 'HCP':
+                                tc_run_idx = np.sum(this_subj_res['mask'][:index])
+                            else:
+                                tc_run_idx = np.sum(mask_run[:index])
+                            
+                            tc_runs.append([np.load(tc_path)[tc_run_idx] for tc_path in tc_paths if f"task-{task}_" in tc_path and f"run-{run}." in tc_path][0])
+
+
+                            tc_runs[-1] -= np.median(tc_runs[-1][...,self.prf_stims[task].late_iso_dict[task]], axis=-1)[...,np.newaxis]
+
+                            
+                        
+                        tc[group][task] = np.mean(tc_runs, axis=0)
+                        
+                        tc_err[group][task] = sem(tc_runs, axis=0)
+                        
+                        tc[group][task] -= np.median(tc[group][task][...,self.prf_stims[task].late_iso_dict[task]], axis=-1)[...,np.newaxis]
+                        #tc[task] -= np.median(tc[task][...,red_per], axis=-1)[...,np.newaxis]
+
+
+                        #if 'CVmean' in analysis or 'CVmedian' in analysis:
+                        #    vertex_info+=f"WARNING: predictions based on mean/median CV parameters are not usually meaningful\n"
+
+                        vertex_info+=f"{task} late iso dict median: {np.median(tc[group][task][self.prf_stims[task].late_iso_dict[task]]):.4f}\n"
+
+                    
+                        #fit and test timecourses separately
+                        if an_info['crossvalidate']:
+                            if 'fit_runs' in an_info:
+                                tc_test[group][task] = np.mean([tc_runs[i] for i in all_runs if i not in an_info['fit_runs']], axis=0)
+                                tc_fit[group][task] = np.mean([tc_runs[i] for i in all_runs if i in an_info['fit_runs']], axis=0)
+                            elif 'fit_task' not in an_info:
+                                print("warning: fit runs not specified. guessing based on space. check code.")
+                                if space == 'HCP':
+                                    fit_runs = [0]
+                                elif space == 'fsnative':
+                                    fit_runs = [0,2,4]
+                                tc_test[group][task] = np.mean([tc_runs[i] for i in all_runs if i not in fit_runs], axis=0)
+                                tc_fit[group][task] = np.mean([tc_runs[i] for i in all_runs if i in fit_runs], axis=0)
+                                
+                            #tc_test[task] *= (100/tc_test[task].mean(-1))[...,np.newaxis]
+                            tc_test[group][task] -= np.median(tc_test[group][task][...,self.prf_stims[task].late_iso_dict[task]], axis=-1)[...,np.newaxis]
+                            #tc_fit[task] *= (100/tc_fit[task].mean(-1))[...,np.newaxis]
+                            tc_fit[group][task] -= np.median(tc_fit[group][task][...,self.prf_stims[task].late_iso_dict[task]], axis=-1)[...,np.newaxis]     
+                        
+    
+                    
+                    tc_full[group] = np.concatenate(tuple([tc[group][task] for task in tc[group]]), axis=0)
+                    tc_err[group] = np.concatenate(tuple([tc_err[group][task] for task in tc_err[group]]), axis=0)
+                    
+                    if an_info['crossvalidate'] and 'fit_task' not in an_info:
+                        tc_full_test[group] = np.concatenate(tuple([tc_test[group][task] for task in tc_test[group]]), axis=0)
+                        tc_full_fit[group] = np.concatenate(tuple([tc_fit[group][task] for task in tc_fit[group]]), axis=0)   
+                        #timecourse reliability stats
+                        vertex_info+="CV timecourse reliability stats\n"
+                        vertex_info+=f"fit-test timecourses corrcoeff {np.corrcoef(tc_full_test[group],tc_full_fit[group])[0,1]:.4f}\n"
+                        vertex_info+=f"fit-test timecourses R-squared {1-np.sum((tc_full_fit[group]-tc_full_test[group])**2)/(tc_full_test[group].var(-1)*tc_full_test[group].shape[-1]):.4f}\n\n"
+                
+
+                    
+                    self.prf_models = dict()
+                    
+                    for model in self.only_models:
+                        self.prf_models[model] = model_wrapper(model,
+                                        stimulus=self.prf_stim,
+                                        hrf=an_info['hrf'],
+                                        filter_predictions=an_info['filter_predictions'],
+                                        filter_type=an_info['filter_type'],
+                                        filter_params={x:an_info[x] for x in ["first_modes_to_remove",
+                                                                                "last_modes_to_remove_percent",
+                                                                                "window_length",
+                                                                                "polyorder",
+                                                                                "highpass",
+                                                                                "add_mean"]},
+                                        normalize_RFs=an_info['normalize_RFs'])
+                        if space == 'HCP':
+                            internal_idx = index
+                        else:
+                            internal_idx = np.sum(this_subj_res['mask'][:index])
+
+                        
+                        if 'CVmean' in analysis or 'CVmedian' in analysis:
+                            #need to combine params/predictions from folds?
+                            pass
+
+                        
+                        params = np.copy(this_subj_res['Results'][model][internal_idx,:-1])
+                        
+
+                        preds[group][model] = self.prf_models[model].return_prediction(*list(params))[0]
+                        
+                        
+                        #mdff = (preds[model]-tc_full).mean()
+                        #tc_full += mdff
+                        
+                        np.set_printoptions(suppress=True, precision=4)
+                        vertex_info+=f"{this_subj} {model} params: {params} \n"
+                        vertex_info+=f"Rsq {this_subj} {model} full tc: {1-np.sum((preds[group][model]-tc_full[group])**2)/(tc_full[group].var(-1)*tc_full[group].shape[-1]):.4f}\n"
+                        
+                        if an_info['crossvalidate'] and 'fit_task' not in an_info:
+                            vertex_info+=f"Rsq {this_subj} {model} fit tc: {1-np.sum((preds[group][model]-tc_full_fit[group])**2)/(tc_full_fit[group].var(-1)*tc_full_fit[group].shape[-1]):.4f}\n"
+                            vertex_info+=f"Rsq {this_subj} {model} test tc: {1-np.sum((preds[group][model]-tc_full_test[group])**2)/(tc_full_test[group].var(-1)*tc_full_test[group].shape[-1]):.4f}\n"
+        
+        
+                            
+                            
+                            # if model != 'Gauss':
+                            #     tc_full_test_gauss_resid = tc_full_test[tc_full_test<0]#(tc_full_test - preds['Gauss'][0])
+                            #     model_gauss_resid = preds[model][tc_full_test<0]#(preds[model] - preds['Gauss'])[0]
+        
+                            #     vertex_info+=f"Rsq {this_subj} {model} negative portions test tc: {1-np.sum((model_gauss_resid-tc_full_test_gauss_resid)**2)/(tc_full_test_gauss_resid.var(-1)*tc_full_test_gauss_resid.shape[-1]):.4f}\n"
+                            #     vertex_info+=f"Rsq {this_subj} {model} negative portions test pearson R {pearsonr(tc_full_test_gauss_resid,model_gauss_resid)[0]:.4f}\n"
+                                
+                                
+                                #vertex_info+=f"Rsq {model} gauss resid test tc: {1-np.sum((model_gauss_resid-tc_full_test_gauss_resid)**2)/(tc_full_test_gauss_resid.var(-1)*tc_full_test_gauss_resid.shape[-1]):.4f}\n"
+                                #vertex_info+=f"Rsq {model} weighted resid tc: {1-np.sum(((preds[model]-preds['Gauss'])*(preds[model]-tc_full_fit))**2)/(tc_full_fit.var(-1)*tc_full_fit.shape[-1]):.4f}\n"
+                            
+                        prfs[group][model] = create_model_rf_wrapper(model,self.prf_stim,params,an_info['normalize_RFs'])
+                        
+                        for key in this_subj_res['Processed Results']:
+                            #if model in subj_res['Processed Results'][key]:
+                            for mm in this_subj_res['Processed Results'][key]:
+                                vertex_info+=f"{this_subj} {key} {mm} {this_subj_res['Processed Results'][key][mm][index]:.4f}\n"
+                        
+                        vertex_info+="\n"
+                        
+
+                    
+                    tseconds = an_info['TR']*np.arange(len(tc_full[group]))
+                    
+                    self.axes['timecourse'].plot(tseconds,np.zeros(len(tc_full[group])),linestyle='--',linewidth=0.1, color='black', zorder=0)
+                    self.axes['timecourse diffs'].plot(tseconds,np.zeros(len(tc_full[group])),linestyle='--',linewidth=0.1, color='black', zorder=0)
+                          
+                    
+                    self.axes['timecourse'].errorbar(tseconds, tc_full[group], yerr=0, label='Data',  marker = 's', mfc=color_dict[group], mec='k', markersize=6,  linewidth=1, zorder=1) 
+                    self.axes['timecourse diffs'].errorbar(tseconds, tc_full[group] - tc_full[base_group], yerr=0, label='Data',  marker = 's', mfc=color_dict[group], mec='k', markersize=6,  linewidth=1, zorder=1) 
+                     
+        
+                    
+                    for model in self.only_models: 
+                        if 'Norm' in model:
+                            self.axes['timecourse'].plot(tseconds, preds[group][model], linewidth=3, color=color_dict[group], label=f"Norm ({this_subj_res['Processed Results']['RSq'][model][index]:.2f})", zorder=2)
+                        elif model == 'DoG':
+                            self.axes['timecourse'].plot(tseconds, preds[group][model], linewidth=3, color=color_dict[group], label=f"DoG ({this_subj_res['Processed Results']['RSq'][model][index]:.2f})", zorder=3)
+                        elif model == 'CSS':
+                            self.axes['timecourse'].plot(tseconds, preds[group][model], linewidth=3, color=color_dict[group], label=f"CSS ({this_subj_res['Processed Results']['RSq'][model][index]:.2f})", zorder=4)
+                        elif model == 'Gauss':
+                            self.axes['timecourse'].plot(tseconds, preds[group][model], linewidth=3, color=color_dict[group], label=f"Gauss ({this_subj_res['Processed Results']['RSq'][model][index]:.2f})", zorder=5)
+
+
+                        if 'Norm' in model:
+                            self.axes['timecourse diffs'].plot(tseconds, preds[group][model]-preds[base_group][model], linewidth=3, color=color_dict[group], label=f"Norm ({this_subj_res['Processed Results']['RSq'][model][index]:.2f})", zorder=2)
+                        elif model == 'DoG':
+                            self.axes['timecourse diffs'].plot(tseconds, preds[group][model]-preds[base_group][model], linewidth=3, color=color_dict[group], label=f"DoG ({this_subj_res['Processed Results']['RSq'][model][index]:.2f})", zorder=3)
+                        elif model == 'CSS':
+                            self.axes['timecourse diffs'].plot(tseconds, preds[group][model]-preds[base_group][model], linewidth=3, color=color_dict[group], label=f"CSS ({this_subj_res['Processed Results']['RSq'][model][index]:.2f})", zorder=4)
+                        elif model == 'Gauss':
+                            self.axes['timecourse diffs'].plot(tseconds, preds[group][model]-preds[base_group][model], linewidth=3, color=color_dict[group], label=f"Gauss ({this_subj_res['Processed Results']['RSq'][model][index]:.2f})", zorder=5)
+                            
+                    
+                    fillin_surround = False
+                    fillin_late_iso_dict = False
+                    fillin_emptyscreen = True
+
+                    if fillin_late_iso_dict:
+                        for tc_ax in ['timecourse', 'timecourse diffs']:
+                            if n_group == len(this_subj_groups.keys())-1:
+                                min_lid = np.zeros_like(tseconds)
+                                max_lid = np.zeros_like(tseconds)
+                                min_lid[self.prf_stim.late_iso_dict['periods']] = self.axes[tc_ax].get_ylim()[0]
+                                max_lid[self.prf_stim.late_iso_dict['periods']] = self.axes[tc_ax].get_ylim()[1]
+
+                                self.axes[tc_ax].fill_between(tseconds,min_lid,max_lid,label='Late iso dict', alpha=0.2, color='gray')
+
+                    if fillin_emptyscreen:
+                        for tc_ax in ['timecourse', 'timecourse diffs']:
+                            if n_group == len(this_subj_groups.keys())-1:
+                                min_lid = np.zeros_like(tseconds)
+                                max_lid = np.zeros_like(tseconds)
+                                min_lid[np.sum(self.prf_stim.design_matrix, axis=(0, 1)) == 0] = self.axes[tc_ax].get_ylim()[0]
+                                max_lid[np.sum(self.prf_stim.design_matrix, axis=(0, 1)) == 0] = self.axes[tc_ax].get_ylim()[1]
+
+                                self.axes[tc_ax].fill_between(tseconds,min_lid,max_lid,label='Empty Screen', alpha=0.2, color='gray')
+                    
+                    if fillin_surround:
+                    
+                        if np.any(['Norm' in model for model in self.only_models]) or 'DoG' in self.only_models:
+                            try:
+                                if ((this_subj_res['Processed Results']['RSq']['DoG'][index]-this_subj_res['Processed Results']['RSq']['Gauss'][index]) > 0.05) or ((this_subj_res['Processed Results']['RSq']['Norm_abcd'][index]-this_subj_res['Processed Results']['RSq']['CSS'][index]) > 0.05):
+                                    surround_effect = np.min([preds[group][model] for model in preds[group] if 'Norm' in model or 'DoG' in model],axis=0)
+                                    surround_effect[surround_effect>0] = preds[group]['Gauss'][surround_effect>0]
+                                    self.axes['timecourse'].fill_between(tseconds,
+                                                                surround_effect, 
+                                                    preds[group]['Gauss'], label='Surround suppression', alpha=0.2, color='gray')
+                            except:
+                                pass
+        
+
+                    for tc_ax in ['timecourse', 'timecourse diffs']:        
+                        self.axes[tc_ax].legend(ncol=3, fontsize=8, loc=9)
+
+                        self.axes[tc_ax].set_xlim(0,tseconds.max())
+                    
+                    if prfs[group]['Norm_abcd'][0].min() < 0:
+                        im = self.axes[f'{group} prf'].imshow(prfs[group]['Norm_abcd'][0], cmap='RdBu_r', vmin=prfs[group]['Norm_abcd'][0].min(), vmax=-prfs[group]['Norm_abcd'][0].min())
+                    else:
+                        im = self.axes[f'{group} prf'].imshow(prfs[group]['Norm_abcd'][0], cmap='RdBu_r', vmax=prfs[group]['Norm_abcd'][0].max(), vmin=-prfs[group]['Norm_abcd'][0].max())
+                        
+                    self.cbar[f'{group} prf'] = colorbar(im)
+                    self.axes[f'{group} prf'].set_title(f'{group} prf')
+                    
+                    #self.cbar = self.f.colorbar(im, ax=self.axes[0,1], use_gridspec=True)
+                    
+                    self.axes[f'{group} prf'].axis('on')            
+                    self.axes[f'{group} vertex info'].axis('off')
+                    self.axes[f'{group} vertex info'].text(0,1,vertex_info, fontsize=10, va='top')
+                
+                
+                self.click+=1
+          
+            return
+
+      
+
+
         def clicker_function(voxel,hemi,vertex):
             if space == 'fsnative' or space == 'HCP':
                 print('recovering vertex index...')
@@ -754,7 +1102,7 @@ class visualize_results(object):
                     #if 'CVmean' in analysis or 'CVmedian' in analysis:
                     #    vertex_info+=f"WARNING: predictions based on mean/median CV parameters are not usually meaningful\n"
 
-                    vertex_info+=f"{task} late iso dict median: {np.median(tc[task][self.prf_stims[task].late_iso_dict[task]])}\n"
+                    vertex_info+=f"{task} late iso dict median: {np.median(tc[task][self.prf_stims[task].late_iso_dict[task]]):.3f}\n"
 
                     
                     #fit and test timecourses separately
@@ -957,6 +1305,13 @@ class visualize_results(object):
                 self.click+=1
           
             return
+        
+
+        if clickerfun == 'groups':
+            pickerfun = groups_clicker_function
+        else:
+            pickerfun = clicker_function
+
 
         
         if space_names == 'all':
@@ -1078,8 +1433,8 @@ class visualize_results(object):
                         for stat in tc_stats.keys():
 
                             if 'Mean' in stat:
-                                vmin_stat = np.nanquantile(tc_stats['Mean'][alpha[analysis][subj]['all']>rsq_thresh],0.1)
-                                vmax_stat = np.nanquantile(tc_stats['Mean'][alpha[analysis][subj]['all']>rsq_thresh],0.9)
+                                vmin_stat = np.nanquantile(tc_stats['Mean'],0.1)
+                                vmax_stat = np.nanquantile(tc_stats['Mean'],0.9)
                             elif 'TSNR' in stat:
                                 vmin_stat = np.nanquantile(tc_stats['TSNR'][alpha[analysis][subj]['all']>rsq_thresh],0.1)
                                 vmax_stat = np.nanquantile(tc_stats['TSNR'][alpha[analysis][subj]['all']>rsq_thresh],0.9)
@@ -1103,7 +1458,7 @@ class visualize_results(object):
                                 fig.savefig(f"{self.pycortex_image_path}/{subj}_{stat}_cbar.pdf", dpi=600, bbox_inches='tight', transparent=True)    
 
         
-                        self.js_handle_dict[space][analysis][subj]['Timecourse Stats'] = cortex.webgl.show(ds_stats, pickerfun=clicker_function,  overlays_visible=[], labels_visible=[]) 
+                        self.js_handle_dict[space][analysis][subj]['Timecourse Stats'] = cortex.webgl.show(ds_stats, pickerfun=pickerfun,  overlays_visible=[], labels_visible=[]) 
         
                         ##plotted_stats[subj] = True
                     
@@ -1184,7 +1539,7 @@ class visualize_results(object):
                                 alpha_rois = glasser_rois_data.astype('bool')
                             ds_rois['Glasser ROIs'] = Vertex2D_fix(glasser_rois_data, alpha_rois, subject=pycortex_subj, cmap=pycortex_cmap, vmin=0, vmax=glasser_rois_data.max(), vmin2=vmin2_rois, vmax2=vmax2_rois, roi_borders=roi_borders) 
                                                 
-                        self.js_handle_dict[space][analysis][subj]['rois'] = cortex.webgl.show(ds_rois, pickerfun=clicker_function,  overlays_visible=[], labels_visible=[]) 
+                        self.js_handle_dict[space][analysis][subj]['rois'] = cortex.webgl.show(ds_rois, pickerfun=pickerfun,  overlays_visible=[], labels_visible=[]) 
         
                         plotted_rois[subj] = True 
                                                 
@@ -1247,7 +1602,7 @@ class visualize_results(object):
                                     fig.savefig(f"{self.pycortex_image_path}/{model}_{param}_cbar.pdf", dpi=600, bbox_inches='tight', transparent=True)
 
                             
-                        self.js_handle_dict[space][analysis][subj]['Diffs'] = cortex.webgl.show(ds_diffs, pickerfun=clicker_function,  overlays_visible=[], labels_visible=[])  
+                        self.js_handle_dict[space][analysis][subj]['Diffs'] = cortex.webgl.show(ds_diffs, pickerfun=pickerfun,  overlays_visible=[], labels_visible=[])  
 
 
 
@@ -1368,10 +1723,10 @@ class visualize_results(object):
                                                                       vmin=rsq_thresh, vmax=0.6, vmin2=0.05, vmax2=rsq_thresh, cmap=pycortex_cmap)
                             ds_rsq_comp[f'{subj} Norm_abcd CV rsq (surface fit)'] = Vertex2D_fix(p_r['RSq']['Norm_abcd'], p_r['RSq']['Norm_abcd'], subject=pycortex_subj,
                                                                       vmin=rsq_thresh, vmax=0.6, vmin2=0.05, vmax2=rsq_thresh, cmap=pycortex_cmap, roi_borders=roi_borders)
-                            self.js_handle_dict[space][analysis][subj]['rsq_comp'] = cortex.webgl.show(ds_rsq_comp, pickerfun=clicker_function,  overlays_visible=[], labels_visible=[]) 
+                            self.js_handle_dict[space][analysis][subj]['rsq_comp'] = cortex.webgl.show(ds_rsq_comp, pickerfun=pickerfun,  overlays_visible=[], labels_visible=[]) 
                         
                         
-                        self.js_handle_dict[space][analysis][subj]['rsq'] = cortex.webgl.show(ds_rsq, pickerfun=clicker_function,  overlays_visible=[], labels_visible=[])  
+                        self.js_handle_dict[space][analysis][subj]['rsq'] = cortex.webgl.show(ds_rsq, pickerfun=pickerfun,  overlays_visible=[], labels_visible=[])  
                         
                     if self.plot_ecc_cortex:
                         ds_ecc = dict()
@@ -1390,7 +1745,7 @@ class visualize_results(object):
                             if self.pycortex_image_path != None and save_colorbars:
                                 fig.savefig(f"{self.pycortex_image_path}/{model}_ecc_cbar.pdf", dpi=600, bbox_inches='tight', transparent=True)
                         
-                        self.js_handle_dict[space][analysis][subj]['ecc'] = cortex.webgl.show(ds_ecc, pickerfun=clicker_function,  overlays_visible=[], labels_visible=[]) 
+                        self.js_handle_dict[space][analysis][subj]['ecc'] = cortex.webgl.show(ds_ecc, pickerfun=pickerfun,  overlays_visible=[], labels_visible=[]) 
         
                     if self.plot_polar_cortex:
                         ds_polar = dict()
@@ -1431,10 +1786,10 @@ class visualize_results(object):
                                                                       vmin2=0.05, vmax2=rsq_thresh, cmap='hsvx2')
                             ds_polar_comp[f'{subj} Norm_abcd CV polar (surface fit)'] = Vertex2D_fix(p_r['Polar Angle']['Norm_abcd'], p_r['RSq']['Norm_abcd'], subject=pycortex_subj,
                                                                       vmin2=0.05, vmax2=rsq_thresh, cmap='hsvx2', roi_borders=roi_borders)
-                            self.js_handle_dict[space][analysis][subj]['polar_comp'] = cortex.webgl.show(ds_polar_comp, pickerfun=clicker_function,  overlays_visible=[], labels_visible=[]) 
+                            self.js_handle_dict[space][analysis][subj]['polar_comp'] = cortex.webgl.show(ds_polar_comp, pickerfun=pickerfun,  overlays_visible=[], labels_visible=[]) 
 
                         
-                        self.js_handle_dict[space][analysis][subj]['polar'] = cortex.webgl.show(ds_polar, pickerfun=clicker_function,  overlays_visible=[], labels_visible=[]) 
+                        self.js_handle_dict[space][analysis][subj]['polar'] = cortex.webgl.show(ds_polar, pickerfun=pickerfun,  overlays_visible=[], labels_visible=[]) 
         
                     if self.plot_size_cortex:
                         ds_size = dict()
@@ -1459,7 +1814,7 @@ class visualize_results(object):
                             if self.pycortex_image_path != None and save_colorbars:
                                 fig.savefig(f"{self.pycortex_image_path}/{model}_sigma1_cbar.pdf", dpi=600, bbox_inches='tight', transparent=True)                            
                             
-                        self.js_handle_dict[space][analysis][subj]['size'] = cortex.webgl.show(ds_size, pickerfun=clicker_function,  overlays_visible=[], labels_visible=[]) 
+                        self.js_handle_dict[space][analysis][subj]['size'] = cortex.webgl.show(ds_size, pickerfun=pickerfun,  overlays_visible=[], labels_visible=[]) 
         
         
                     if self.plot_amp_cortex:
@@ -1490,7 +1845,7 @@ class visualize_results(object):
                                     fig.savefig(f"{self.pycortex_image_path}/{model}_surround_amplitude_cbar.pdf", dpi=600, bbox_inches='tight', transparent=True)  
 
                         
-                        self.js_handle_dict[space][analysis][subj]['amp'] = cortex.webgl.show(ds_amp, pickerfun=clicker_function,  overlays_visible=[], labels_visible=[]) 
+                        self.js_handle_dict[space][analysis][subj]['amp'] = cortex.webgl.show(ds_amp, pickerfun=pickerfun,  overlays_visible=[], labels_visible=[]) 
 
                         
                     if self.plot_css_exp_cortex and 'CSS' in self.only_models:
@@ -1499,7 +1854,7 @@ class visualize_results(object):
                         ds_css_exp[f'{subj} CSS Exponent'] = Vertex2D_fix(p_r['CSS Exponent']['CSS'], alpha[analysis][subj]['CSS'], subject=pycortex_subj, 
                                                                      vmin=0, vmax=1, vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap=pycortex_cmap, roi_borders=roi_borders)
         
-                        self.js_handle_dict[space][analysis][subj]['css_exp'] = cortex.webgl.show(ds_css_exp, pickerfun=clicker_function,  overlays_visible=[], labels_visible=[]) 
+                        self.js_handle_dict[space][analysis][subj]['css_exp'] = cortex.webgl.show(ds_css_exp, pickerfun=pickerfun,  overlays_visible=[], labels_visible=[]) 
                         
                     if self.plot_surround_size_cortex:
                         ds_surround_size = dict()
@@ -1525,7 +1880,7 @@ class visualize_results(object):
                                     fig.savefig(f"{self.pycortex_image_path}/{model}_sigma2_cbar.pdf", dpi=600, bbox_inches='tight', transparent=True)   
                                 
                                 
-                        self.js_handle_dict[space][analysis][subj]['surround_size'] = cortex.webgl.show(ds_surround_size, pickerfun=clicker_function,  overlays_visible=[], labels_visible=[])  
+                        self.js_handle_dict[space][analysis][subj]['surround_size'] = cortex.webgl.show(ds_surround_size, pickerfun=pickerfun,  overlays_visible=[], labels_visible=[])  
 
                     if self.plot_suppression_index_cortex:
                         ds_suppression_index = dict()
@@ -1543,7 +1898,7 @@ class visualize_results(object):
                                 ds_suppression_index[f'{subj} {model} NI (aperture)'] = Vertex2D_fix(p_r['Suppression Index'][model], alpha[analysis][subj][model], subject=pycortex_subj, 
                                                                      vmin=0, vmax=1.5, vmin2=rsq_thresh, vmax2=rsq_max_opacity, cmap=pycortex_cmap, roi_borders=roi_borders)                     
         
-                        self.js_handle_dict[space][analysis][subj]['suppression_index'] = cortex.webgl.show(ds_suppression_index, pickerfun=clicker_function,  overlays_visible=[], labels_visible=[])    
+                        self.js_handle_dict[space][analysis][subj]['suppression_index'] = cortex.webgl.show(ds_suppression_index, pickerfun=pickerfun,  overlays_visible=[], labels_visible=[])    
 
                     if self.plot_size_ratio_cortex:
                         ds_size_ratio = dict()           
@@ -1560,7 +1915,7 @@ class visualize_results(object):
                                 if self.pycortex_image_path != None and save_colorbars:
                                     fig.savefig(f"{self.pycortex_image_path}/{model}_sizeratio_cbar.pdf", dpi=600, bbox_inches='tight', transparent=True)  
 
-                        self.js_handle_dict[space][analysis][subj]['size_ratio'] = cortex.webgl.show(ds_size_ratio, pickerfun=clicker_function,  overlays_visible=[], labels_visible=[])     
+                        self.js_handle_dict[space][analysis][subj]['size_ratio'] = cortex.webgl.show(ds_size_ratio, pickerfun=pickerfun,  overlays_visible=[], labels_visible=[])     
 
                     if self.plot_hrf_cortex:
                         ds_hrf = dict()           
@@ -1578,7 +1933,7 @@ class visualize_results(object):
                                     if self.pycortex_image_path != None and save_colorbars:
                                         fig.savefig(f"{self.pycortex_image_path}/{model}_sizeratio_cbar.pdf", dpi=600, bbox_inches='tight', transparent=True)  
 
-                        self.js_handle_dict[space][analysis][subj]['hrf_params'] = cortex.webgl.show(ds_hrf, pickerfun=clicker_function,  overlays_visible=[], labels_visible=[])     
+                        self.js_handle_dict[space][analysis][subj]['hrf_params'] = cortex.webgl.show(ds_hrf, pickerfun=pickerfun,  overlays_visible=[], labels_visible=[])     
                     
 
                     if self.plot_receptors_cortex:
@@ -1602,7 +1957,7 @@ class visualize_results(object):
                                 if self.pycortex_image_path != None and save_colorbars:
                                     fig.savefig(f"{self.pycortex_image_path}/{receptor}_cbar.pdf", dpi=600, bbox_inches='tight', transparent=True)                                                    
             
-                            self.js_handle_dict[space][analysis][subj]['receptors'] = cortex.webgl.show(ds_receptors, pickerfun=clicker_function,  overlays_visible=[], labels_visible=[])     
+                            self.js_handle_dict[space][analysis][subj]['receptors'] = cortex.webgl.show(ds_receptors, pickerfun=pickerfun,  overlays_visible=[], labels_visible=[])     
 
                          
                     if self.plot_norm_baselines_cortex:
@@ -1649,7 +2004,7 @@ class visualize_results(object):
                                 if self.pycortex_image_path != None and save_colorbars:
                                     fig.savefig(f"{self.pycortex_image_path}/{model}_BDratio_cbar.pdf", dpi=600, bbox_inches='tight', transparent=True)   
                             
-                        self.js_handle_dict[space][analysis][subj]['norm_baselines'] = cortex.webgl.show(ds_norm_baselines, pickerfun=clicker_function,  overlays_visible=[], labels_visible=[]) 
+                        self.js_handle_dict[space][analysis][subj]['norm_baselines'] = cortex.webgl.show(ds_norm_baselines, pickerfun=pickerfun,  overlays_visible=[], labels_visible=[]) 
 
                     if self.plot_correlations_per_roi != None:
                         ds_correlations = dict()
@@ -1690,7 +2045,7 @@ class visualize_results(object):
                                                                           cmap=pycortex_cmap, roi_borders=roi_borders)                   
 
 
-                        self.js_handle_dict[space][analysis][subj]['correlations_per_roi'] = cortex.webgl.show(ds_correlations, pickerfun=clicker_function,  overlays_visible=[], labels_visible=[])     
+                        self.js_handle_dict[space][analysis][subj]['correlations_per_roi'] = cortex.webgl.show(ds_correlations, pickerfun=pickerfun,  overlays_visible=[], labels_visible=[])     
                     
                     if self.plot_means_per_roi != None:
                         ds_means = dict()
@@ -1724,7 +2079,7 @@ class visualize_results(object):
                                                                   cmap=pycortex_cmap, roi_borders=roi_borders)                  
 
 
-                        self.js_handle_dict[space][analysis][subj]['means_per_roi'] = cortex.webgl.show(ds_means, pickerfun=clicker_function,  overlays_visible=[], labels_visible=[]) 
+                        self.js_handle_dict[space][analysis][subj]['means_per_roi'] = cortex.webgl.show(ds_means, pickerfun=pickerfun,  overlays_visible=[], labels_visible=[]) 
                                 
         
         
