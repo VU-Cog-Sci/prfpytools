@@ -1430,7 +1430,13 @@ class visualize_results(object):
                     if self.plot_stats_cortex: # and not plotted_stats[subj] :
                         ds_stats = dict()
 
-                        for stat in tc_stats.keys():
+                        if self.plot_onlymean_forveins:
+                            these_stats = ['Mean']
+                        else:
+                            these_stats = tc_stats.keys()
+
+
+                        for stat in these_stats:
 
                             if 'Mean' in stat:
                                 vmin_stat = np.nanquantile(tc_stats['Mean'],0.1)

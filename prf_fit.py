@@ -94,6 +94,9 @@ iter_fit_hrf = analysis_info["iter_fit_hrf"]
 
 use_previous_gaussian_fitter_hrf = analysis_info["use_previous_gaussian_fitter_hrf"]
 
+hrf_basis = analysis_info["hrf_basis"]
+normalize_hrf = analysis_info["normalize_hrf"]
+
 fix_bold_baseline = analysis_info["fix_bold_baseline"]
     
 dog_grid = analysis_info["dog_grid"]
@@ -119,6 +122,7 @@ else:
     fit_task = None
     fit_runs = None        
 
+#only applies to crossvalidation
 single_hrf = analysis_info["single_hrf"]
 return_noise_ceiling_fraction = analysis_info["return_noise_ceiling_fraction"]
     
@@ -638,7 +642,9 @@ gg = Iso2DGaussianModel(stimulus=prf_stim,
                           filter_predictions=filter_predictions,
                           filter_type=filter_type,
                           filter_params=filter_params,
-                          normalize_RFs=normalize_RFs)
+                          normalize_RFs=normalize_RFs,
+                          hrf_basis=hrf_basis,
+                          normalize_hrf=normalize_hrf)
 
 
 gf = Iso2DGaussianFitter(
@@ -829,7 +835,9 @@ if "CSS" in models_to_fit:
                                       filter_predictions=filter_predictions,
                                       filter_type=filter_type,
                                       filter_params=filter_params,                                     
-                                      normalize_RFs=normalize_RFs)
+                                      normalize_RFs=normalize_RFs,
+                                        hrf_basis=hrf_basis,
+                                        normalize_hrf=normalize_hrf)
     gf_css = CSS_Iso2DGaussianFitter(
         data=tc_full_iso_nonzerovar_dict['tc'], model=gg_css, n_jobs=n_jobs,
         previous_gaussian_fitter=gf, use_previous_gaussian_fitter_hrf=use_previous_gaussian_fitter_hrf)
@@ -1011,7 +1019,9 @@ if "DoG" in models_to_fit:
                                       filter_predictions=filter_predictions,
                                       filter_type=filter_type,
                                       filter_params=filter_params,                                     
-                                      normalize_RFs=normalize_RFs)
+                                      normalize_RFs=normalize_RFs,
+                          hrf_basis=hrf_basis,
+                          normalize_hrf=normalize_hrf)
 
     gf_dog = DoG_Iso2DGaussianFitter(data=tc_full_iso_nonzerovar_dict['tc'],
                                      model=gg_dog,
@@ -1202,7 +1212,9 @@ if "norm" in models_to_fit:
                                             filter_predictions=filter_predictions,
                                             filter_type=filter_type,
                                             filter_params=filter_params,                                       
-                                            normalize_RFs=normalize_RFs)
+                                            normalize_RFs=normalize_RFs,
+                          hrf_basis=hrf_basis,
+                          normalize_hrf=normalize_hrf)
 
         gf_norm = Norm_Iso2DGaussianFitter(data=tc_full_iso_nonzerovar_dict['tc'],
                                         model=gg_norm,
