@@ -746,7 +746,7 @@ if 'gauss' in models_to_fit:
                                     test_stimulus=test_prf_stim)
                 print("Gaussian Crossvalidation completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Mean rsq>"+str(rsq_threshold)+": "+str(np.mean(gf_gauss.iterative_search_params[gf_gauss.rsq_mask, -1])))
                 
-                if hasattr(gf, 'noise_ceiling'):
+                if hasattr(gf_gauss, 'noise_ceiling'):
                     print("Mean noise-ceiling >"+str(rsq_threshold)+": "+str(np.mean(gf_gauss.noise_ceiling[gf_gauss.rsq_mask])))                
                     noise_ceiling_fraction = gf_gauss.iterative_search_params[gf_gauss.rsq_mask, -1]/gf_gauss.noise_ceiling[gf_gauss.rsq_mask]
                     print("Mean noise-ceiling-fraction rsq>"+str(rsq_threshold)+": "+str(np.mean(noise_ceiling_fraction)))
@@ -776,7 +776,7 @@ if 'gauss' in models_to_fit:
                                     test_stimulus=test_prf_stim)
                 print("Gaussian Crossvalidation completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Mean rsq>"+str(rsq_threshold)+": "+str(np.mean(gf_gauss.iterative_search_params[gf_gauss.rsq_mask, -1])))
 
-                if hasattr(gf, 'noise_ceiling'):
+                if hasattr(gf_gauss, 'noise_ceiling'):
                     print("Mean noise-ceiling >"+str(rsq_threshold)+": "+str(np.mean(gf_gauss.noise_ceiling[gf_gauss.rsq_mask])))   
                     noise_ceiling_fraction = gf_gauss.iterative_search_params[gf_gauss.rsq_mask, -1]/gf_gauss.noise_ceiling[gf_gauss.rsq_mask]
                     print("Mean noise-ceiling-fraction rsq>"+str(rsq_threshold)+": "+str(np.mean(noise_ceiling_fraction)))
@@ -813,7 +813,7 @@ if 'gauss' in models_to_fit:
 
                     print("Gaussian Crossvalidation completed at "+datetime.now().strftime('%Y/%m/%d %H:%M:%S')+". Mean rsq>"+str(rsq_threshold)+": "+str(np.mean(gf_gauss.iterative_search_params[gf_gauss.rsq_mask, -1])))
 
-                    if hasattr(gf, 'noise_ceiling'):
+                    if hasattr(gf_gauss, 'noise_ceiling'):
                         print("Mean noise-ceiling >"+str(rsq_threshold)+": "+str(np.mean(gf_gauss.noise_ceiling[gf_gauss.rsq_mask])))   
                         noise_ceiling_fraction = gf_gauss.iterative_search_params[gf_gauss.rsq_mask, -1]/gf_gauss.noise_ceiling[gf_gauss.rsq_mask]
                         print("Mean noise-ceiling-fraction rsq>"+str(rsq_threshold)+": "+str(np.mean(noise_ceiling_fraction)))
@@ -843,7 +843,7 @@ if "CSS" in models_to_fit:
                                         normalize_hrf=normalize_hrf)
     gf_css = CSS_Iso2DGaussianFitter(
         data=tc_full_iso_nonzerovar_dict['tc'], model=gg_css, n_jobs=n_jobs,
-        previous_gaussian_fitter=gf, use_previous_gaussian_fitter_hrf=use_previous_gaussian_fitter_hrf)
+        previous_gaussian_fitter=gf_gauss, use_previous_gaussian_fitter_hrf=use_previous_gaussian_fitter_hrf)
 
 
     # CSS grid fit
@@ -1030,7 +1030,7 @@ if "DoG" in models_to_fit:
     gf_dog = DoG_Iso2DGaussianFitter(data=tc_full_iso_nonzerovar_dict['tc'],
                                      model=gg_dog,
                                      n_jobs=n_jobs,
-                                     previous_gaussian_fitter=gf,
+                                     previous_gaussian_fitter=gf_gauss,
                                      use_previous_gaussian_fitter_hrf=use_previous_gaussian_fitter_hrf)
 
     # DoG grid fit
@@ -1224,7 +1224,7 @@ if "norm" in models_to_fit:
         gf_norm = Norm_Iso2DGaussianFitter(data=tc_full_iso_nonzerovar_dict['tc'],
                                         model=gg_norm,
                                         n_jobs=n_jobs,
-                                        previous_gaussian_fitter=gf,
+                                        previous_gaussian_fitter=gf_gauss,
                                         use_previous_gaussian_fitter_hrf=use_previous_gaussian_fitter_hrf)
         
         #normalization grid stage
