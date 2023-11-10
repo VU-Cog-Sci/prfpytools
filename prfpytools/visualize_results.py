@@ -204,17 +204,23 @@ class visualize_results(object):
 
                         for param, param_res in parameters:
                             if f'{current_sj_group}' not in param and f'{base_group}' not in param and param in p_r_pla:
-                                models = [item for item in param_res.items()]
+                                if param == 'Timecourse Stats':
+                                    models = [item for item in param_res.items() if 'run' not in item[0]]
+                                    
+                                else:
+                                    models = [item for item in param_res.items() if item[0] in self.only_models]
+                                    
+
                                 for model, model_res in models:
-                                    if model in p_r['Alpha']:
+                                    if param == 'Timecourse Stats':
+                                        this_alpha = np.ones_like(p_r[param][model])
+                                    else:
                                         this_alpha = (p_r['Alpha'][model] + p_r_pla['Alpha'][model])/2
 
                                         this_alpha[p_r['Alpha'][model]<=0] = 0
                                         this_alpha[p_r_pla['Alpha'][model]<=0] = 0
 
-                                        p_r[f'Mean Masked RSq {current_sj_group}-{base_group}'][model] = this_alpha
-                                    else:
-                                        this_alpha = np.ones_like(p_r[param][model])
+                                        p_r[f'Mean Masked RSq {current_sj_group}-{base_group}'][model] = this_alpha                                        
 
                                     if model in p_r_pla[param]:
 
@@ -646,10 +652,14 @@ class visualize_results(object):
     
                 #recover needed information
                 an_info = subj_res['analysis_info']       
+
                 #this was added later
                 if 'normalize_integral_dx' not in an_info:
                     an_info['normalize_integral_dx'] = False    
-
+                if 'normalize_hrf' not in an_info:
+                    an_info['normalize_hrf'] = False    
+                if 'hrf_basis' not in an_info:
+                    an_info['hrf_basis'] = 'SPM'                       
 
                 gen_subj = subj.split('_')[0]
 
@@ -820,7 +830,9 @@ class visualize_results(object):
                                                                                 "polyorder",
                                                                                 "highpass",
                                                                                 "add_mean"]},
-                                        normalize_RFs=an_info['normalize_RFs'])
+                                        normalize_RFs=an_info['normalize_RFs'],
+                                        hrf_basis=an_info['hrf_basis'],
+                                        normalize_hrf=an_info['normalize_hrf'])
                         if space == 'HCP':
                             internal_idx = index
                         else:
@@ -1006,8 +1018,13 @@ class visualize_results(object):
                 #recover needed information
                 an_info = subj_res['analysis_info']       
                 #this was added later
+                #this was added later
                 if 'normalize_integral_dx' not in an_info:
-                    an_info['normalize_integral_dx'] = False                
+                    an_info['normalize_integral_dx'] = False    
+                if 'normalize_hrf' not in an_info:
+                    an_info['normalize_hrf'] = False    
+                if 'hrf_basis' not in an_info:
+                    an_info['hrf_basis'] = 'SPM'                   
     
                 if not hasattr(self, 'prf_stim') or self.prf_stim.task_names != an_info['task_names']:
         
@@ -1154,7 +1171,9 @@ class visualize_results(object):
                                                                              "polyorder",
                                                                              "highpass",
                                                                              "add_mean"]},
-                                       normalize_RFs=an_info['normalize_RFs'])
+                                       normalize_RFs=an_info['normalize_RFs'],
+                                        hrf_basis=an_info['hrf_basis'],
+                                        normalize_hrf=an_info['normalize_hrf'])
                     if space == 'HCP':
                         internal_idx = index
                     else:
