@@ -653,6 +653,75 @@ def fwhmax_fwatmin(model, params, normalize_RFs=False, return_profiles=False):
         return result, profile.T
     else:
         return result
+
+
+def align_barpasses(prf_stim,prf_pos,timecourses_toalign):
+    #there needs to be a minus sign here for prfpy conventions
+    y_ravel = -prf_stim.y_coordinates.reshape((-1))
+    x_ravel = prf_stim.x_coordinates.reshape((-1))
+    coords = np.array([x_ravel,y_ravel]).T
+
+    bar_coms = []
+    for time in range(prf_stim.design_matrix.shape[-1]):
+        if prf_stim.design_matrix[:,:,time].sum()>0:
+            dm_ravel = prf_stim.design_matrix[:,:,time].reshape((-1))
+            com = np.average(coords, axis=0, weights=dm_ravel)
+            bar_coms.append(com)
+        else:
+            bar_coms.append([np.nan,np.nan])
+    bar_coms = np.array(bar_coms)
+    # pl.figure()
+    # pl.plot(bar_coms[:,0])
+    # pl.plot(bar_coms[:,1])
+
+    # prf_pos = np.array([1,1])
+    dist_prf_bar = np.linalg.norm(bar_coms - prf_pos[np.newaxis,...],axis=1)
+    # pl.figure()
+    # pl.plot(dist_prf_bar)
+
+
+    bar_passes = [np.arange(16,36),np.arange(36,56),np.arange(71,91),np.arange(91,111),np.arange(126,146),
+                np.arange(146,166),np.arange(181,201),np.arange(201,221)]
+
+    mindist = []
+
+    for bp in bar_passes:
+        # pl.fill_between(bp,np.nanmin(dist_prf_bar)*np.ones_like(bp),np.nanmax(dist_prf_bar)*np.ones_like(bp),color='gray',alpha=0.1)
+        this_bp_dist = dist_prf_bar[bp]
+        mindist_bp = bp[np.nanargmin(this_bp_dist)]
+        # print(mindist_bp)
+        # pl.plot(mindist_bp*np.ones(10),np.linspace(np.nanmin(dist_prf_bar),np.nanmax(dist_prf_bar),10),ls='--',c='k')
+        mindist.append(int(mindist_bp))
+
+    timecourses_aligned = {}
+    timecourses_tps = {}
+
+    for tc_toalign in timecourses_toalign:      
+        # pl.figure()
+        centered_y = []
+        centered_x = []
+        for en,bp in enumerate(bar_passes):
+            
+            # pl.plot(bar_passes[en]-mindist[en],dist_prf_bar[bp])
+            centered_x.append(bar_passes[en]-mindist[en])
+
+            centered_y.append(timecourses_toalign[tc_toalign][bp])
+
+            
+        centered_x = np.array(centered_x)
+        centered_y = np.array(centered_y)
+        centered_mean_x = []
+        centered_mean_y = []
+        for i in np.arange(np.min(centered_x),np.max(centered_x)):
+            centered_mean_x.append(i)
+            centered_mean_y.append(np.nanmean(centered_y[centered_x==i]))
+
+        timecourses_tps[tc_toalign] = centered_mean_x
+        timecourses_aligned[tc_toalign] = centered_mean_y
+            
+        # pl.figure()
+        # pl.plot(centered_mean_x,centered_mean_y)
+    return timecourses_tps,timecourses_aligned
             
                                 
 def colorbar(mappable):

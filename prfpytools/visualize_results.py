@@ -22,7 +22,7 @@ from copy import deepcopy
 import itertools
 from pathlib import Path
 from prfpytools.postproc_utils import model_wrapper, create_model_rf_wrapper, colorbar, norm_1d_sr_function, norm_2d_sr_function, Vertex2D_fix, simple_colorbar
-from prfpytools.postproc_utils import reduced_graph_ft, graph_randomization
+from prfpytools.postproc_utils import reduced_graph_ft, graph_randomization, align_barpasses
 import cmasher as cmr
 from prfpytools.preproc_utils import roi_mask, inverse_roi_mask, create_full_stim
 #import seaborn as sns
@@ -60,11 +60,15 @@ class visualize_results(object):
         """
         self.main_dict = deepcopy(results.main_dict) 
         self.js_handle_dict = dd(lambda:dd(lambda:dd(dict)))
+
+        self.subjects = []
         
         self.get_spaces()
         self.get_subjects(self.main_dict)
         
         self.prf_stims = dict()
+
+        return
         
     def fix_hcp_ordering(self, curr_dict, hcp_atlas_mask_path):
         
@@ -98,24 +102,28 @@ class visualize_results(object):
                 pass
         
         
-    def get_subjects(self, curr_dict, subject_list = []):
-        for k, v in curr_dict.items():
+    def get_subjects(self, curr_dict):
+        
+        for k in curr_dict:
+            
             if 'fsaverage' not in k:
                 if 'sub-' not in k and not k.isdecimal() and '999999' not in k and 'rsq' not in k:# and isinstance(v, (dict,dd)):
-                    self.get_subjects(v, subject_list)
+                    self.get_subjects(curr_dict[k])
                 else:
-                    if k not in subject_list:
-                        subject_list.append(k)
+                    if k not in self.subjects:
+                        #print(k)
+                        self.subjects.append(k)
             else:
-                
-                if 'fsaverage' == k and 'fsaverage' not in subject_list:
-                    subject_list.append('fsaverage')
-                    self.get_subjects(v, subject_list)
+                #print(k)
+                if 'fsaverage' == k and 'fsaverage' not in self.subjects:
+                    self.subjects.append('fsaverage')
+                    self.get_subjects(curr_dict[k])
                 else:
-                    if k not in subject_list:
-                        subject_list.append(k)
+                    if k not in self.subjects:
+                        self.subjects.append(k)
         
-        self.subjects = subject_list
+        #self.subjects = deepcopy(subject_list)
+        #subject_list=[]
         return
     
     def get_spaces(self):
@@ -630,10 +638,13 @@ class visualize_results(object):
                 os.makedirs(pycortex_image_path)
         self.pycortex_image_path = pycortex_image_path
 
+        self.similar_vertices = dd(lambda:dd(list))
         #######PYCORTEX PICKERFUNS
         #function to plot prf and timecourses when clicking surface vertex in webgl        
 
         def groups_clicker_function(voxel,hemi,vertex):
+            
+            self.clicker_completed = False
             if space == 'fsnative' or space == 'HCP':
                 print('recovering vertex index...')
                 #translate javascript indeing to python
@@ -645,7 +656,11 @@ class visualize_results(object):
                     index = len(lctm)+rctm[int(vertex)]
                     #print(f"{model} rsq {p_r['RSq'][model][index]}") 
                 
-                    
+                for rrr in [roi for roi in self.idx_rois[subj] if 'custom' in roi]:
+                    if index in self.idx_rois[subj][rrr]:
+                        this_index_roi = rrr
+
+
                 print('recovering data and model timecourses...')
 
                 color_dict = {'placebo':'blue','5mg':'orange','10mg':'green'}                
@@ -687,13 +702,14 @@ class visualize_results(object):
                 pl.ion()
     
                 if self.click==0:
-                    gs_kw = dict(width_ratios=[1, 1, 1], height_ratios=[1, 1, 1, 20/8])
+                    gs_kw = dict(width_ratios=[1, 1, 1, 1, 1, 1], height_ratios=[1, 1, 1.5, 1, 20/8])
                     self.cbar=dict()
 
-                    self.f, self.axes = pl.subplot_mosaic([[f'timecourse' for group in this_subj_groups.keys()],
-                                                [f'timecourse diffs' for group in this_subj_groups.keys()],
-                                                [f'{group} prf' for group in this_subj_groups.keys()],
-                                                [f'{group} vertex info' for group in this_subj_groups.keys()]],
+                    self.f, self.axes = pl.subplot_mosaic([[f'timecourse' for i in range(6)],
+                                                [f'timecourse diffs' for i in range(6)],
+                                                [f'timecourse aligned' for i in range(3)]+[f'timecourse diffs aligned' for i in range(3)],
+                                                [f'{group} prf' for group in this_subj_groups.keys() for i in range(2)],
+                                                [f'{group} vertex info' for group in this_subj_groups.keys() for i in range(2)]],
                                                 gridspec_kw=gs_kw,
                                                 figsize=(18, 44))#, tight_layout=True)
 
@@ -725,6 +741,14 @@ class visualize_results(object):
                     this_subj_res = analysis_res[this_subj]
 
                     vertex_info = ""
+
+
+                    for id2 in self.idx_rois[subj][this_index_roi]:
+                        if this_subj_res['Processed Results']['Alpha']['Norm_abcd'][id2]>0 and np.abs(subj_res['Processed Results']['Eccentricity']['Norm_abcd'][id2]-subj_res['Processed Results']['Eccentricity']['Norm_abcd'][index])<1.5:
+
+                            self.similar_vertices[index][group].append(id2)
+
+
 
 
 
@@ -883,21 +907,38 @@ class visualize_results(object):
                                 vertex_info+=f"{this_subj} {key} {mm} {this_subj_res['Processed Results'][key][mm][index]:.4f}\n"
                         
                         vertex_info+="\n"
+
+                    
+
+                    timecourses_toalign = {'tc_full':tc_full[group],'tc_full_diff':tc_full[group] - tc_full[base_group]}
+
+                    for model in preds[group]:
+                        timecourses_toalign[f'pred {model}'] = preds[group][model]
+                        timecourses_toalign[f'pred {model} diff'] = preds[group][model] - preds[base_group][model]
+
+                    tc_xps, tcs_aligned = align_barpasses(self.prf_stim,params[:2],timecourses_toalign)
                         
 
                     
                     tseconds = an_info['TR']*np.arange(len(tc_full[group]))
+
+                    self.axes['timecourse'].set_title(f"Vx: {index} subj {gen_subj} ({this_index_roi.replace('custom.','')})")
                     
                     self.axes['timecourse'].plot(tseconds,np.zeros(len(tc_full[group])),linestyle='--',linewidth=0.1, color='black', zorder=0)
-                    self.axes['timecourse diffs'].plot(tseconds,np.zeros(len(tc_full[group])),linestyle='--',linewidth=0.1, color='black', zorder=0)
-                          
+                    self.axes['timecourse aligned'].plot(tc_xps['tc_full'],np.zeros(len(tc_xps['tc_full'])),linestyle='--',linewidth=0.1, color='black', zorder=0)
+                      
                     
                     self.axes['timecourse'].errorbar(tseconds, tc_full[group], yerr=0, label='Data',  marker = 's', mfc=color_dict[group], mec='k', markersize=6,  linewidth=1, zorder=1) 
                     self.axes['timecourse diffs'].errorbar(tseconds, tc_full[group] - tc_full[base_group], yerr=0, label='Data',  marker = 's', mfc=color_dict[group], mec='k', markersize=6,  linewidth=1, zorder=1) 
+
+
+                    self.axes['timecourse aligned'].errorbar(tc_xps['tc_full'],tcs_aligned['tc_full'], yerr=0, label='Data',  marker = 's', mfc=color_dict[group], mec='k', markersize=6,  linewidth=1, zorder=1) 
+                    self.axes['timecourse diffs aligned'].errorbar(tc_xps['tc_full_diff'], tcs_aligned['tc_full_diff'], yerr=0, label='Data',  marker = 's', mfc=color_dict[group], mec='k', markersize=6,  linewidth=1, zorder=1) 
                      
         
                     
                     for model in self.only_models: 
+                        
                         if 'Norm' in model:
                             self.axes['timecourse'].plot(tseconds, preds[group][model], linewidth=3, color=color_dict[group], label=f"Norm ({this_subj_res['Processed Results']['RSq'][model][index]:.2f})", zorder=2)
                         elif model == 'DoG':
@@ -916,7 +957,33 @@ class visualize_results(object):
                             self.axes['timecourse diffs'].plot(tseconds, preds[group][model]-preds[base_group][model], linewidth=3, color=color_dict[group], label=f"CSS ({this_subj_res['Processed Results']['RSq'][model][index]:.2f})", zorder=4)
                         elif model == 'Gauss':
                             self.axes['timecourse diffs'].plot(tseconds, preds[group][model]-preds[base_group][model], linewidth=3, color=color_dict[group], label=f"Gauss ({this_subj_res['Processed Results']['RSq'][model][index]:.2f})", zorder=5)
-                            
+
+                        plot_aligned_models = False
+                        if plot_aligned_models:
+                            if 'Norm' in model:
+                                self.axes['timecourse aligned'].plot(tc_xps[f'pred {model}'], tcs_aligned[f'pred {model}'], linewidth=3, color=color_dict[group], label=f"Norm ({this_subj_res['Processed Results']['RSq'][model][index]:.2f})", zorder=2)
+                            elif model == 'DoG':
+                                self.axes['timecourse aligned'].plot(tc_xps[f'pred {model}'], tcs_aligned[f'pred {model}'], linewidth=3, color=color_dict[group], label=f"DoG ({this_subj_res['Processed Results']['RSq'][model][index]:.2f})", zorder=3)
+                            elif model == 'CSS':
+                                self.axes['timecourse aligned'].plot(tc_xps[f'pred {model}'], tcs_aligned[f'pred {model}'], linewidth=3, color=color_dict[group], label=f"CSS ({this_subj_res['Processed Results']['RSq'][model][index]:.2f})", zorder=4)
+                            elif model == 'Gauss':
+                                self.axes['timecourse aligned'].plot(tc_xps[f'pred {model}'], tcs_aligned[f'pred {model}'], linewidth=3, color=color_dict[group], label=f"Gauss ({this_subj_res['Processed Results']['RSq'][model][index]:.2f})", zorder=5)
+
+
+                            if 'Norm' in model:
+                                self.axes['timecourse diffs aligned'].plot(tc_xps[f'pred {model} diff'], tcs_aligned[f'pred {model} diff'], linewidth=3, color=color_dict[group], label=f"Norm ({this_subj_res['Processed Results']['RSq'][model][index]:.2f})", zorder=2)
+                            elif model == 'DoG':
+                                self.axes['timecourse diffs aligned'].plot(tc_xps[f'pred {model} diff'], tcs_aligned[f'pred {model} diff'], linewidth=3, color=color_dict[group], label=f"DoG ({this_subj_res['Processed Results']['RSq'][model][index]:.2f})", zorder=3)
+                            elif model == 'CSS':
+                                self.axes['timecourse diffs aligned'].plot(tc_xps[f'pred {model} diff'], tcs_aligned[f'pred {model} diff'], linewidth=3, color=color_dict[group], label=f"CSS ({this_subj_res['Processed Results']['RSq'][model][index]:.2f})", zorder=4)
+                            elif model == 'Gauss':
+                                self.axes['timecourse diffs aligned'].plot(tc_xps[f'pred {model} diff'], tcs_aligned[f'pred {model} diff'], linewidth=3, color=color_dict[group], label=f"Gauss ({this_subj_res['Processed Results']['RSq'][model][index]:.2f})", zorder=5)
+
+
+
+
+
+
                     
                     fillin_surround = False
                     fillin_late_iso_dict = False
@@ -959,7 +1026,7 @@ class visualize_results(object):
                     for tc_ax in ['timecourse', 'timecourse diffs']:        
                         self.axes[tc_ax].legend(ncol=3, fontsize=8, loc=9)
 
-                        self.axes[tc_ax].set_xlim(0,tseconds.max())
+                        self.axes[tc_ax].set_xlim(0,150)#tseconds.max())
                     
                     if prfs[group]['Norm_abcd'][0].min() < 0:
                         im = self.axes[f'{group} prf'].imshow(prfs[group]['Norm_abcd'][0], cmap='RdBu_r', vmin=prfs[group]['Norm_abcd'][0].min(), vmax=-prfs[group]['Norm_abcd'][0].min())
@@ -977,6 +1044,7 @@ class visualize_results(object):
                 
                 
                 self.click+=1
+                self.clicker_completed = True
           
             return
 
@@ -2555,10 +2623,15 @@ class visualize_results(object):
 
                             if group == groups[1]:
                                 bar_position += 1.5*bar_or_violin_width
-                            elif group == groups[2]:
-                                bar_position += 3*bar_or_violin_width
+                            if len(groups)>2:
+                                if group == groups[2]:
+                                    bar_position += 3*bar_or_violin_width
+                                if len(groups)>3:
+                                    if group == groups[3]:
+                                        bar_position += 4.5*bar_or_violin_width
 
                         elif '-' in y_parameter or '-' in y_parameter_toplevel:
+                            #UGLY HARDCODE
                             if group == '10mg':
                                 bar_position += 1.5*bar_or_violin_width
                         
@@ -2780,7 +2853,7 @@ class visualize_results(object):
                                 print(f"Samples in ROI {roi}: {samples_in_roi}")
                                 
                                 if i>0:
-                                    bar_position += ((2+len(groups))*bar_or_violin_width)
+                                    bar_position += ((2+len(groups))*1.3*bar_or_violin_width)
 
                                 if len(groups)>1:
                                     if group == groups[1]:
@@ -2799,9 +2872,9 @@ class visualize_results(object):
                                 for model in self.only_models:
 
                                     if len(rois)>15 or 'Group' in subj:
-                                         figsize = (38, 18)
+                                         figsize = (1.2*len(groups)*len(rois), 16)
                                     else:
-                                        figsize=(12, 8)
+                                        figsize=(0.6*len(groups)*len(rois), 8)
 
 
 
@@ -3183,14 +3256,24 @@ class visualize_results(object):
                                             print(f'roi {pval}')
                                             
                                             pval_str = ""
+
+                                            actual_mean =  (diff * diff_weights).sum()/(diff_weights.sum())
                                             
                                             #compute p values
-                                            if pval<0.01:
-                                                pval_str+="*"
-                                                if pval<1e-3:
-                                                    pval_str+="*"
-                                                    if pval<1e-4:
-                                                        pval_str+="*"
+                                            if actual_mean>0:
+                                                if pval<0.01:
+                                                    pval_str+="+"
+                                                    if pval<1e-3:
+                                                        pval_str+="+"
+                                                        if pval<1e-4:
+                                                            pval_str+="+"
+                                            else:
+                                                if pval<0.01:
+                                                    pval_str+="-"
+                                                    if pval<1e-3:
+                                                        pval_str+="-"
+                                                        if pval<1e-4:
+                                                            pval_str+="-"
                                     
                                             if pval_str != '':
                                                 if not only_stats:
@@ -3233,7 +3316,7 @@ class visualize_results(object):
                                     if len(self.only_models)>1:
                                         bar_position += (bar_or_violin_width)
                                     else:
-                                        bar_position += (0.4*bar_or_violin_width)
+                                        bar_position += (0.7 *bar_or_violin_width)
 
                                     if not only_stats:
                                     
