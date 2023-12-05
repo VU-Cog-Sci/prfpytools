@@ -66,7 +66,7 @@ class visualize_results(object):
         self.get_spaces()
         self.get_subjects(self.main_dict)
         
-        self.prf_stims = dict()
+        self.prf_stims = dd(dict)
 
         return
         
@@ -629,9 +629,14 @@ class visualize_results(object):
                        space_names = 'fsnative', analysis_names = 'all', subject_ids='all', param_diffs=[],
                        timecourse_folder = None, screenshot_paths = [], save_colorbars=False, pycortex_cmap = 'nipy_spectral',
                        rsq_max_opacity = 0.5, pycortex_image_path = None, roi_borders_name = None,
-                       clickerfun='standard'):        
-        pl.rcParams.update({'font.size': 16})
-        pl.rcParams.update({'pdf.fonttype':42})        
+                       clickerfun='standard'):           
+
+        pl.rcParams.update({'font.size': 22})
+        pl.rcParams.update({'pdf.fonttype':42})
+        pl.rcParams.update({'figure.max_open_warning': 0})
+        pl.rcParams['axes.spines.right'] = False
+        pl.rcParams['axes.spines.top'] = False
+
         self.click=0
         if pycortex_image_path != None:
             if not os.path.exists(pycortex_image_path):
@@ -655,15 +660,23 @@ class visualize_results(object):
                 else:
                     index = len(lctm)+rctm[int(vertex)]
                     #print(f"{model} rsq {p_r['RSq'][model][index]}") 
+
+                
+                index = 160557
+                this_index_roi = 'index not in custom ROIs'
                 
                 for rrr in [roi for roi in self.idx_rois[subj] if 'custom' in roi]:
                     if index in self.idx_rois[subj][rrr]:
                         this_index_roi = rrr
 
 
+                
+                
                 print('recovering data and model timecourses...')
 
-                color_dict = {'placebo':'blue','5mg':'orange','10mg':'green'}                
+                #color_dict = {'placebo':'blue','5mg':'orange','10mg':'green'}             
+                color_dict =  {'placebo':(0,0.6497,0.7176) ,'5mg':(0.4287*1.8,0.0,0.6130*1.5),'10mg':(0.864*1.1,0.0,0.0)}   
+
     
                 #recover needed information
                 an_info = subj_res['analysis_info']       
@@ -682,23 +695,8 @@ class visualize_results(object):
                 
                 for group in self.groups:
                     this_subj_groups[group] = [s for s in self.subjects if gen_subj in s and s in self.groups_dict[group]][0]
-          
-
     
-                if not hasattr(self, 'prf_stim') or self.prf_stim.task_names != an_info['task_names']:
-        
-
-                    self.prf_stim = create_full_stim(screenshot_paths=screenshot_paths,
-                                n_pix=an_info['n_pix'],
-                                discard_volumes=an_info['discard_volumes'],
-                                dm_edges_clipping=an_info['dm_edges_clipping'],
-                                screen_size_cm=an_info['screen_size_cm'],
-                                screen_distance_cm=an_info['screen_distance_cm'],
-                                TR=an_info['TR'],
-                                task_names=an_info['task_names'],
-                                normalize_integral_dx=an_info['normalize_integral_dx'])
                     
-
                 pl.ion()
     
                 if self.click==0:
@@ -743,10 +741,10 @@ class visualize_results(object):
                     vertex_info = ""
 
 
-                    for id2 in self.idx_rois[subj][this_index_roi]:
-                        if this_subj_res['Processed Results']['Alpha']['Norm_abcd'][id2]>0 and np.abs(subj_res['Processed Results']['Eccentricity']['Norm_abcd'][id2]-subj_res['Processed Results']['Eccentricity']['Norm_abcd'][index])<1.5:
+                    # for id2 in self.idx_rois[subj][this_index_roi]:
+                    #     if this_subj_res['Processed Results']['Alpha']['Norm_abcd'][id2]>0 and np.abs(this_subj_res['Processed Results']['Eccentricity']['Norm_abcd'][id2]-this_subj_res['Processed Results']['Eccentricity']['Norm_abcd'][index])<1.5:
 
-                            self.similar_vertices[index][group].append(id2)
+                    #         self.similar_vertices[index][group].append(id2)
 
 
 
@@ -761,8 +759,8 @@ class visualize_results(object):
 
                     
                     for i,task in enumerate(an_info['task_names']):
-                        if task not in self.prf_stims:
-                            self.prf_stims[task] = create_full_stim(screenshot_paths=[screenshot_paths[i]],
+                        if task not in self.prf_stims[this_subj]:
+                            self.prf_stims[this_subj][task] = create_full_stim(screenshot_paths=[screenshot_paths[i]],
                                     n_pix=an_info['n_pix'],
                                     discard_volumes=an_info['discard_volumes'],
                                     dm_edges_clipping=an_info['dm_edges_clipping'],
@@ -773,8 +771,6 @@ class visualize_results(object):
                                     normalize_integral_dx=an_info['normalize_integral_dx'])                    
                             
                         tc_runs=[]
-
-                        #red_per = self.prf_stims[task].late_iso_dict['periods'][(self.prf_stims[task].late_iso_dict['periods']<20) | (self.prf_stims[task].late_iso_dict['periods']>234)]
 
                         
                         for run in all_runs:
@@ -788,7 +784,7 @@ class visualize_results(object):
                             tc_runs.append([np.load(tc_path)[tc_run_idx] for tc_path in tc_paths if f"task-{task}_" in tc_path and f"run-{run}." in tc_path][0])
 
 
-                            tc_runs[-1] -= np.median(tc_runs[-1][...,self.prf_stims[task].late_iso_dict[task]], axis=-1)[...,np.newaxis]
+                            tc_runs[-1] -= np.median(tc_runs[-1][...,self.prf_stims[this_subj][task].late_iso_dict[task]], axis=-1)[...,np.newaxis]
 
                             
                         
@@ -796,14 +792,14 @@ class visualize_results(object):
                         
                         tc_err[group][task] = sem(tc_runs, axis=0)
                         
-                        tc[group][task] -= np.median(tc[group][task][...,self.prf_stims[task].late_iso_dict[task]], axis=-1)[...,np.newaxis]
+                        tc[group][task] -= np.median(tc[group][task][...,self.prf_stims[this_subj][task].late_iso_dict[task]], axis=-1)[...,np.newaxis]
                         #tc[task] -= np.median(tc[task][...,red_per], axis=-1)[...,np.newaxis]
 
 
                         #if 'CVmean' in analysis or 'CVmedian' in analysis:
                         #    vertex_info+=f"WARNING: predictions based on mean/median CV parameters are not usually meaningful\n"
 
-                        vertex_info+=f"{task} late iso dict median: {np.median(tc[group][task][self.prf_stims[task].late_iso_dict[task]]):.4f}\n"
+                        vertex_info+=f"{task} late iso dict median: {np.median(tc[group][task][self.prf_stims[this_subj][task].late_iso_dict[task]]):.4f}\n"
 
                     
                         #fit and test timecourses separately
@@ -821,14 +817,14 @@ class visualize_results(object):
                                 tc_fit[group][task] = np.mean([tc_runs[i] for i in all_runs if i in fit_runs], axis=0)
                                 
                             #tc_test[task] *= (100/tc_test[task].mean(-1))[...,np.newaxis]
-                            tc_test[group][task] -= np.median(tc_test[group][task][...,self.prf_stims[task].late_iso_dict[task]], axis=-1)[...,np.newaxis]
+                            tc_test[group][task] -= np.median(tc_test[group][task][...,self.prf_stims[this_subj][task].late_iso_dict[task]], axis=-1)[...,np.newaxis]
                             #tc_fit[task] *= (100/tc_fit[task].mean(-1))[...,np.newaxis]
-                            tc_fit[group][task] -= np.median(tc_fit[group][task][...,self.prf_stims[task].late_iso_dict[task]], axis=-1)[...,np.newaxis]     
+                            tc_fit[group][task] -= np.median(tc_fit[group][task][...,self.prf_stims[this_subj][task].late_iso_dict[task]], axis=-1)[...,np.newaxis]     
                         
     
                     
                     tc_full[group] = np.concatenate(tuple([tc[group][task] for task in tc[group]]), axis=0)
-                    tc_err[group] = np.concatenate(tuple([tc_err[group][task] for task in tc_err[group]]), axis=0)
+                    tc_full_err[group] = np.concatenate(tuple([tc_err[group][task] for task in tc_err[group]]), axis=0)
                     
                     if an_info['crossvalidate'] and 'fit_task' not in an_info:
                         tc_full_test[group] = np.concatenate(tuple([tc_test[group][task] for task in tc_test[group]]), axis=0)
@@ -844,7 +840,7 @@ class visualize_results(object):
                     
                     for model in self.only_models:
                         self.prf_models[model] = model_wrapper(model,
-                                        stimulus=self.prf_stim,
+                                        stimulus=self.prf_stims[this_subj][task],
                                         hrf=an_info['hrf'],
                                         filter_predictions=an_info['filter_predictions'],
                                         filter_type=an_info['filter_type'],
@@ -899,7 +895,7 @@ class visualize_results(object):
                                 #vertex_info+=f"Rsq {model} gauss resid test tc: {1-np.sum((model_gauss_resid-tc_full_test_gauss_resid)**2)/(tc_full_test_gauss_resid.var(-1)*tc_full_test_gauss_resid.shape[-1]):.4f}\n"
                                 #vertex_info+=f"Rsq {model} weighted resid tc: {1-np.sum(((preds[model]-preds['Gauss'])*(preds[model]-tc_full_fit))**2)/(tc_full_fit.var(-1)*tc_full_fit.shape[-1]):.4f}\n"
                             
-                        prfs[group][model] = create_model_rf_wrapper(model,self.prf_stim,params,an_info['normalize_RFs'])
+                        prfs[group][model] = create_model_rf_wrapper(model,self.prf_stims[this_subj][task],params,an_info['normalize_RFs'])
                         
                         for key in this_subj_res['Processed Results']:
                             #if model in subj_res['Processed Results'][key]:
@@ -916,7 +912,7 @@ class visualize_results(object):
                         timecourses_toalign[f'pred {model}'] = preds[group][model]
                         timecourses_toalign[f'pred {model} diff'] = preds[group][model] - preds[base_group][model]
 
-                    tc_xps, tcs_aligned = align_barpasses(self.prf_stim,params[:2],timecourses_toalign)
+                    tc_xps, tcs_aligned = align_barpasses(self.prf_stims[this_subj][task],params[:2],timecourses_toalign)
                         
 
                     
@@ -928,19 +924,25 @@ class visualize_results(object):
                     self.axes['timecourse aligned'].plot(tc_xps['tc_full'],np.zeros(len(tc_xps['tc_full'])),linestyle='--',linewidth=0.1, color='black', zorder=0)
                       
                     
-                    self.axes['timecourse'].errorbar(tseconds, tc_full[group], yerr=0, label='Data',  marker = 's', mfc=color_dict[group], mec='k', markersize=6,  linewidth=1, zorder=1) 
-                    self.axes['timecourse diffs'].errorbar(tseconds, tc_full[group] - tc_full[base_group], yerr=0, label='Data',  marker = 's', mfc=color_dict[group], mec='k', markersize=6,  linewidth=1, zorder=1) 
+                    self.axes['timecourse'].errorbar(tseconds, tc_full[group], yerr=0, label='Data',  marker = 'o', mfc=color_dict[group], 
+                                                     mec='k', markersize=5,  linewidth=1, elinewidth=1.5, ecolor=color_dict[group], mew=1,   zorder=len(this_subj_groups)-n_group,
+                                                     c=color_dict[group]) 
+
+                    self.axes['timecourse diffs'].errorbar(tseconds, tc_full[group] - tc_full[base_group], yerr=0, label='Data',  marker = 'o', mfc=color_dict[group], mec='k', markersize=6,  linewidth=1, zorder=1,
+                                                           c=color_dict[group]) 
 
 
-                    self.axes['timecourse aligned'].errorbar(tc_xps['tc_full'],tcs_aligned['tc_full'], yerr=0, label='Data',  marker = 's', mfc=color_dict[group], mec='k', markersize=6,  linewidth=1, zorder=1) 
-                    self.axes['timecourse diffs aligned'].errorbar(tc_xps['tc_full_diff'], tcs_aligned['tc_full_diff'], yerr=0, label='Data',  marker = 's', mfc=color_dict[group], mec='k', markersize=6,  linewidth=1, zorder=1) 
+                    self.axes['timecourse aligned'].errorbar(tc_xps['tc_full'],tcs_aligned['tc_full'], yerr=0, label='Data',  marker = 'o', mfc=color_dict[group], mec='k', markersize=6,  linewidth=1, zorder=1,
+                                                           c=color_dict[group]) 
+                    self.axes['timecourse diffs aligned'].errorbar(tc_xps['tc_full_diff'], tcs_aligned['tc_full_diff'], yerr=0, label='Data',  marker = 'o', mfc=color_dict[group], mec='k', markersize=6,  linewidth=1, zorder=1,
+                                                           c=color_dict[group]) 
                      
         
                     
                     for model in self.only_models: 
                         
                         if 'Norm' in model:
-                            self.axes['timecourse'].plot(tseconds, preds[group][model], linewidth=3, color=color_dict[group], label=f"Norm ({this_subj_res['Processed Results']['RSq'][model][index]:.2f})", zorder=2)
+                            self.axes['timecourse'].plot(tseconds, preds[group][model], linewidth=3, color=color_dict[group], label=f"Norm ({this_subj_res['Processed Results']['RSq'][model][index]:.2f})", zorder=2*len(this_subj_groups)-n_group)
                         elif model == 'DoG':
                             self.axes['timecourse'].plot(tseconds, preds[group][model], linewidth=3, color=color_dict[group], label=f"DoG ({this_subj_res['Processed Results']['RSq'][model][index]:.2f})", zorder=3)
                         elif model == 'CSS':
@@ -992,22 +994,27 @@ class visualize_results(object):
                     if fillin_late_iso_dict:
                         for tc_ax in ['timecourse', 'timecourse diffs']:
                             if n_group == len(this_subj_groups.keys())-1:
-                                min_lid = np.zeros_like(tseconds)
-                                max_lid = np.zeros_like(tseconds)
-                                min_lid[self.prf_stim.late_iso_dict['periods']] = self.axes[tc_ax].get_ylim()[0]
-                                max_lid[self.prf_stim.late_iso_dict['periods']] = self.axes[tc_ax].get_ylim()[1]
 
-                                self.axes[tc_ax].fill_between(tseconds,min_lid,max_lid,label='Late iso dict', alpha=0.2, color='gray')
+                                min_lid = self.axes[tc_ax].get_ylim()[0]
+                                max_lid = self.axes[tc_ax].get_ylim()[1]
+
+                                for period in self.prf_stims[this_subj][task].late_iso_dict['periods']:
+
+                                    self.axes[tc_ax].fill_between(tseconds[period],min_lid*np.ones_like(tseconds[period]),max_lid*np.ones_like(tseconds[period]),label='Late iso dict', alpha=0.2, color='gray')
 
                     if fillin_emptyscreen:
                         for tc_ax in ['timecourse', 'timecourse diffs']:
                             if n_group == len(this_subj_groups.keys())-1:
-                                min_lid = np.zeros_like(tseconds)
-                                max_lid = np.zeros_like(tseconds)
-                                min_lid[np.sum(self.prf_stim.design_matrix, axis=(0, 1)) == 0] = self.axes[tc_ax].get_ylim()[0]
-                                max_lid[np.sum(self.prf_stim.design_matrix, axis=(0, 1)) == 0] = self.axes[tc_ax].get_ylim()[1]
+                                min_lid = self.axes[tc_ax].get_ylim()[0]
+                                max_lid = self.axes[tc_ax].get_ylim()[1]
 
-                                self.axes[tc_ax].fill_between(tseconds,min_lid,max_lid,label='Empty Screen', alpha=0.2, color='gray')
+                                empty_screen_timepoints = np.where(np.sum(self.prf_stims[this_subj][task].design_matrix, axis=(0, 1)) == 0)[0]
+                                cut_points = np.where(np.diff(empty_screen_timepoints) != 1)[0] + 1
+                                splits = np.split(empty_screen_timepoints, cut_points)
+
+                                for split in splits:
+                                    self.axes[tc_ax].fill_between(tseconds[split],min_lid,max_lid,label='Empty Screen', alpha=0.2, color='gray')
+
                     
                     if fillin_surround:
                     
@@ -1026,21 +1033,32 @@ class visualize_results(object):
                     for tc_ax in ['timecourse', 'timecourse diffs']:        
                         self.axes[tc_ax].legend(ncol=3, fontsize=8, loc=9)
 
-                        self.axes[tc_ax].set_xlim(0,150)#tseconds.max())
+                        self.axes[tc_ax].set_xlim(0,tseconds.max())
                     
-                    if prfs[group]['Norm_abcd'][0].min() < 0:
-                        im = self.axes[f'{group} prf'].imshow(prfs[group]['Norm_abcd'][0], cmap='RdBu_r', vmin=prfs[group]['Norm_abcd'][0].min(), vmax=-prfs[group]['Norm_abcd'][0].min())
-                    else:
-                        im = self.axes[f'{group} prf'].imshow(prfs[group]['Norm_abcd'][0], cmap='RdBu_r', vmax=prfs[group]['Norm_abcd'][0].max(), vmin=-prfs[group]['Norm_abcd'][0].max())
-                        
-                    self.cbar[f'{group} prf'] = colorbar(im)
-                    self.axes[f'{group} prf'].set_title(f'{group} prf')
+
                     
                     #self.cbar = self.f.colorbar(im, ax=self.axes[0,1], use_gridspec=True)
                     
-                    self.axes[f'{group} prf'].axis('on')            
+                    #self.axes[f'{group} prf'].axis('on')            
                     self.axes[f'{group} vertex info'].axis('off')
                     self.axes[f'{group} vertex info'].text(0,1,vertex_info, fontsize=10, va='top')
+
+                
+
+                vmin = np.min([prfs[group]['Norm_abcd'][0].min() for group in this_subj_groups])
+                vmax = np.max([prfs[group]['Norm_abcd'][0].max() for group in this_subj_groups])
+
+
+                for group in this_subj_groups:
+                    
+                
+                    if vmin < 0:
+                        im = self.axes[f'{group} prf'].imshow(prfs[group]['Norm_abcd'][0], cmap='RdBu_r', vmin=vmin, vmax=-vmin)
+                    else:
+                        im = self.axes[f'{group} prf'].imshow(prfs[group]['Norm_abcd'][0], cmap='RdBu_r', vmax=vmax, vmin=-vmax)
+                        
+                    self.cbar[f'{group} prf'] = colorbar(im)
+                    self.axes[f'{group} prf'].set_title(f'{group} prf')
                 
                 
                 self.click+=1
@@ -1094,18 +1112,6 @@ class visualize_results(object):
                 if 'hrf_basis' not in an_info:
                     an_info['hrf_basis'] = 'SPM'                   
     
-                if not hasattr(self, 'prf_stim') or self.prf_stim.task_names != an_info['task_names']:
-        
-
-                    self.prf_stim = create_full_stim(screenshot_paths=screenshot_paths,
-                                n_pix=an_info['n_pix'],
-                                discard_volumes=an_info['discard_volumes'],
-                                dm_edges_clipping=an_info['dm_edges_clipping'],
-                                screen_size_cm=an_info['screen_size_cm'],
-                                screen_distance_cm=an_info['screen_distance_cm'],
-                                TR=an_info['TR'],
-                                task_names=an_info['task_names'],
-                                normalize_integral_dx=an_info['normalize_integral_dx'])
     
                 if 'ses-all' in subj:
 
@@ -1131,8 +1137,8 @@ class visualize_results(object):
                 tc_fit = dict()
                 
                 for i,task in enumerate(an_info['task_names']):
-                    if task not in self.prf_stims:
-                        self.prf_stims[task] = create_full_stim(screenshot_paths=[screenshot_paths[i]],
+                    if task not in self.prf_stims[subj]:
+                        self.prf_stims[subj][task] = create_full_stim(screenshot_paths=[screenshot_paths[i]],
                                 n_pix=an_info['n_pix'],
                                 discard_volumes=an_info['discard_volumes'],
                                 dm_edges_clipping=an_info['dm_edges_clipping'],
@@ -1143,8 +1149,6 @@ class visualize_results(object):
                                 normalize_integral_dx=an_info['normalize_integral_dx'])                    
                         
                     tc_runs=[]
-
-                    #red_per = self.prf_stims[task].late_iso_dict['periods'][(self.prf_stims[task].late_iso_dict['periods']<20) | (self.prf_stims[task].late_iso_dict['periods']>234)]
 
                     
                     for run in all_runs:
@@ -1160,7 +1164,7 @@ class visualize_results(object):
                                 tc_runs.append([np.load(tc_path)[tc_run_idx] for tc_path in tc_paths if f"task-{task}_" in tc_path and f"run-{run}." in tc_path and f"ses-{ses}" in tc_path][0])
 
 
-                                tc_runs[-1] -= np.median(tc_runs[-1][...,self.prf_stims[task].late_iso_dict[task]], axis=-1)[...,np.newaxis]
+                                tc_runs[-1] -= np.median(tc_runs[-1][...,self.prf_stims[subj][task].late_iso_dict[task]], axis=-1)[...,np.newaxis]
                         else:
                             mask_run = [np.load(mask_path) for mask_path in mask_paths if f"task-{task}_" in mask_path and f"run-{run}." in mask_path][0]
                             
@@ -1172,7 +1176,7 @@ class visualize_results(object):
                             tc_runs.append([np.load(tc_path)[tc_run_idx] for tc_path in tc_paths if f"task-{task}_" in tc_path and f"run-{run}." in tc_path][0])
 
 
-                            tc_runs[-1] -= np.median(tc_runs[-1][...,self.prf_stims[task].late_iso_dict[task]], axis=-1)[...,np.newaxis]
+                            tc_runs[-1] -= np.median(tc_runs[-1][...,self.prf_stims[subj][task].late_iso_dict[task]], axis=-1)[...,np.newaxis]
 
                         
                       
@@ -1180,14 +1184,14 @@ class visualize_results(object):
                     
                     tc_err[task] = sem(tc_runs, axis=0)
                     
-                    tc[task] -= np.median(tc[task][...,self.prf_stims[task].late_iso_dict[task]], axis=-1)[...,np.newaxis]
+                    tc[task] -= np.median(tc[task][...,self.prf_stims[subj][task].late_iso_dict[task]], axis=-1)[...,np.newaxis]
                     #tc[task] -= np.median(tc[task][...,red_per], axis=-1)[...,np.newaxis]
 
 
                     #if 'CVmean' in analysis or 'CVmedian' in analysis:
                     #    vertex_info+=f"WARNING: predictions based on mean/median CV parameters are not usually meaningful\n"
 
-                    vertex_info+=f"{task} late iso dict median: {np.median(tc[task][self.prf_stims[task].late_iso_dict[task]]):.3f}\n"
+                    vertex_info+=f"{task} late iso dict median: {np.median(tc[task][self.prf_stims[subj][task].late_iso_dict[task]]):.3f}\n"
 
                     
                     #fit and test timecourses separately
@@ -1205,9 +1209,9 @@ class visualize_results(object):
                             tc_fit[task] = np.mean([tc_runs[i] for i in all_runs if i in fit_runs], axis=0)
                             
                         #tc_test[task] *= (100/tc_test[task].mean(-1))[...,np.newaxis]
-                        tc_test[task] -= np.median(tc_test[task][...,self.prf_stims[task].late_iso_dict[task]], axis=-1)[...,np.newaxis]
+                        tc_test[task] -= np.median(tc_test[task][...,self.prf_stims[subj][task].late_iso_dict[task]], axis=-1)[...,np.newaxis]
                         #tc_fit[task] *= (100/tc_fit[task].mean(-1))[...,np.newaxis]
-                        tc_fit[task] -= np.median(tc_fit[task][...,self.prf_stims[task].late_iso_dict[task]], axis=-1)[...,np.newaxis]     
+                        tc_fit[task] -= np.median(tc_fit[task][...,self.prf_stims[subj][task].late_iso_dict[task]], axis=-1)[...,np.newaxis]     
                         
     
                     
@@ -1229,7 +1233,7 @@ class visualize_results(object):
                 
                 for model in self.only_models:
                     self.prf_models[model] = model_wrapper(model,
-                                       stimulus=self.prf_stim,
+                                       stimulus=self.prf_stims[subj][task],
                                        hrf=an_info['hrf'],
                                        filter_predictions=an_info['filter_predictions'],
                                        filter_type=an_info['filter_type'],
@@ -1284,7 +1288,7 @@ class visualize_results(object):
                             #vertex_info+=f"Rsq {model} gauss resid test tc: {1-np.sum((model_gauss_resid-tc_full_test_gauss_resid)**2)/(tc_full_test_gauss_resid.var(-1)*tc_full_test_gauss_resid.shape[-1]):.4f}\n"
                             #vertex_info+=f"Rsq {model} weighted resid tc: {1-np.sum(((preds[model]-preds['Gauss'])*(preds[model]-tc_full_fit))**2)/(tc_full_fit.var(-1)*tc_full_fit.shape[-1]):.4f}\n"
                         
-                    prfs[model] = create_model_rf_wrapper(model,self.prf_stim,params,an_info['normalize_RFs'])
+                    prfs[model] = create_model_rf_wrapper(model,self.prf_stims[subj][task],params,an_info['normalize_RFs'])
                     
                     for key in subj_res['Processed Results']:
                         #if model in subj_res['Processed Results'][key]:
@@ -1348,8 +1352,8 @@ class visualize_results(object):
                 if fillin_late_iso_dict:
                     min_lid = np.zeros_like(tseconds)
                     max_lid = np.zeros_like(tseconds)
-                    min_lid[self.prf_stim.late_iso_dict['periods']] = self.axes[0,0].get_ylim()[0]
-                    max_lid[self.prf_stim.late_iso_dict['periods']] = self.axes[0,0].get_ylim()[1]
+                    min_lid[self.prf_stims[subj][task].late_iso_dict['periods']] = self.axes[0,0].get_ylim()[0]
+                    max_lid[self.prf_stims[subj][task].late_iso_dict['periods']] = self.axes[0,0].get_ylim()[1]
 
                     self.axes[0,0].fill_between(tseconds,min_lid,max_lid,label='Late iso dict', alpha=0.2, color='gray')
                 
@@ -2419,7 +2423,7 @@ class visualize_results(object):
                     x_parameter_toplevel='', y_parameter_toplevel='', 
                     ylim={}, xlim={}, log_yaxis=False, log_xaxis = False, nr_bins = 8, weights='RSq',
                     x_param_model='', violin=False, scatter=False, diff_norm=False, diff_gauss=False, diff_gauss_x=False,
-                    rois_on_plot = False, rsq_alpha_plot = False,
+                    rois_on_plot = False, rsq_alpha_plot = False, color_by_rois=True,
                     means_only=False, stats_on_plot=False, only_stats=False, bin_by='size', zscore_ydata=False, zscore_xdata=False,
                     zconfint_err_alpha = None, fit = True,exp_fit = False, show_legend=False, each_subj_on_group=False,
                     bold_voxel_volume = None, quantile_exclusion=0.999):
@@ -2479,6 +2483,8 @@ class visualize_results(object):
         cmap_rois = cm.get_cmap('nipy_spectral')(cmap_values)#
 
         self.curr_rois_names = []
+
+        print(cmap_rois)
         
         #making black into dark gray for visualization reasons
         cmap_rois[(cmap_rois == [0,0,0,1]).sum(1)==4] = [0.33,0.33,0.33,1]
@@ -2641,9 +2647,21 @@ class visualize_results(object):
 
                         model_colors = {'Gauss':'blue','CSS':'orange','DoG':'green','Norm_abcd':'red','Norm_abc':'purple'}
 
-                        
-                                                
+                        #v4 FINAL FOR BLUE TO RED
+                        #color_dict =  {'placebo':(0.0,0.15,1) ,'5mg':(0.8,0.05,0.8),'10mg':(1,0.0,0.0)}
 
+                        # #FINAL FOR BLUE TO ORANGE
+                        # color_dict = {'placebo':(0.15,0.2,0.85),'5mg':(0,0.6,0.15),'10mg':(1,0.65,0)}   
+
+                        # #v5 blue to red(from nipy spectral)     (purple too dark)            
+                        # color_dict =  {'placebo':(0.0,0.2196,0.8667) ,'5mg':(0.4287,0.0,0.6130),'10mg':(0.864,0.0,0.0)}
+
+                        # #cyan to red v1
+                        # color_dict =  {'placebo':cmap_rois[5] ,'5mg':(0.4287*1.2,0.0,0.6130*1.2),'10mg':(0.864*1.1,0.0,0.0)}
+                        #cyan to red v2
+                        #color_dict =  {'placebo':(0,0.6497,0.7176) ,'5mg':(0.4287*1.5,0.0,0.6130*1.3),'10mg':(0.864*1.1,0.0,0.0)}
+
+                        color_dict =  {'placebo':(0,0.6497,0.7176) ,'5mg':(0.4287*1.8,0.0,0.6130*1.5),'10mg':(0.864*1.1,0.0,0.0)}   
     
                         for i, roi in enumerate(rois):                              
                             for model in self.only_models:                                
@@ -2853,7 +2871,7 @@ class visualize_results(object):
                                 print(f"Samples in ROI {roi}: {samples_in_roi}")
                                 
                                 if i>0:
-                                    bar_position += ((2+len(groups))*1.3*bar_or_violin_width)
+                                    bar_position += ((1+len(groups))*1.3*bar_or_violin_width)
 
                                 if len(groups)>1:
                                     if group == groups[1]:
@@ -2924,7 +2942,8 @@ class visualize_results(object):
 
                                     #horrible stuff out here
                                     if not only_stats:
-                                        self.dict_stats_text_pos[analysis][subj][y_parameter_toplevel][y_parameter][model][roi]['barheight'] = bar_height+bar_err
+                                        self.dict_stats_text_pos[analysis][subj][y_parameter_toplevel][y_parameter][model][roi]['barheight'] = bar_height
+                                        self.dict_stats_text_pos[analysis][subj][y_parameter_toplevel][y_parameter][model][roi]['barerr'] = bar_err
                                         self.dict_stats_text_pos[analysis][subj][y_parameter_toplevel][y_parameter][model][roi]['barpos'] = bar_position
                                         
     
@@ -3151,9 +3170,14 @@ class visualize_results(object):
                                                 bar_err = None
 
                                             if not only_stats:
-                                                
-                                                pl.bar(bar_position, bar_height, width=bar_or_violin_width, yerr=bar_err, 
-                                                   edgecolor=cmap_rois[i], color=cmap_rois[i])
+
+                                                if color_by_rois:                                              
+                                                    pl.bar(bar_position, bar_height, width=bar_or_violin_width, yerr=bar_err, 
+                                                    edgecolor=cmap_rois[i], color=cmap_rois[i])
+                                                else:
+                                                    pl.bar(bar_position, bar_height, width=bar_or_violin_width, yerr=bar_err, 
+                                                    edgecolor=color_dict[group], color=color_dict[group])
+
                                             
                                             if i == (len(rois)-1):
                                                 if not only_stats:
@@ -3182,29 +3206,33 @@ class visualize_results(object):
                                                         ssj_group_stats_roi_errs[analysis][group][model][roi].append(yerr_sj)
 
                                                         if not only_stats:
-                                                            
-                                                            pl.errorbar(ssj_datapoints_x[ssj_nr], ssj_group_stats_roi_means[analysis][group][model][roi][ssj_nr],
-                                                            yerr=ssj_group_stats_roi_errs[analysis][group][model][roi][ssj_nr],  alpha=np.nanmax((0,np.nanmean(rsq_y[analysis][ssj[0]][model][roi]))),
-                                                            fmt='s',  mec='k', color=cmap_rois[i], ecolor='k')    
+                                                            if color_by_rois:
+                                                                pl.errorbar(ssj_datapoints_x[ssj_nr], ssj_stats.mean,
+                                                                yerr=yerr_sj,  alpha=np.nanmax((0,np.nanmean(rsq_y[analysis][ssj[0]][model][roi]))),
+                                                                fmt='o',  mec='k', mfc=cmap_rois[i], ecolor='k')   
+                                                            else:
+                                                                pl.errorbar(ssj_datapoints_x[ssj_nr], ssj_stats.mean,
+                                                                yerr=yerr_sj,  alpha=np.nanmax((0,np.nanmean(rsq_y[analysis][ssj[0]][model][roi]))),
+                                                                fmt='o',  mec='k', mfc=color_dict[group], ecolor='k')   
 
                                                         #if i == 0:
-                                                        if  ssj_group_stats_roi_means[analysis][group][model][roi][ssj_nr]<0:
+                                                        if  ssj_stats.mean<0:
                                                             vanch_sj = 'top'
                                                         else:
                                                             vanch_sj = 'bottom'
 
                                                         #sj number on plot
                                                         #if space == 'fsnative'
-                                                        sj_number_on_plot = True
+                                                        sj_number_on_plot = False
                                                         if sj_number_on_plot:
                                                             if not only_stats:
-                                                                pl.text(ssj_datapoints_x[ssj_nr], ssj_group_stats_roi_means[analysis][group][model][roi][ssj_nr], int(ssj[0].split('_')[0].split('-')[1]), fontsize=12, color='k', ha='center', va=vanch_sj,
+                                                                pl.text(ssj_datapoints_x[ssj_nr], ssj_stats.mean, int(ssj[0].split('_')[0].split('-')[1]), fontsize=12, color='k', ha='center', va=vanch_sj,
                                                                     alpha=np.nanmax((0,np.nanmean(rsq_y[analysis][ssj[0]][model][roi]))))      
 
                                                         plot_lines = True
                                                         if plot_lines:
                                                             dict_lines[analysis][ssj[0].split('_')[0]][model][roi]['xpos'].append(ssj_datapoints_x[ssj_nr])      
-                                                            dict_lines[analysis][ssj[0].split('_')[0]][model][roi]['ypos'].append(ssj_group_stats_roi_means[analysis][group][model][roi][ssj_nr])
+                                                            dict_lines[analysis][ssj[0].split('_')[0]][model][roi]['ypos'].append(ssj_stats.mean)
 
                                                             
 
@@ -3225,10 +3253,10 @@ class visualize_results(object):
                                                 diff = y_par[analysis][subj][model][roi]
                                                 diff_weights = rsq_y[analysis][subj][model][roi]
 
-                                            pvals = []
-                                                
-                                            for ccc in range(100000):                                                                                                                                 
-                                                
+                                                  
+
+                                            def permutator(ccc):                 
+
                                                 #correct for upsampling
                                                 #ideally add rsq weighting, increase asterisks font size,
 
@@ -3248,7 +3276,11 @@ class visualize_results(object):
                                                 null_mean = (null_distrib * observ_weights).sum()/(observ_weights.sum())
                                                 observ_mean = (observ * observ_weights).sum()/(observ_weights.sum())
                                                                                         
-                                                pvals.append(np.abs(null_mean) >= np.abs(observ_mean))
+                                                this_perm = np.abs(null_mean) >= np.abs(observ_mean)
+
+                                                return this_perm
+                                            
+                                            pvals = Parallel(n_jobs=8, verbose=True)(delayed(permutator)(ccc) for ccc in range(1000000))
 
                                                         
                                                     
@@ -3299,7 +3331,7 @@ class visualize_results(object):
                                              
                                                 if only_stats:
                                                     text_x_pos = self.dict_stats_text_pos[analysis][subj][y_parameter_toplevel_str][y_parameter_str][model][roi]['barpos']
-                                                    text_y_pos = self.dict_stats_text_pos[analysis][subj][y_parameter_toplevel_str][y_parameter_str][model][roi]['barheight']
+                                                    text_y_pos = self.dict_stats_text_pos[analysis][subj][y_parameter_toplevel_str][y_parameter_str][model][roi]['barheight']+self.dict_stats_text_pos[analysis][subj][y_parameter_toplevel_str][y_parameter_str][model][roi]['barerr']
 
                                                 if 'Group' in subj:
                                                     text_y_pos = 0
